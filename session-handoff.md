@@ -141,6 +141,9 @@
   - Red/green model lifecycle regression now proves two buffered ASR sessions build the inner Whisper recognizer once and keep separate PCM buffers.
   - Latest local full Python deterministic suite after the model lifecycle fix: 106 tests passing.
   - Latest local compile check after the model lifecycle fix passed.
+  - Commit `c62b236` is deployed on RunPod and the public real-ASR backend is restarted on `0.0.0.0:8000`.
+  - Public `/health` returned HTTP 200 after the restart.
+  - Two sequential public WSS smokes for `fixtures/local_audio/114002.wav --chunk-ms 1000` both returned `locked` at `114:2`; the second call completed without the model-construction CUDA crash.
 
 ## Changed This Session
 
@@ -176,6 +179,7 @@
   - Deployed the adapter fixes to RunPod and completed an A/B replay between `basharalrfooh/whisper-small-quran` and `tarteel-ai/whisper-base-ar-quran`.
   - Updated the ASR app model lifecycle so the heavy Whisper recognizer is shared across WebSocket sessions instead of being rebuilt for each session.
   - Added a regression covering shared model construction with separate per-session buffers.
+  - Deployed the lifecycle fix to RunPod and verified repeated public WSS calls against the same server process.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -192,7 +196,7 @@
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
   - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, clipped-fragment recovery, and tarteel-ai adapter compatibility fixes are deployed. Clean Surah 102 now shows the next major blocker is post-lock exact alignment, because tarteel-ai cleaner transcripts still become `wrong` after lock.
-  - The model lifecycle fix is verified locally and still needs to be pulled, restarted, and smoke-tested on RunPod before the next simulator retry.
+  - The model lifecycle fix is deployed and smoke-tested on RunPod.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -202,7 +206,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. The immediate deployment step is to pull the model-lifecycle fix onto RunPod so repeated WebSocket sessions do not rebuild the GPU model; after that, the session still needs post-lock tolerant progression recovery before a final model choice is meaningful.
+- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, and repeated WebSocket sessions no longer rebuild the GPU model. The next product behavior step is a simulator retry followed by post-lock tolerant progression recovery before a final model choice is meaningful.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.

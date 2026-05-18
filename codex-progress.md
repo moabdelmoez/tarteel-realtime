@@ -1186,6 +1186,8 @@
   - Identified the backend failure as a CUDA `device-side assert triggered` during Whisper model construction on a WebSocket session, not as an iPhone microphone transport failure.
   - Added a regression proving two buffered ASR sessions reuse one inner Whisper recognizer/model while keeping separate per-session audio buffers.
   - Updated the lazy Whisper factory so the heavy model is shared across ASR WebSocket sessions, with locked one-time initialization.
+  - Committed and pushed the lifecycle fix to GitHub as `c62b236`.
+  - Pulled `c62b236` onto RunPod, restarted the real ASR backend, and verified two sequential public WSS calls against the same server process.
 - Verification run:
   - Red regression first failed with `AssertionError: 2 != 1`, proving the model was previously built once per session.
   - `uv run python -B -m unittest tests.test_asr_app.AsrAppTests.test_buffered_whisper_factory_reuses_model_across_sessions_with_separate_buffers -v`.
@@ -1194,12 +1196,21 @@
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - `uv run python -B -m json.tool feature_list.json`.
   - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+  - RunPod: `uv run python -B -m unittest tests.test_asr_app.AsrAppTests.test_buffered_whisper_factory_reuses_model_across_sessions_with_separate_buffers -v`.
+  - RunPod restart with `TARTEEL_WHISPER_MODEL_ID=tarteel-ai/whisper-base-ar-quran`, `TARTEEL_WHISPER_DEVICE=cuda:0`, `TARTEEL_ASR_MIN_AUDIO_MS=4200`, `TARTEEL_ASR_FLUSH_MS=4200`, and `--host 0.0.0.0 --port 8000`.
+  - Local public health check: `curl -i --max-time 20 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+  - Local public WSS smoke twice: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`.
 - Evidence captured:
   - Focused model-lifecycle regression passed: 1 test.
   - Focused ASR app and buffering tests passed: 10 tests.
   - Full Python deterministic suite passed: 106 tests.
   - Compile check passed.
   - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+  - RunPod pulled `c62b236` and focused model-lifecycle regression passed.
+  - Public `/health` returned HTTP 200.
+  - First public WSS smoke returned four `waiting_for_audio_buffer` events followed by `locked`, `ayah_ref=114:2`, transcript `مَلِكِ النَّاسِ`.
+  - Second public WSS smoke against the same server process also returned `locked`, `ayah_ref=114:2`, transcript `مَلِكِ النَّاسِ`, without the CUDA crash.
+  - RunPod logs showed the first call emitted the Hugging Face/model warmup warning, while the second call went straight through buffered flush and locked, consistent with model reuse.
 - Files or artifacts updated:
   - `tarteel_realtime/asr_app.py`
   - `tests/test_asr_app.py`
@@ -1208,5 +1219,5 @@
   - `session-handoff.md`
 - Known risk or unresolved issue:
   - This fixes repeated GPU model construction across WebSocket sessions; it does not yet change post-lock tolerant progression recovery.
-  - RunPod still needs to pull this commit, restart the ASR backend, and verify that repeated public WSS calls do not recreate/crash the model.
-- Next best step: commit, push, deploy the lifecycle fix to RunPod, restart the ASR backend with `tarteel-ai/whisper-base-ar-quran`, and re-run two sequential WSS smoke calls against the same server process.
+  - The public RunPod backend is currently running the lifecycle fix with `tarteel-ai/whisper-base-ar-quran`.
+- Next best step: retry the simulator mic flow against the same WSS endpoint, then implement post-lock tolerant progression recovery so plausible post-lock ASR chunks are not surfaced as hard wrongs too early.
