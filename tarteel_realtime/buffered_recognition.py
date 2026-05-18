@@ -41,7 +41,7 @@ class BufferedRecognizer:
         if chunk.pcm:
             self._append(chunk)
         if not self._ready_to_flush():
-            logger.info(
+            logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                 "buffered_ms=%s unflushed_ms=%s action=wait",
                 chunk.sequence_number,
@@ -52,7 +52,7 @@ class BufferedRecognizer:
             )
             return _waiting_result(chunk.sequence_number)
 
-        logger.info(
+        logger.warning(
             "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
             "buffered_ms=%s unflushed_ms=%s action=flush",
             chunk.sequence_number,

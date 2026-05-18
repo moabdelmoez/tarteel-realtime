@@ -41,7 +41,7 @@ def create_app(
                 payload = await websocket.receive_json()
                 chunk = _audio_chunk_from_payload(payload)
                 event = session.handle_chunk(chunk)
-                logger.info(
+                logger.warning(
                     "recitation_chunk sequence=%s pcm_bytes=%s sample_rate_hz=%s "
                     "approx_audio_ms=%s event_type=%s reason=%s ayah_ref=%s",
                     chunk.sequence_number,
