@@ -214,6 +214,53 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=7))
         self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=7, word_index=1))
 
+    def test_after_lock_does_not_relock_to_unrelated_global_match_at_ayah_boundary(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer([
+                "لَتَرَوُنَّ الْجَحِيمَ",
+                "مَلِكِ النَّاسِ",
+                "مَلِكِ النَّاسِ",
+            ]),
+            minimum_lock_words=2,
+        )
+
+        first_event = session.handle_chunk(chunk(0))
+        guidance_event = session.handle_chunk(chunk(1))
+        out_of_order_event = session.handle_chunk(chunk(2))
+
+        self.assertEqual(first_event.type, SessionEventType.LOCKED)
+        self.assertEqual(first_event.ayah_ref, QuranRef(surah=102, ayah=6))
+        self.assertEqual(guidance_event.type, SessionEventType.UNCERTAIN)
+        self.assertEqual(guidance_event.reason, "expected_ordered_progression")
+        self.assertEqual(guidance_event.ayah_ref, QuranRef(surah=102, ayah=7))
+        self.assertEqual(guidance_event.next_expected_ref, QuranRef(surah=102, ayah=7, word_index=1))
+        self.assertEqual(out_of_order_event.type, SessionEventType.WRONG)
+        self.assertEqual(out_of_order_event.reason, "out_of_order")
+        self.assertEqual(out_of_order_event.expected_ref, QuranRef(surah=102, ayah=7, word_index=1))
+        self.assertEqual(out_of_order_event.expected_word, "ثم")
+
+    def test_after_lock_recovers_tolerant_progress_inside_current_ayah(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer([
+                "كَلَّا لَوْ",
+                "عَلَّمُونَ عِلْمَ الْيَقِينِ",
+            ]),
+            minimum_lock_words=2,
+        )
+
+        first_event = session.handle_chunk(chunk(0))
+        recovered_event = session.handle_chunk(chunk(1))
+
+        self.assertEqual(first_event.type, SessionEventType.LOCKED)
+        self.assertEqual(first_event.ayah_ref, QuranRef(surah=102, ayah=5))
+        self.assertEqual(first_event.next_expected_ref, QuranRef(surah=102, ayah=5, word_index=3))
+        self.assertEqual(recovered_event.type, SessionEventType.PROGRESS)
+        self.assertEqual(recovered_event.reason, "tolerant_progression")
+        self.assertEqual(recovered_event.next_expected_ref, None)
+        self.assertEqual(recovered_event.consumed_words, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

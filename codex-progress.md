@@ -1318,3 +1318,43 @@
   - Generic ASR exception-to-UI error handling is still not implemented; this slice fixes the reproduced crash trigger.
   - Post-lock tolerant progression recovery remains the next product behavior slice.
 - Next best step: retry the simulator mic. Start reciting promptly after tapping the mic; if the debug panel stays on Gathering audio during silence and then locks once speech is present, proceed to post-lock tolerant progression recovery.
+
+### Session 035
+
+- Date: 2026-05-18
+- Goal: Implement ordered post-lock tolerant progression recovery without using GPU.
+- Completed:
+  - Added locator scoping via `allowed_ayah_refs` so recovery can search only the current/next ordered ayah after the session has locked.
+  - Split the session state so `next_expected_ref == None` no longer means both "not locked yet" and "finished this ayah"; the session now tracks whether it has already locked.
+  - Added ordered ayah-boundary behavior: after completing an ayah, the next chunk is checked against the expected next ayah only, not the full Quran.
+  - Added tolerant post-lock recovery for plausible local ASR fragments inside the current expected ayah before surfacing a hard `wrong`.
+  - Added a simple ordered miss path: the first out-of-order chunk after an ayah boundary emits `uncertain` with `reason=expected_ordered_progression`; a repeated miss emits `wrong` with `reason=out_of_order`.
+- Verification run:
+  - Red locator test first errored because `QuranLocator.locate(...)` did not accept `allowed_ayah_refs`.
+  - Red session test first failed because an unrelated global phrase after `102:6` relocked to `114:2` instead of staying on ordered progression.
+  - Red tolerant recovery test first failed because an imperfect continuation of `102:5` emitted `wrong`.
+  - `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_locator_can_be_scoped_to_ordered_ayahs_after_lock -v`.
+  - `uv run python -B -m unittest tests.test_session.RecitationSessionTests.test_after_lock_does_not_relock_to_unrelated_global_match_at_ayah_boundary tests.test_session.RecitationSessionTests.test_after_lock_recovers_tolerant_progress_inside_current_ayah -v`.
+  - `uv run python -B -m unittest tests.test_locator tests.test_session -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -B -m json.tool feature_list.json`.
+- Evidence captured:
+  - Focused locator scoped-search regression passed.
+  - Focused session ordered-progression regressions passed.
+  - Combined locator/session tests passed: 25 tests.
+  - Full Python deterministic suite passed: 110 tests.
+  - Compile check passed.
+  - `feature_list.json` parsed successfully.
+- Files or artifacts updated:
+  - `tarteel_realtime/locator.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_locator.py`
+  - `tests/test_session.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - This is locally verified with deterministic transcripts only; it has not yet been deployed to RunPod or replayed against the real `tarteel-ai/whisper-base-ar-quran` model.
+  - The current iOS UI does not yet present the expected next ayah text from the new `expected_ordered_progression` uncertain event as a polished guidance message.
+- Next best step: deploy this slice to RunPod, replay clean Surah 102 through the public WSS endpoint, then decide whether the next slice is UI guidance text for expected-next-ayah or ASR chunking/finalization tuning.

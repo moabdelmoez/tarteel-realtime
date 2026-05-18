@@ -138,6 +138,15 @@ class QuranLocatorTests(unittest.TestCase):
         self.assertEqual(progressed_decision.best.ayah_ref, QuranRef(surah=102, ayah=7))
         self.assertEqual(progressed_decision.best.start_ref, QuranRef(surah=102, ayah=7, word_index=1))
 
+    def test_locator_can_be_scoped_to_ordered_ayahs_after_lock(self):
+        decision = self.locator.locate(
+            "مَلِكِ النَّاسِ",
+            allowed_ayah_refs=(QuranRef(surah=102, ayah=4),),
+        )
+
+        self.assertEqual(decision.status, LocatorStatus.NOT_FOUND)
+        self.assertEqual(decision.reason, "no_match")
+
 
 if __name__ == "__main__":
     unittest.main()

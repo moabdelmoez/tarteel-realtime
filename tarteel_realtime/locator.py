@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from enum import StrEnum
@@ -52,6 +53,7 @@ class QuranLocator:
         recognized_text: str,
         *,
         preferred_ref: QuranRef | None = None,
+        allowed_ayah_refs: Iterable[QuranRef] | None = None,
     ) -> LocatorDecision:
         recognized_words = normalize_arabic(recognized_text).split()
         if not recognized_words:
@@ -60,7 +62,11 @@ class QuranLocator:
                 reason="no_recognized_words",
             )
 
-        candidates = self._find_candidates(recognized_words, preferred_ref=preferred_ref)
+        candidates = self._find_candidates(
+            recognized_words,
+            preferred_ref=preferred_ref,
+            allowed_ayah_refs=allowed_ayah_refs,
+        )
         if not candidates:
             return LocatorDecision(
                 status=LocatorStatus.NOT_FOUND,
@@ -96,6 +102,7 @@ class QuranLocator:
         recognized_text: str,
         *,
         preferred_ref: QuranRef | None = None,
+        allowed_ayah_refs: Iterable[QuranRef] | None = None,
     ) -> LocatorDecision:
         recognized_words = normalize_arabic(recognized_text).split()
         if not recognized_words:
@@ -107,6 +114,7 @@ class QuranLocator:
         candidates = self._find_tolerant_candidates(
             recognized_words,
             preferred_ref=preferred_ref,
+            allowed_ayah_refs=allowed_ayah_refs,
         )
         if not candidates:
             return LocatorDecision(
@@ -143,11 +151,15 @@ class QuranLocator:
         recognized_words: list[str],
         *,
         preferred_ref: QuranRef | None = None,
+        allowed_ayah_refs: Iterable[QuranRef] | None = None,
     ) -> tuple[LocatorCandidate, ...]:
         candidates: list[LocatorCandidate] = []
         recognized_length = len(recognized_words)
+        allowed_refs = _ayah_ref_set(allowed_ayah_refs)
 
         for ayah in self._corpus.ayahs():
+            if allowed_refs is not None and ayah.ref not in allowed_refs:
+                continue
             ayah_words = [word.normalized_text for word in ayah.words]
             for start_index in range(0, len(ayah_words) - recognized_length + 1):
                 candidate_words = ayah_words[start_index:start_index + recognized_length]
@@ -184,11 +196,15 @@ class QuranLocator:
         recognized_words: list[str],
         *,
         preferred_ref: QuranRef | None = None,
+        allowed_ayah_refs: Iterable[QuranRef] | None = None,
     ) -> tuple[LocatorCandidate, ...]:
         candidates: list[LocatorCandidate] = []
         recognized_length = len(recognized_words)
+        allowed_refs = _ayah_ref_set(allowed_ayah_refs)
 
         for ayah in self._corpus.ayahs():
+            if allowed_refs is not None and ayah.ref not in allowed_refs:
+                continue
             ayah_words = [word.normalized_text for word in ayah.words]
             for start_index in range(0, len(ayah_words) - recognized_length + 1):
                 candidate_words = ayah_words[start_index:start_index + recognized_length]
@@ -272,3 +288,12 @@ def _word_similarity(recognized_word: str, candidate_word: str) -> float:
     if recognized_word == candidate_word:
         return 1.0
     return SequenceMatcher(None, recognized_word, candidate_word).ratio()
+
+
+def _ayah_ref_set(ayah_refs: Iterable[QuranRef] | None) -> set[QuranRef] | None:
+    if ayah_refs is None:
+        return None
+    return {
+        QuranRef(surah=ref.surah, ayah=ref.ayah)
+        for ref in ayah_refs
+    }
