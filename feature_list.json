@@ -318,7 +318,10 @@
         "Live simulator retry showed audio transport is working: the backend received 3200-byte 100ms PCM chunks at 16 kHz, buffered to 4200ms, flushed, and returned locating/no_match instead of locked.",
         "Added client-side suppression for repeated waiting_for_audio_buffer states so a post-flush no_match diagnostic is not immediately overwritten by the next 100ms waiting event.",
         "Added backend audio-level diagnostics: pcm_rms, pcm_peak, transcript_chars, and opt-in transcript_text logging controlled by TARTEEL_LOG_TRANSCRIPTS.",
-        "Latest verification after the flashing/no_match diagnostic update: full Python suite passed with 95 tests, Swift client core passed with 9 tests, and the iPhone simulator app target build succeeded."
+        "Latest verification after the flashing/no_match diagnostic update: full Python suite passed with 95 tests, Swift client core passed with 9 tests, and the iPhone simulator app target build succeeded.",
+        "Deployed commit 2b72253 to RunPod, restarted Uvicorn on 0.0.0.0:8000, confirmed public /health returned HTTP 200, and verified 114002.wav still reached locked at 114:2 through the public WSS endpoint.",
+        "RunPod logs now show privacy-safe audio-level diagnostics for known-good WAV chunks, for example pcm_rms/pcm_peak plus transcript_chars with transcript_text=<redacted>.",
+        "Installed and launched the updated app in the iPhone 17 simulator with process id 21513; screenshot captured at /private/tmp/tarteel-flashing-fix-installed.png."
       ],
       "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering, but real ASR returns no_match after flush. The feature remains in progress until the simulator or phone is manually verified with live mic chunks reaching locked."
     },

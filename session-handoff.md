@@ -36,6 +36,8 @@
   - Live simulator audio transport has been confirmed from RunPod logs: 3200-byte PCM chunks every 100ms at 16 kHz reached the backend, buffered to 4200ms, flushed, and returned `locating/no_match`.
   - iOS state now suppresses repeated `waiting_for_audio_buffer` redraws so the last meaningful diagnostic is not immediately overwritten.
   - Backend diagnostics now include `pcm_rms`, `pcm_peak`, `transcript_chars`, and optional `transcript_text` when `TARTEEL_LOG_TRANSCRIPTS=1`.
+  - RunPod is updated to commit `2b72253` and running the ASR backend on `0.0.0.0:8000` with transcript text redacted.
+  - Updated app build is installed and launched in the iPhone 17 simulator.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -102,6 +104,10 @@
   - Latest full Python deterministic suite after flashing/no_match diagnostics: 95 tests passing.
   - Latest Swift client core after flashing fix: 9 tests passing.
   - Latest iPhone simulator app target build after flashing fix succeeded.
+  - RunPod public health endpoint returned HTTP 200 after restart from commit `2b72253`.
+  - RunPod public WSS smoke for `114002.wav --chunk-ms 1000` still returned `locked` at `114:2`.
+  - RunPod known-good logs now show `pcm_rms`, `pcm_peak`, `transcript_chars`, and `transcript_text=<redacted>`.
+  - Updated app launched in iPhone 17 simulator with process id `21513`; screenshot captured at `/private/tmp/tarteel-flashing-fix-installed.png`.
 
 ## Changed This Session
 
@@ -141,7 +147,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics and flashing fix still need to be deployed to RunPod/reinstalled in the simulator before the next live manual retry.
+  - The latest audio-level diagnostics and flashing fix are deployed; the next live manual retry has not yet been performed.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.

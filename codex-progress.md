@@ -913,6 +913,8 @@
   - Changed the mobile state reducer so repeated `waiting_for_audio_buffer` events do not hide the last meaningful pre-lock diagnostic such as `locating (no_match)`.
   - Changed the view model so identical realtime states and repeated connection statuses are not republished every 100ms.
   - Added backend audio-level diagnostics: `pcm_rms`, `pcm_peak`, `transcript_chars`, and opt-in `transcript_text` logging gated by `TARTEEL_LOG_TRANSCRIPTS`.
+  - Deployed commit `2b72253` to RunPod, restarted Uvicorn on `0.0.0.0:8000`, and reverified the public WSS endpoint with the known `114002.wav` file.
+  - Installed and launched the updated iPhone app build in the iPhone 17 simulator.
 - Verification run:
   - Red Swift test first: repeated waiting event overwrote the prior `no_match` diagnostic.
   - Red Python tests first: backend logs lacked audio-level diagnostics and transcript logging controls.
@@ -926,6 +928,10 @@
   - Swift client core passed: 9 tests.
   - Full Python deterministic suite passed: 95 tests.
   - iPhone simulator app target build succeeded.
+  - RunPod public `/health` returned HTTP 200.
+  - Public WSS smoke for `fixtures/local_audio/114002.wav --chunk-ms 1000` returned four buffering events followed by `type=locked`, `ayah_ref=114:2`, `start_ref=114:2:1`.
+  - RunPod logs now show `pcm_rms`, `pcm_peak`, and `transcript_chars`, with `transcript_text=<redacted>` by default.
+  - Updated app launched in iPhone 17 simulator with process id `21513`; screenshot captured at `/private/tmp/tarteel-flashing-fix-installed.png`.
 - Files or artifacts updated:
   - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
   - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
@@ -941,4 +947,4 @@
   - `session-handoff.md`
 - Known risk or unresolved issue:
   - Current evidence points past transport and buffering into audio quality or ASR transcript/location quality. The next live retry should inspect `pcm_rms`, `pcm_peak`, and `transcript_chars`; exact transcript logging should be enabled only deliberately with `TARTEEL_LOG_TRANSCRIPTS=1`.
-- Next best step: deploy this diagnostic update to RunPod and reinstall the app build, then retry the simulator mic and judge success by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.
+- Next best step: retry the simulator mic and judge success by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`. If it still reaches `no_match`, inspect `pcm_rms`, `pcm_peak`, and `transcript_chars` in `/tmp/tarteel-asr.log`.
