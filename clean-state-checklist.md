@@ -11,6 +11,8 @@
 - [ ] The compile check still runs: `uv run python -m compileall -q tarteel_realtime tests`.
 - [ ] The sample evaluator still runs: `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`.
 - [ ] The sample Tanzil manifest smoke still runs: `uv run python -m tarteel_realtime.quran_data --tanzil-path fixtures/quran/sample-tanzil.txt --source-name sample-fixture`.
+- [ ] R2 helper tests still run when touched: `uv run python -B -m unittest tests.test_r2_artifacts`.
+- [ ] RunPod bootstrap syntax still validates when touched: `bash -n scripts/runpod_bootstrap.sh`.
 - [ ] When `data/tanzil/quran-simple-clean.txt` exists, its manifest still validates: `uv run python -m tarteel_realtime.quran_data --check-manifest`.
 - [ ] Current progress is recorded in `codex-progress.md`.
 - [ ] Feature state in `feature_list.json` reflects what is actually passing versus unverified.

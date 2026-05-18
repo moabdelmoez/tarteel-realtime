@@ -174,6 +174,32 @@ uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --ur
 
 Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
 
+## GitHub And R2 Artifact Workflow
+
+Use GitHub for source code and Cloudflare R2 for ignored local artifacts such as the full Tanzil text and recitation WAVs. The R2 helper expects S3-compatible R2 credentials in environment variables, not a general Cloudflare API token.
+
+```bash
+export R2_ENDPOINT_URL="https://bb8b1b9ffb067e41f5657c9f1400c42b.r2.cloudflarestorage.com"
+export R2_BUCKET="tarteel-realtime"
+export R2_ACCESS_KEY_ID="replace-with-r2-access-key-id"
+export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
+```
+
+Upload local artifacts:
+
+```bash
+uv run --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simple-clean.txt
+uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio
+```
+
+Download on RunPod:
+
+```bash
+uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
+```
+
+The full RunPod/R2 workflow is documented in `docs/runpod-r2.md`.
+
 ## iOS Prototype
 
 The first native SwiftUI prototype lives under `ios/`.

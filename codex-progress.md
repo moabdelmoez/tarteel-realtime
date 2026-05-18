@@ -578,3 +578,41 @@
   - GitHub remote is not created yet because `gh` needs re-authentication.
   - After `gh auth login -h github.com`, create a private repo and push `main`.
 - Next best step: re-authenticate GitHub CLI, create a private `tarteel-realtime` repo, add it as `origin`, and push `main`.
+
+### Session 017
+
+- Date: 2026-05-18
+- Goal: Add Cloudflare R2 artifact workflow now that GitHub is ready.
+- Completed:
+  - Confirmed local `main` tracks `origin/main` at `https://github.com/moabdelmoez/tarteel-realtime.git`.
+  - Added an R2 helper for upload, download, and list operations using S3-compatible R2 environment variables.
+  - Added `.env.example` with placeholder R2 settings and updated `.gitignore` so real `.env` files stay local.
+  - Added `docs/runpod-r2.md` with Mac upload, RunPod download, and fresh-pod bootstrap commands.
+  - Added `scripts/runpod_bootstrap.sh` to install uv/ffmpeg when needed, clone or update GitHub source, set persistent cache paths, optionally download R2 artifacts, and run compile/tests.
+  - Added deterministic R2 helper tests that do not require network access or real credentials.
+  - Recorded `infra-001` as passing while keeping `mobile-002` as the only active implementation feature.
+- Verification run:
+  - Red test first: `uv run python -B -m unittest tests.test_r2_artifacts` failed because `scripts.r2_artifacts` did not exist.
+  - `uv run python -B -m unittest tests.test_r2_artifacts`
+  - `bash -n scripts/runpod_bootstrap.sh`
+- Evidence captured:
+  - R2 helper tests passed: 4 tests.
+  - Bootstrap script syntax validation exited 0.
+- Files or artifacts updated:
+  - `.env.example`
+  - `.gitignore`
+  - `README.md`
+  - `docs/runpod-r2.md`
+  - `scripts/__init__.py`
+  - `scripts/r2_artifacts.py`
+  - `scripts/runpod_bootstrap.sh`
+  - `tests/test_r2_artifacts.py`
+  - `feature_list.json`
+  - `clean-state-checklist.md`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - Real R2 upload/download has not been exercised yet because the workflow needs R2 S3 Access Key ID and Secret Access Key.
+  - A general Cloudflare API token should be rotated if it was exposed and should not be used for this S3 artifact helper.
+  - The app still has not been manually connected to a real ASR backend.
+- Next best step: create scoped R2 S3 credentials, upload the ignored local artifacts from the Mac, then use the bootstrap script on the next RunPod pod before the real-ASR mobile verification slice.

@@ -21,6 +21,9 @@
   - iOS app now has `Simulator` and `Custom` backend presets.
   - iOS state reducer now treats `waiting_for_audio_buffer` as normal real-ASR latency before and after lock.
   - Local git repository exists on `main` with initial commit `ea25b2a`.
+  - GitHub remote exists at `https://github.com/moabdelmoez/tarteel-realtime.git` and local `main` tracks `origin/main`.
+  - Cloudflare R2 artifact workflow exists for ignored Tanzil/audio artifacts using S3-compatible R2 environment variables.
+  - RunPod bootstrap script exists for clone/update, uv/ffmpeg setup, cache paths, optional R2 artifact download, compile checks, and tests.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -49,6 +52,8 @@
   - Swift client core tests now pass with 8 tests, including backend presets and buffering state.
   - iOS simulator build succeeded after adding backend presets and buffering UI behavior.
   - GitHub bootstrap audit confirmed `.venv`, `.DS_Store`, Xcode user state, full Tanzil text, local audio, and downloaded QUL metadata are ignored.
+  - `uv run python -B -m unittest tests.test_r2_artifacts` with 4 tests passing.
+  - `bash -n scripts/runpod_bootstrap.sh`.
 
 ## Changed This Session
 
@@ -62,9 +67,12 @@
   - Added `mobile-002` as the next active slice.
   - Completed `mobile-002` phase 1 without GPU: backend presets, custom URL path, and buffer-event UX.
   - Initialized git locally and created initial source commit `ea25b2a`.
-  - Detected invalid GitHub CLI auth token for account `moabdelmoez`.
+  - GitHub was made ready separately; `origin/main` now exists for `https://github.com/moabdelmoez/tarteel-realtime.git`.
+  - Added the Cloudflare R2 artifact workflow without storing secrets.
+  - Added an optional RunPod bootstrap script for repeatable pod setup.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
+  - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, and `tests/test_r2_artifacts.py`.
 
 ## Broken Or Unverified
 
@@ -76,10 +84,11 @@
   - The phone has not yet been pointed at the real ASR backend; it has only been verified against the fake backend.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
-  - GitHub remote is not created/pushed yet because `gh auth status` reports the saved token is invalid.
+  - Cloudflare R2 upload/download has not been manually verified yet because S3-compatible R2 credentials are still needed.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
+  - Use R2 S3 Access Key ID and Secret Access Key for artifacts; do not use or store general Cloudflare API tokens.
   - Do not weaken deterministic tests while experimenting with model inference.
 
 ## Next Best Step
@@ -101,10 +110,15 @@
 
 ## Commands
 
-- GitHub setup:
-  - `gh auth login -h github.com`
-  - `gh repo create tarteel-realtime --private --source=. --remote=origin --push`
-  - If the repo already exists: `git remote add origin git@github.com:<owner>/tarteel-realtime.git` then `git push -u origin main`
+- Artifact setup:
+  - `export R2_ENDPOINT_URL="https://bb8b1b9ffb067e41f5657c9f1400c42b.r2.cloudflarestorage.com"`
+  - `export R2_BUCKET=tarteel-realtime`
+  - `export R2_ACCESS_KEY_ID=<r2-access-key-id>`
+  - `export R2_SECRET_ACCESS_KEY=<r2-secret-access-key>`
+  - `uv run --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simple-clean.txt`
+  - `uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio`
+  - `uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt`
+  - `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 bash scripts/runpod_bootstrap.sh`
 - Startup: `uv run uvicorn tarteel_realtime.dev_app:app --reload`
 - Verification:
   - `uv run python -B -m unittest discover`

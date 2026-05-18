@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 .DS_Store
+.env
+.env.*
+!.env.example
 
 # Swift/Xcode local build and user state
 .build/

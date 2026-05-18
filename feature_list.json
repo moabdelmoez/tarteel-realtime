@@ -302,6 +302,30 @@
         "iOS simulator build succeeded with xcodebuild and CODE_SIGNING_ALLOWED=NO."
       ],
       "notes": "Phase 1 is complete. The feature remains in progress until the real RunPod backend is connected to the simulator or phone and manually verified with live mic chunks."
+    },
+    {
+      "id": "infra-001",
+      "priority": 12,
+      "area": "devops-artifacts",
+      "title": "Use GitHub plus Cloudflare R2 for reproducible RunPod setup",
+      "user_visible_behavior": "A developer can clone the repo on RunPod and fetch ignored Quran/audio artifacts from Cloudflare R2 without copying files by hand.",
+      "status": "passing",
+      "verification": [
+        "Keep secrets out of git and only document placeholder environment variables.",
+        "Use uv run --with boto3 for the optional R2 helper dependency.",
+        "Add deterministic tests for helper behavior that does not require network access.",
+        "Validate the RunPod bootstrap script syntax.",
+        "Keep exactly one in-progress feature in this file."
+      ],
+      "evidence": [
+        "Added scripts/r2_artifacts.py with upload, download, and list commands using R2 S3-compatible credentials from environment variables.",
+        "Added .env.example with placeholder R2 variables and updated .gitignore so real .env files stay local.",
+        "Added docs/runpod-r2.md with Mac upload, RunPod download, and bootstrap commands.",
+        "Added scripts/runpod_bootstrap.sh to install uv/ffmpeg when needed, clone or update the repo, set persistent cache directories, optionally download R2 artifacts, and run compile/tests.",
+        "Added tests/test_r2_artifacts.py covering default keys, outside-repo rejection, hidden platform file skipping, and S3 credential validation.",
+        "uv run python -B -m unittest tests.test_r2_artifacts passed: 4 tests."
+      ],
+      "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token."
     }
   ]
 }
