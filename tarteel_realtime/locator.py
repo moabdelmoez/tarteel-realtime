@@ -38,6 +38,7 @@ class QuranLocator:
     _TOLERANT_WORD_THRESHOLD = 0.60
     _TOLERANT_AVERAGE_THRESHOLD = 0.72
     _AYAH_START_BONUS = 0.01
+    _PREFERRED_AYAH_BONUS = 1.0
 
     def __init__(self, corpus: QuranCorpus, minimum_lock_words: int = 3) -> None:
         if minimum_lock_words < 1:
@@ -45,7 +46,12 @@ class QuranLocator:
         self._corpus = corpus
         self._minimum_lock_words = minimum_lock_words
 
-    def locate(self, recognized_text: str) -> LocatorDecision:
+    def locate(
+        self,
+        recognized_text: str,
+        *,
+        preferred_ref: QuranRef | None = None,
+    ) -> LocatorDecision:
         recognized_words = normalize_arabic(recognized_text).split()
         if not recognized_words:
             return LocatorDecision(
@@ -53,7 +59,7 @@ class QuranLocator:
                 reason="no_recognized_words",
             )
 
-        candidates = self._find_candidates(recognized_words)
+        candidates = self._find_candidates(recognized_words, preferred_ref=preferred_ref)
         if not candidates:
             return LocatorDecision(
                 status=LocatorStatus.NOT_FOUND,
@@ -84,7 +90,12 @@ class QuranLocator:
             reason="unique_match",
         )
 
-    def locate_tolerant(self, recognized_text: str) -> LocatorDecision:
+    def locate_tolerant(
+        self,
+        recognized_text: str,
+        *,
+        preferred_ref: QuranRef | None = None,
+    ) -> LocatorDecision:
         recognized_words = normalize_arabic(recognized_text).split()
         if not recognized_words:
             return LocatorDecision(
@@ -92,7 +103,10 @@ class QuranLocator:
                 reason="no_recognized_words",
             )
 
-        candidates = self._find_tolerant_candidates(recognized_words)
+        candidates = self._find_tolerant_candidates(
+            recognized_words,
+            preferred_ref=preferred_ref,
+        )
         if not candidates:
             return LocatorDecision(
                 status=LocatorStatus.NOT_FOUND,
@@ -123,7 +137,12 @@ class QuranLocator:
             reason="tolerant_match",
         )
 
-    def _find_candidates(self, recognized_words: list[str]) -> tuple[LocatorCandidate, ...]:
+    def _find_candidates(
+        self,
+        recognized_words: list[str],
+        *,
+        preferred_ref: QuranRef | None = None,
+    ) -> tuple[LocatorCandidate, ...]:
         candidates: list[LocatorCandidate] = []
         recognized_length = len(recognized_words)
 
@@ -140,7 +159,10 @@ class QuranLocator:
                         ayah_ref=ayah.ref,
                         start_ref=start_ref,
                         matched_words=recognized_length,
-                        score=float(recognized_length),
+                        score=(
+                            float(recognized_length)
+                            + self._preferred_ayah_bonus(ayah.ref, preferred_ref)
+                        ),
                     )
                 )
 
@@ -159,6 +181,8 @@ class QuranLocator:
     def _find_tolerant_candidates(
         self,
         recognized_words: list[str],
+        *,
+        preferred_ref: QuranRef | None = None,
     ) -> tuple[LocatorCandidate, ...]:
         candidates: list[LocatorCandidate] = []
         recognized_length = len(recognized_words)
@@ -195,7 +219,11 @@ class QuranLocator:
                         ayah_ref=ayah.ref,
                         start_ref=start_ref,
                         matched_words=recognized_length,
-                        score=sum(similarities) + ayah_start_bonus,
+                        score=(
+                            sum(similarities)
+                            + ayah_start_bonus
+                            + self._preferred_ayah_bonus(ayah.ref, preferred_ref)
+                        ),
                     )
                 )
 
@@ -210,6 +238,17 @@ class QuranLocator:
                 ),
             )
         )
+
+    def _preferred_ayah_bonus(
+        self,
+        ayah_ref: QuranRef,
+        preferred_ref: QuranRef | None,
+    ) -> float:
+        if preferred_ref is None:
+            return 0.0
+        if ayah_ref.surah == preferred_ref.surah and ayah_ref.ayah == preferred_ref.ayah:
+            return self._PREFERRED_AYAH_BONUS
+        return 0.0
 
 
 def _word_similarity(recognized_word: str, candidate_word: str) -> float:

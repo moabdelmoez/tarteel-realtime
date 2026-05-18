@@ -47,6 +47,12 @@ class RecitationSession:
         self._locator = QuranLocator(corpus, minimum_lock_words=minimum_lock_words)
         self._aligner = QuranAligner(corpus)
         self._next_expected_ref: QuranRef | None = None
+        self._progress_anchor_ref: QuranRef | None = None
+        ordered_ayah_refs = tuple(ayah.ref for ayah in corpus.ayahs())
+        self._next_ayah_refs = {
+            current_ref: next_ref
+            for current_ref, next_ref in zip(ordered_ayah_refs, ordered_ayah_refs[1:])
+        }
 
     def handle_chunk(self, chunk: AudioChunk) -> SessionEvent:
         recognition = self._recognizer.recognize(chunk)
@@ -67,9 +73,15 @@ class RecitationSession:
             )
 
         if self._next_expected_ref is None:
-            locator_decision = self._locator.locate(recognition.transcript)
+            locator_decision = self._locator.locate(
+                recognition.transcript,
+                preferred_ref=self._progress_anchor_ref,
+            )
             if locator_decision.status == LocatorStatus.NOT_FOUND:
-                tolerant_decision = self._locator.locate_tolerant(recognition.transcript)
+                tolerant_decision = self._locator.locate_tolerant(
+                    recognition.transcript,
+                    preferred_ref=self._progress_anchor_ref,
+                )
                 if tolerant_decision.status != LocatorStatus.NOT_FOUND:
                     locator_decision = tolerant_decision
 
@@ -110,6 +122,10 @@ class RecitationSession:
                 recognition.transcript,
             )
             self._next_expected_ref = alignment_decision.next_expected_ref
+            self._progress_anchor_ref = self._progress_ref_after(
+                locked_candidate.ayah_ref,
+                self._next_expected_ref,
+            )
             return SessionEvent(
                 type=SessionEventType.LOCKED,
                 transcript=recognition.transcript,
@@ -122,13 +138,18 @@ class RecitationSession:
                 consumed_words=alignment_decision.consumed_words,
             )
 
+        current_expected_ref = self._next_expected_ref
         alignment_decision = self._aligner.evaluate_from(
-            self._next_expected_ref,
+            current_expected_ref,
             recognition.transcript,
         )
 
         if alignment_decision.status == AlignmentStatus.CORRECT:
             self._next_expected_ref = alignment_decision.next_expected_ref
+            self._progress_anchor_ref = self._progress_ref_after(
+                current_expected_ref,
+                self._next_expected_ref,
+            )
             return SessionEvent(
                 type=SessionEventType.PROGRESS,
                 transcript=recognition.transcript,
@@ -159,6 +180,16 @@ class RecitationSession:
             recognized_word=alignment_decision.recognized_word,
             consumed_words=alignment_decision.consumed_words,
         )
+
+    def _progress_ref_after(
+        self,
+        current_ref: QuranRef,
+        next_expected_ref: QuranRef | None,
+    ) -> QuranRef | None:
+        if next_expected_ref is not None:
+            return next_expected_ref
+        ayah_ref = QuranRef(surah=current_ref.surah, ayah=current_ref.ayah)
+        return self._next_ayah_refs.get(ayah_ref)
 
 
 def _is_waiting_for_audio_buffer(recognition) -> bool:

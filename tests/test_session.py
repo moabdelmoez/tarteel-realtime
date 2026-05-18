@@ -175,6 +175,25 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=2))
         self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
 
+    def test_progression_prefers_next_ayah_for_repeated_asr_phrase(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer([
+                "كَلَّا سَوْفَ تَعْلَى",
+                "إِلَّا سَوْفَ تَعْلَمُونَ",
+            ]),
+            minimum_lock_words=2,
+        )
+
+        first_event = session.handle_chunk(chunk(0))
+        second_event = session.handle_chunk(chunk(1))
+
+        self.assertEqual(first_event.type, SessionEventType.LOCKED)
+        self.assertEqual(first_event.ayah_ref, QuranRef(surah=102, ayah=3))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=4))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
+
 
 if __name__ == "__main__":
     unittest.main()

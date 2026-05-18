@@ -105,6 +105,26 @@ class QuranLocatorTests(unittest.TestCase):
                 self.assertEqual(decision.best.ayah_ref, ayah_ref)
                 self.assertEqual(decision.best.start_ref, start_ref)
 
+    def test_exact_locator_prefers_progression_for_repeated_phrase(self):
+        decision = self.locator.locate(
+            "كَلَّا سَوْفَ تَعْلَمُونَ",
+            preferred_ref=QuranRef(surah=102, ayah=4),
+        )
+
+        self.assertEqual(decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(decision.best.ayah_ref, QuranRef(surah=102, ayah=4))
+        self.assertEqual(decision.best.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
+
+    def test_tolerant_locator_prefers_progression_for_repeated_phrase(self):
+        decision = self.locator.locate_tolerant(
+            "إِلَّا سَوْفَ تَعْلَمُونَ",
+            preferred_ref=QuranRef(surah=102, ayah=4),
+        )
+
+        self.assertEqual(decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(decision.best.ayah_ref, QuranRef(surah=102, ayah=4))
+        self.assertEqual(decision.best.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
+
 
 if __name__ == "__main__":
     unittest.main()
