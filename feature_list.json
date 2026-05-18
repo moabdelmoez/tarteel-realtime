@@ -299,9 +299,14 @@
         "RecitationSessionState now treats reason waiting_for_audio_buffer as normal real-ASR latency: pre-lock shows Gathering audio / Keep reciting, post-lock stays in Listening / Keep reciting.",
         "Added Swift tests for backend presets and pre/post-lock buffering state.",
         "Swift client core tests passed: 8 tests.",
-        "iOS simulator build succeeded with xcodebuild and CODE_SIGNING_ALLOWED=NO."
+        "iOS simulator build succeeded with xcodebuild and CODE_SIGNING_ALLOWED=NO.",
+        "RunPod GPU pod l9eyt59lbjfq3e verified NVIDIA L40S driver 570.124.06 with 46068 MiB VRAM.",
+        "RunPod public GitHub plus R2 bootstrap downloaded the full Tanzil file and Surah 114 MP3 proof files, prepared WAVs, and validated the full Tanzil manifest.",
+        "RunPod one-shot GPU warmup for fixtures/local_audio/114002.wav returned transcript مَلِكِ النَّاسِ, normalized ملك الناس, and locator locked to 114:2.",
+        "RunPod ASR backend is running on 0.0.0.0:8000 and public proxy health returned HTTP 200 at https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health.",
+        "Local WebSocket client streamed fixtures/local_audio/114002.wav through wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation with --chunk-ms 1000 and received four waiting_for_audio_buffer events followed by type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1."
       ],
-      "notes": "Phase 1 is complete. The feature remains in progress until the real RunPod backend is connected to the simulator or phone and manually verified with live mic chunks."
+      "notes": "Phase 1 is complete and the public real-ASR WebSocket is proven with WAV streaming. The feature remains in progress until the simulator or phone is manually verified with live mic chunks."
     },
     {
       "id": "infra-001",

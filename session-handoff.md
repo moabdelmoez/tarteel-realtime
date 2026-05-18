@@ -28,6 +28,8 @@
   - RunPod bootstrap disables interactive Git prompts; private repos require a deploy key, `gh auth setup-git`, or another GitHub auth method on the pod.
   - Public GitHub clone plus R2 artifact hydration has been verified on a CPU-only RunPod pod without using `scp`.
   - CPU-only RunPod bootstrap prepared `114001.wav` and `114002.wav` from R2 MP3 artifacts and validated the full Tanzil manifest.
+  - Public RunPod real-ASR backend is live on `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`.
+  - Public RunPod `/health` returned HTTP 200 and public WSS streaming of `114002.wav` returned buffering events followed by `locked` at `114:2`.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -67,6 +69,12 @@
   - CPU-only RunPod bootstrap prepared `fixtures/local_audio/114001.wav` and `fixtures/local_audio/114002.wav`.
   - CPU-only RunPod manifest check returned `ayah_count: 6236`, `first_ref: 1:1`, `last_ref: 114:6`.
   - CPU-only RunPod `uv run python -B -m unittest discover` passed with 88 tests.
+  - RunPod GPU pod `l9eyt59lbjfq3e`: NVIDIA L40S, driver `570.124.06`, memory `46068 MiB`.
+  - RunPod GPU bootstrap downloaded Tanzil sha256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, `114001.mp3` sha256 `a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253`, and `114002.mp3` sha256 `d8ea32af92008a2ff7986eba33f19fc4fd1a53bc3de832c9193a01149ac392dd`.
+  - RunPod GPU one-shot ASR warmup for `114002.wav` returned transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`, and locator locked to `114:2`.
+  - RunPod ASR server was started with `--host 0.0.0.0 --port 8000` and `ss` showed Uvicorn listening on `0.0.0.0:8000`.
+  - Local proxy health check returned HTTP 200 for `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+  - Local public WSS client for `fixtures/local_audio/114002.wav --chunk-ms 1000` returned four `waiting_for_audio_buffer` events followed by `type: locked`, `ayah_ref: 114:2`, `start_ref: 114:2:1`.
 
 ## Changed This Session
 
@@ -85,6 +93,7 @@
   - Added an optional RunPod bootstrap script for repeatable pod setup.
   - Updated RunPod bootstrap to download Surah 114 MP3 proof files and prepare mono 16 kHz PCM WAVs.
   - Verified the RunPod bootstrap on a CPU-only pod after switching GitHub read access to public and manually adding R2 environment variables on the pod.
+  - Started the real ASR backend on a GPU pod and verified the public RunPod proxy plus WSS URL from the local machine.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -96,9 +105,9 @@
 - Unverified path:
   - Real ASR model inference and real ASR WebSocket behavior are verified only for two short Surah 114 samples against `fixtures/quran/sample-tanzil.txt`.
   - Real Quran audio datasets and QUL Al-Husary playback are not integrated.
-  - The phone has not yet been pointed at the real ASR backend; it has only been verified against the fake backend.
+  - The phone app has a working public real-ASR WSS URL available, but manual mic verification against that URL is still pending.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
-  - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
+  - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
@@ -109,7 +118,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: backend buffering works with chunked WAV input on GPU, and the app is ready for custom URLs; the remaining risk is the phone-to-real-backend bridge and manual mic verification.
+- Why it is next: the public real-ASR WSS endpoint is live and proven with WAV streaming; the remaining risk is manual simulator/phone mic verification against the Custom URL.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -160,3 +169,6 @@
   - `TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt TARTEEL_MINIMUM_LOCK_WORDS=2 TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran TARTEEL_WHISPER_DEVICE=cuda:0 TARTEEL_ASR_MIN_AUDIO_MS=4200 TARTEEL_ASR_FLUSH_MS=4200 TARTEEL_ASR_TAIL_MS=0 UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000`
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav`
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000`
+  - Current RunPod health URL while the pod is alive: `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`
+  - Current iOS Custom backend URL while the pod is alive: `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`
+  - Stop current RunPod ASR server if needed: `kill $(cat /tmp/tarteel-asr.pid)` from `/workspace/tarteel-realtime` on the pod.

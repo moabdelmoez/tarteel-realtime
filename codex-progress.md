@@ -13,7 +13,7 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
 - Current highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend
-- Current blocker: CPU-only RunPod bootstrap is verified; the iPhone app still needs a real ASR backend URL/tunnel and manual mic verification against RunPod GPU
+- Current blocker: public RunPod real-ASR backend is live and proxy-verified; the iPhone simulator still needs manual mic verification against the Custom WSS URL
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
@@ -754,3 +754,38 @@
   - The phone still has not been pointed at a live real-ASR RunPod backend.
   - R2 credentials remain external/manual and must not be committed or streamed through SSH.
 - Next best step: start the GPU pod only for the real-ASR mobile verification slice, run the opt-in ASR backend, expose it through the chosen URL/tunnel path, and verify the iPhone app receives `waiting_for_audio_buffer` followed by `locked`.
+
+### Session 022
+
+- Date: 2026-05-18
+- Goal: Start the real-ASR RunPod backend for `mobile-002` through an exposed HTTP/WebSocket proxy.
+- Completed:
+  - Connected to GPU pod `l9eyt59lbjfq3e`.
+  - Confirmed the pod has an NVIDIA L40S GPU with driver `570.124.06` and 46068 MiB VRAM.
+  - Used the user-provided `/workspace/tarteel-r2.env` file without printing secret values.
+  - Bootstrapped the public GitHub checkout from R2 artifacts and prepared `114001.wav` plus `114002.wav`.
+  - Warmed the Quran Whisper model on GPU against `fixtures/local_audio/114002.wav`.
+  - Started the opt-in ASR backend with Uvicorn bound to `0.0.0.0:8000` for RunPod HTTP proxy compatibility.
+  - Verified the public RunPod health endpoint and public WSS recitation endpoint from the local machine.
+- Verification run:
+  - RunPod GPU pod: public GitHub bootstrap with `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` and `TARTEEL_RUN_TESTS=0`.
+  - RunPod GPU pod: `UV_NO_PROGRESS=1 HF_HUB_DISABLE_PROGRESS_BARS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke fixtures/local_audio/114002.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
+  - RunPod GPU pod: `uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000`
+  - Local: `curl -i --max-time 15 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`
+  - Local: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`
+- Evidence captured:
+  - Bootstrap downloaded Tanzil sha256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, `114001.mp3` sha256 `a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253`, and `114002.mp3` sha256 `d8ea32af92008a2ff7986eba33f19fc4fd1a53bc3de832c9193a01149ac392dd`.
+  - Full Tanzil manifest check on pod returned `ayah_count: 6236`, `first_ref: 1:1`, `last_ref: 114:6`, `bytes: 794313`.
+  - One-shot GPU warmup for `114002.wav` returned transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`, and locator locked to `114:2`.
+  - ASR server log showed `Uvicorn running on http://0.0.0.0:8000`.
+  - Pod socket check showed Uvicorn listening on `0.0.0.0:8000`.
+  - Public proxy health returned HTTP 200 with `{"status":"ok"}`.
+  - Public WebSocket client returned four `waiting_for_audio_buffer` events followed by `type: locked`, transcript `مَلِكِ النَّاسِ`, `ayah_ref: 114:2`, `start_ref: 114:2:1`.
+- Files or artifacts updated:
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The public real-ASR backend is running for manual simulator verification, but the app mic path has not yet been manually verified against it.
+  - The RunPod server process is intentionally left running in the pod background for the user's simulator test.
+- Next best step: in the iPhone simulator app, choose `Custom`, set `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`, tap the mic, recite Surah 114:2, and confirm the UI shows normal buffering followed by a locked event.
