@@ -7,6 +7,7 @@ final class RecitationViewModel: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var backendPreset = BackendEndpointPreset.simulator
+    @Published private(set) var connectionStatus = "Idle"
     @Published var backendURLText = BackendEndpointPreset.simulator.defaultURLText
 
     private let socketClient: BackendWebSocketClient
@@ -44,6 +45,7 @@ final class RecitationViewModel: ObservableObject {
 
     private func startRecording() async {
         errorMessage = nil
+        connectionStatus = "Connecting"
         state = RecitationSessionState(
             phase: .connecting,
             headline: "Connecting",
@@ -59,8 +61,10 @@ final class RecitationViewModel: ObservableObject {
             try await socketClient.connect(url: backendURL) { [weak self] event in
                 Task { @MainActor in
                     self?.state = self?.state.applying(event) ?? RecitationSessionState().applying(event)
+                    self?.connectionStatus = "Receiving events"
                 }
             }
+            connectionStatus = "Connected"
 
             try await audioStreamer.start { [weak self] pcm, sampleRate in
                 Task { @MainActor in
@@ -69,6 +73,7 @@ final class RecitationViewModel: ObservableObject {
             }
 
             isRecording = true
+            connectionStatus = "Streaming"
             state = RecitationSessionState(
                 phase: .listening,
                 headline: "Listening",
@@ -77,6 +82,7 @@ final class RecitationViewModel: ObservableObject {
         } catch {
             stopRecording()
             errorMessage = error.localizedDescription
+            connectionStatus = "Error"
         }
     }
 
@@ -91,8 +97,9 @@ final class RecitationViewModel: ObservableObject {
         do {
             try await socketClient.send(payload)
         } catch {
-            errorMessage = error.localizedDescription
             stopRecording()
+            errorMessage = error.localizedDescription
+            connectionStatus = "Error"
         }
     }
 
@@ -100,6 +107,7 @@ final class RecitationViewModel: ObservableObject {
         audioStreamer.stop()
         socketClient.disconnect()
         isRecording = false
+        connectionStatus = "Stopped"
         state = RecitationSessionState(
             phase: .stopped,
             headline: "Stopped",

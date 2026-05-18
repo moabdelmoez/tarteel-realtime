@@ -8,7 +8,7 @@ struct ContentView: View {
             Color(red: 0.04, green: 0.02, blue: 0.05)
                 .ignoresSafeArea()
 
-            VStack(spacing: 28) {
+            VStack(spacing: 22) {
                 Spacer()
 
                 VStack(spacing: 12) {
@@ -35,6 +35,13 @@ struct ContentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .disabled(viewModel.isRecording || viewModel.backendPreset != .custom)
                         .padding(.bottom, 12)
+
+                    DebugStatusPanel(
+                        connectionStatus: viewModel.connectionStatus,
+                        state: viewModel.state,
+                        errorMessage: viewModel.errorMessage
+                    )
+                    .padding(.bottom, 8)
 
                     Text(viewModel.state.headline)
                         .font(.title2.weight(.semibold))
@@ -74,6 +81,55 @@ struct ContentView: View {
                 .accessibilityLabel(viewModel.isRecording ? "Stop recitation" : "Start recitation")
                 .padding(.bottom, 28)
             }
+        }
+    }
+}
+
+private struct DebugStatusPanel: View {
+    let connectionStatus: String
+    let state: RecitationSessionState
+    let errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            DebugStatusRow(title: "Connection", value: connectionStatus)
+            DebugStatusRow(title: "Last event", value: state.debugLastEventText)
+            DebugStatusRow(title: "Ayah", value: state.debugAyahText)
+            DebugStatusRow(title: "Transcript", value: state.debugTranscriptText)
+
+            if let errorMessage, !errorMessage.isEmpty {
+                DebugStatusRow(title: "Error", value: errorMessage, isError: true)
+            }
+        }
+        .padding(12)
+        .background(.white.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.white.opacity(0.14), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct DebugStatusRow: View {
+    let title: String
+    let value: String
+    var isError = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.64))
+                .frame(width: 78, alignment: .leading)
+
+            Text(value)
+                .font(.caption.monospaced())
+                .foregroundStyle(isError ? .red.opacity(0.9) : .white.opacity(0.92))
+                .lineLimit(2)
+                .minimumScaleFactor(0.78)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

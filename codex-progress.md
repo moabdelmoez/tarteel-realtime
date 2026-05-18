@@ -824,3 +824,44 @@
 - Known risk or unresolved issue:
   - The crash fix is built and installed, but the user still needs to retry the live mic against the real-ASR WSS URL and report whether the app now reaches buffering/locked events.
 - Next best step: retry the simulator mic with the `Custom` URL `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`.
+
+### Session 024
+
+- Date: 2026-05-18
+- Goal: Make `mobile-002` manual success criteria visible inside the iPhone simulator app.
+- Completed:
+  - Added debug fields to `RecitationSessionState` for last backend event, ayah ref, transcript, and event reason.
+  - Added a compact `DebugStatusPanel` to the SwiftUI screen showing Connection, Last event, Ayah, and Transcript.
+  - Added view-model connection status transitions: Idle, Connecting, Connected, Streaming, Receiving events, Stopped, and Error.
+  - Installed and launched the updated app in the iPhone 17 simulator.
+- Verification run:
+  - Red test first: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` failed because debug fields were missing.
+  - Green Swift tests: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
+  - Red source test first: `uv run python -B -m unittest tests.test_ios_status_panel` failed because `DebugStatusPanel` was missing.
+  - Green source tests: `uv run python -B -m unittest tests.test_ios_status_panel tests.test_ios_audio_streamer`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - `uv run python -B -m unittest discover`.
+  - `curl -i --max-time 15 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+  - `xcrun simctl install 5F1E7676-EF55-490C-91B0-ED07291C16B1 /private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app`.
+  - `xcrun simctl launch 5F1E7676-EF55-490C-91B0-ED07291C16B1 dev.mostafa.TarteelPrototype`.
+  - `xcrun simctl io 5F1E7676-EF55-490C-91B0-ED07291C16B1 screenshot /private/tmp/tarteel-status-panel.png`.
+- Evidence captured:
+  - Swift client core passed: 8 tests.
+  - Focused iOS source checks passed: 2 tests.
+  - Full Python deterministic suite passed: 90 tests.
+  - iOS simulator build succeeded.
+  - RunPod public health endpoint still returned HTTP 200 with `{"status":"ok"}`.
+  - Updated app launched in the iPhone 17 simulator with process id `8190`.
+  - Screenshot captured at `/private/tmp/tarteel-status-panel.png` showing the status panel.
+- Files or artifacts updated:
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/ContentView.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/RecitationViewModel.swift`
+  - `tests/test_ios_status_panel.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The app now shows objective success signals, but the user still needs to retry the live mic against RunPod and report whether the panel reaches `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.
+- Next best step: choose `Custom`, set `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`, tap mic, recite `مَلِكِ النَّاسِ` for 5-8 seconds, and use the debug panel as the pass/fail indicator.

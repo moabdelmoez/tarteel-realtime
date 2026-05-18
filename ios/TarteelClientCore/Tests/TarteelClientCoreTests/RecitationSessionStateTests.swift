@@ -26,6 +26,9 @@ struct RecitationSessionStateTests {
         #expect(state.currentAyahRef == "114:2")
         #expect(state.headline == "Locked on 114:2")
         #expect(state.detail == "مَلِكِ النَّاسِ")
+        #expect(state.debugLastEventText == "locked (unique_match)")
+        #expect(state.debugAyahText == "114:2")
+        #expect(state.debugTranscriptText == "مَلِكِ النَّاسِ")
     }
 
     @Test func wrongEventMovesStateIntoCorrectionMode() {
@@ -74,6 +77,9 @@ struct RecitationSessionStateTests {
         #expect(state.phase == .connecting)
         #expect(state.headline == "Gathering audio")
         #expect(state.detail == "Keep reciting")
+        #expect(state.debugLastEventText == "locating (waiting_for_audio_buffer)")
+        #expect(state.debugAyahText == "none")
+        #expect(state.debugTranscriptText == "none")
     }
 
     @Test func postLockBufferingEventKeepsListeningState() {

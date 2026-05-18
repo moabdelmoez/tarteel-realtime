@@ -307,9 +307,13 @@
         "Local WebSocket client streamed fixtures/local_audio/114002.wav through wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation with --chunk-ms 1000 and received four waiting_for_audio_buffer events followed by type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1.",
         "Fixed a simulator crash on mic tap by letting AVAudioEngine select the input tap format and converting from each received buffer format.",
         "Added tests/test_ios_audio_streamer.py to prevent reintroducing format: inputFormat for the input tap.",
-        "After the crash fix, focused regression passed, full Python suite passed with 89 tests, Swift client core passed with 8 tests, iOS simulator build succeeded, and the patched app launched in iPhone 17 simulator."
+        "After the crash fix, focused regression passed, full Python suite passed with 89 tests, Swift client core passed with 8 tests, iOS simulator build succeeded, and the patched app launched in iPhone 17 simulator.",
+        "Added a visible MVP status panel with Connection, Last event, Ayah, and Transcript rows so manual RunPod success criteria are observable.",
+        "RecitationSessionState now exposes debugLastEventText, debugAyahText, and debugTranscriptText for UI status and tests.",
+        "Added tests/test_ios_status_panel.py to pin the visible success signals in ContentView.",
+        "After the status panel update, Swift client core passed with 8 tests, focused iOS source checks passed with 2 tests, full Python suite passed with 90 tests, iOS simulator build succeeded, RunPod health returned HTTP 200, and the updated app launched in iPhone 17 simulator."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, and the simulator mic-tap crash has a built/installed fix. The feature remains in progress until the simulator or phone is manually verified with live mic chunks."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, the simulator mic-tap crash is fixed, and visible pass/fail signals are installed. The feature remains in progress until the simulator or phone is manually verified with live mic chunks."
     },
     {
       "id": "infra-001",

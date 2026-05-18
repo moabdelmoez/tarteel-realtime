@@ -1,0 +1,31 @@
+from pathlib import Path
+import unittest
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONTENT_VIEW_PATH = (
+    REPO_ROOT
+    / "ios"
+    / "TarteelPrototype"
+    / "TarteelPrototype"
+    / "App"
+    / "ContentView.swift"
+)
+
+
+class IOSStatusPanelSourceTests(unittest.TestCase):
+    def test_status_panel_shows_real_asr_success_signals(self) -> None:
+        source = CONTENT_VIEW_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("DebugStatusPanel", source)
+        self.assertIn('"Connection"', source)
+        self.assertIn('"Last event"', source)
+        self.assertIn('"Ayah"', source)
+        self.assertIn('"Transcript"', source)
+        self.assertIn("debugLastEventText", source)
+        self.assertIn("debugAyahText", source)
+        self.assertIn("debugTranscriptText", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
