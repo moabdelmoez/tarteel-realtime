@@ -901,3 +901,44 @@
 - Known risk or unresolved issue:
   - The user's live simulator mic still needs one retry while the backend logs are tailed. The diagnostics should distinguish empty/tiny iOS chunks from backend buffering/model recognition problems.
 - Next best step: retry the simulator mic, then inspect `/tmp/tarteel-asr.log` for `incoming_bytes`, `buffered_ms`, `action=flush`, and final `event_type`.
+
+### Session 026
+
+- Date: 2026-05-18
+- Goal: Diagnose the live simulator `no_match` result and reduce visible UI flashing during `mobile-002` manual verification.
+- Completed:
+  - Inspected RunPod logs from the user's simulator retry.
+  - Confirmed audio transport is working: the simulator sent `3200` byte PCM chunks every 100ms at 16 kHz.
+  - Confirmed backend buffering is working: `buffered_ms` reached `4200`, `action=flush` ran, and the session returned `event_type=locating`, `reason=no_match`.
+  - Changed the mobile state reducer so repeated `waiting_for_audio_buffer` events do not hide the last meaningful pre-lock diagnostic such as `locating (no_match)`.
+  - Changed the view model so identical realtime states and repeated connection statuses are not republished every 100ms.
+  - Added backend audio-level diagnostics: `pcm_rms`, `pcm_peak`, `transcript_chars`, and opt-in `transcript_text` logging gated by `TARTEEL_LOG_TRANSCRIPTS`.
+- Verification run:
+  - Red Swift test first: repeated waiting event overwrote the prior `no_match` diagnostic.
+  - Red Python tests first: backend logs lacked audio-level diagnostics and transcript logging controls.
+  - `uv run python -m unittest tests.test_api tests.test_ios_status_panel -v`.
+  - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
+  - `uv run python -m unittest discover -s tests -v`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath /private/tmp/tarteel-xcode-derived build`.
+- Evidence captured:
+  - RunPod logs from the failed simulator retry showed `incoming_bytes=3200`, `sample_rate_hz=16000`, `buffered_ms=4200`, `action=flush`, then `event_type=locating`, `reason=no_match`.
+  - Focused Python tests passed: 8 tests across `tests.test_api` and `tests.test_ios_status_panel`.
+  - Swift client core passed: 9 tests.
+  - Full Python deterministic suite passed: 95 tests.
+  - iPhone simulator app target build succeeded.
+- Files or artifacts updated:
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/RecitationViewModel.swift`
+  - `tarteel_realtime/api.py`
+  - `tarteel_realtime/app_factory.py`
+  - `tarteel_realtime/asr_app.py`
+  - `tests/test_api.py`
+  - `tests/test_asr_app.py`
+  - `tests/test_ios_status_panel.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - Current evidence points past transport and buffering into audio quality or ASR transcript/location quality. The next live retry should inspect `pcm_rms`, `pcm_peak`, and `transcript_chars`; exact transcript logging should be enabled only deliberately with `TARTEEL_LOG_TRANSCRIPTS=1`.
+- Next best step: deploy this diagnostic update to RunPod and reinstall the app build, then retry the simulator mic and judge success by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.

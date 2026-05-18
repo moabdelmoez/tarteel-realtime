@@ -1,4 +1,5 @@
 import base64
+import struct
 import unittest
 
 from fastapi.testclient import TestClient
@@ -14,10 +15,10 @@ SAMPLE_TANZIL_LINES = [
 ]
 
 
-def chunk_payload(sequence_number: int) -> dict:
+def chunk_payload(sequence_number: int, pcm: bytes = b"\x00\x01") -> dict:
     return {
         "sequence_number": sequence_number,
-        "pcm_base64": base64.b64encode(b"\x00\x01").decode("ascii"),
+        "pcm_base64": base64.b64encode(pcm).decode("ascii"),
         "sample_rate_hz": 16_000,
     }
 
@@ -96,6 +97,42 @@ class ApiTests(unittest.TestCase):
         self.assertIn("sample_rate_hz=16000", joined_logs)
         self.assertIn("event_type=locked", joined_logs)
         self.assertIn("ayah_ref=114:2", joined_logs)
+
+    def test_websocket_logs_audio_level_diagnostics(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+        )
+        client = TestClient(app)
+        pcm = struct.pack("<hh", 1000, -1000)
+
+        with self.assertLogs("tarteel_realtime.api", level="INFO") as logs:
+            with client.websocket_connect("/ws/recitation") as websocket:
+                websocket.send_json(chunk_payload(0, pcm=pcm))
+                websocket.receive_json()
+
+        joined_logs = "\n".join(logs.output)
+        self.assertIn("pcm_rms=1000", joined_logs)
+        self.assertIn("pcm_peak=1000", joined_logs)
+        self.assertIn("transcript_chars=6", joined_logs)
+
+    def test_websocket_transcript_log_content_is_opt_in(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+            log_transcripts=True,
+        )
+        client = TestClient(app)
+
+        with self.assertLogs("tarteel_realtime.api", level="INFO") as logs:
+            with client.websocket_connect("/ws/recitation") as websocket:
+                websocket.send_json(chunk_payload(0))
+                websocket.receive_json()
+
+        joined_logs = "\n".join(logs.output)
+        self.assertIn("transcript_text=مَلِكِ", joined_logs)
 
 
 if __name__ == "__main__":

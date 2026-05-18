@@ -57,6 +57,12 @@ public struct RecitationSessionState: Equatable, Sendable {
 
     public func applying(_ event: RecitationEvent) -> RecitationSessionState {
         if event.isWaitingForAudioBuffer {
+            if lastEventReason == "waiting_for_audio_buffer" {
+                return self
+            }
+            if phase == .connecting, lastEventType != nil {
+                return self
+            }
             return bufferingState(for: event)
         }
 

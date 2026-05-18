@@ -33,6 +33,9 @@
   - iPhone simulator mic-tap crash from explicit `AVAudioNode.installTap(... format: inputFormat)` has been fixed, built, installed, and launched in the simulator.
   - iPhone app now shows a visible MVP status panel with Connection, Last event, Ayah, and Transcript rows.
   - RunPod backend diagnostics are live from commit `8fd73a7`, logging chunk bytes, approximate audio milliseconds, buffered milliseconds, wait/flush actions, event type, reason, and ayah ref.
+  - Live simulator audio transport has been confirmed from RunPod logs: 3200-byte PCM chunks every 100ms at 16 kHz reached the backend, buffered to 4200ms, flushed, and returned `locating/no_match`.
+  - iOS state now suppresses repeated `waiting_for_audio_buffer` redraws so the last meaningful diagnostic is not immediately overwritten.
+  - Backend diagnostics now include `pcm_rms`, `pcm_peak`, `transcript_chars`, and optional `transcript_text` when `TARTEEL_LOG_TRANSCRIPTS=1`.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -94,6 +97,11 @@
   - Latest full Python deterministic suite after backend diagnostics: 92 tests passing.
   - RunPod public WSS smoke for `114002.wav --chunk-ms 1000` still returned `locked` at `114:2`.
   - Known-good diagnostic log pattern: `incoming_bytes=32000`, `approx_audio_ms=1000`, `buffered_ms=4702`, `action=flush`, `event_type=locked`, `ayah_ref=114:2`.
+  - Latest failed simulator retry pattern: `incoming_bytes=3200`, `sample_rate_hz=16000`, `buffered_ms=4200`, `action=flush`, then `event_type=locating`, `reason=no_match`.
+  - Latest focused Python diagnostics/UI tests passed: 8 tests.
+  - Latest full Python deterministic suite after flashing/no_match diagnostics: 95 tests passing.
+  - Latest Swift client core after flashing fix: 9 tests passing.
+  - Latest iPhone simulator app target build after flashing fix succeeded.
 
 ## Changed This Session
 
@@ -116,6 +124,8 @@
   - Fixed the simulator microphone tap crash by using AVAudioEngine-selected tap format and converting from the actual buffer format.
   - Added the visible MVP status panel so `mobile-002` can be manually judged by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.
   - Added backend diagnostics to distinguish empty/tiny iOS chunks from backend buffering or ASR recognition failures.
+  - Added client-side waiting-event suppression to reduce UI flashing during real ASR buffering.
+  - Added audio-level and optional transcript backend diagnostics to separate silent/low mic input from ASR location failures.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -131,6 +141,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
+  - The latest audio-level diagnostics and flashing fix still need to be deployed to RunPod/reinstalled in the simulator before the next live manual retry.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -148,6 +159,7 @@
   - Swift client core tests still pass after any event-state changes.
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
+  - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
 - What must not change during that step:
   - Do not remove fake recognizer tests.
   - Do not make heavyweight ASR dependencies required for the default test suite unless explicitly approved.
@@ -194,4 +206,5 @@
   - Current RunPod health URL while the pod is alive: `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`
   - Current iOS Custom backend URL while the pod is alive: `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`
   - Current RunPod live log command: `tail -f /tmp/tarteel-asr.log | tr -d '\000'`
+  - Optional temporary transcript debugging on RunPod: add `TARTEEL_LOG_TRANSCRIPTS=1` to the ASR server environment only when the user agrees to log recognized transcript text.
   - Stop current RunPod ASR server if needed: `kill $(cat /tmp/tarteel-asr.pid)` from `/workspace/tarteel-realtime` on the pod.

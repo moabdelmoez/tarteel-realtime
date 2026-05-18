@@ -11,6 +11,14 @@ CONTENT_VIEW_PATH = (
     / "App"
     / "ContentView.swift"
 )
+VIEW_MODEL_PATH = (
+    REPO_ROOT
+    / "ios"
+    / "TarteelPrototype"
+    / "TarteelPrototype"
+    / "App"
+    / "RecitationViewModel.swift"
+)
 
 
 class IOSStatusPanelSourceTests(unittest.TestCase):
@@ -25,6 +33,12 @@ class IOSStatusPanelSourceTests(unittest.TestCase):
         self.assertIn("debugLastEventText", source)
         self.assertIn("debugAyahText", source)
         self.assertIn("debugTranscriptText", source)
+
+    def test_view_model_does_not_republish_identical_realtime_state(self) -> None:
+        source = VIEW_MODEL_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("let nextState = currentState.applying(event)", source)
+        self.assertIn("if nextState != currentState", source)
 
 
 if __name__ == "__main__":

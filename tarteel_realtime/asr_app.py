@@ -27,6 +27,7 @@ class AsrAppSettings:
     minimum_audio_ms: int = 2_000
     flush_interval_ms: int = 1_500
     tail_audio_ms: int = 500
+    log_transcripts: bool = False
 
 
 class LazyRecognizer:
@@ -51,6 +52,7 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrAppSettings:
         minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", "2000")),
         flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", "1500")),
         tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", "500")),
+        log_transcripts=_env_bool(values, "TARTEEL_LOG_TRANSCRIPTS"),
     )
 
 
@@ -102,6 +104,7 @@ def create_asr_app(
         AppSettings(
             tanzil_path=settings.tanzil_path,
             minimum_lock_words=settings.minimum_lock_words,
+            log_transcripts=settings.log_transcripts,
         ),
         recognizer_factory=recognizer_factory or create_buffered_whisper_recognizer_factory(settings),
     )
@@ -116,3 +119,7 @@ def _optional_env(values: Mapping[str, str], key: str) -> str | None:
     if not value:
         return None
     return value
+
+
+def _env_bool(values: Mapping[str, str], key: str) -> bool:
+    return values.get(key, "").strip().lower() in {"1", "true", "yes", "on"}

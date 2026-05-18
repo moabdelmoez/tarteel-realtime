@@ -60,8 +60,15 @@ final class RecitationViewModel: ObservableObject {
 
             try await socketClient.connect(url: backendURL) { [weak self] event in
                 Task { @MainActor in
-                    self?.state = self?.state.applying(event) ?? RecitationSessionState().applying(event)
-                    self?.connectionStatus = "Receiving events"
+                    guard let self else { return }
+                    let currentState = self.state
+                    let nextState = currentState.applying(event)
+                    if nextState != currentState {
+                        self.state = nextState
+                    }
+                    if self.connectionStatus != "Receiving events" {
+                        self.connectionStatus = "Receiving events"
+                    }
                 }
             }
             connectionStatus = "Connected"

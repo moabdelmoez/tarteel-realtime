@@ -15,6 +15,7 @@ from tarteel_realtime.recognition import SpeechRecognizer
 class AppSettings:
     tanzil_path: Path
     minimum_lock_words: int = 3
+    log_transcripts: bool = False
 
 
 def create_configured_app(
@@ -26,4 +27,5 @@ def create_configured_app(
         corpus=QuranCorpus.from_tanzil_file(settings.tanzil_path),
         recognizer_factory=recognizer_factory,
         minimum_lock_words=settings.minimum_lock_words,
+        log_transcripts=settings.log_transcripts,
     )

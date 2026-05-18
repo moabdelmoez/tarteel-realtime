@@ -42,6 +42,7 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.minimum_audio_ms, 2_000)
         self.assertEqual(settings.flush_interval_ms, 1_500)
         self.assertEqual(settings.tail_audio_ms, 500)
+        self.assertFalse(settings.log_transcripts)
 
     def test_settings_from_env_accepts_backend_overrides(self):
         settings = settings_from_env({
@@ -53,6 +54,7 @@ class AsrAppTests(unittest.TestCase):
             "TARTEEL_ASR_MIN_AUDIO_MS": "1000",
             "TARTEEL_ASR_FLUSH_MS": "750",
             "TARTEEL_ASR_TAIL_MS": "250",
+            "TARTEEL_LOG_TRANSCRIPTS": "1",
         })
 
         self.assertEqual(settings.tanzil_path, Path("/tmp/quran.txt"))
@@ -63,6 +65,7 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.minimum_audio_ms, 1_000)
         self.assertEqual(settings.flush_interval_ms, 750)
         self.assertEqual(settings.tail_audio_ms, 250)
+        self.assertTrue(settings.log_transcripts)
 
     def test_lazy_whisper_factory_defers_model_creation_until_first_audio_chunk(self):
         built_configs = []

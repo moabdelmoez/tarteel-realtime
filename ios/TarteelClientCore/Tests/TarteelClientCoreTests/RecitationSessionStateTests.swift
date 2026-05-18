@@ -112,4 +112,44 @@ struct RecitationSessionStateTests {
         #expect(state.headline == "Listening")
         #expect(state.detail == "Keep reciting")
     }
+
+    @Test func repeatedPreLockBufferingDoesNotHideLastMeaningfulDiagnostic() {
+        let noMatchEvent = RecitationEvent(
+            type: .locating,
+            transcript: "hello",
+            confidence: 0.4,
+            chunkSequence: 42,
+            reason: "no_match",
+            candidateRefs: [],
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: nil,
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+        let bufferingEvent = RecitationEvent(
+            type: .locating,
+            transcript: "",
+            confidence: 0.0,
+            chunkSequence: 43,
+            reason: "waiting_for_audio_buffer",
+            candidateRefs: [],
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: nil,
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let noMatchState = RecitationSessionState().applying(noMatchEvent)
+        let nextState = noMatchState.applying(bufferingEvent)
+
+        #expect(nextState == noMatchState)
+        #expect(nextState.debugLastEventText == "locating (no_match)")
+        #expect(nextState.debugTranscriptText == "hello")
+    }
 }
