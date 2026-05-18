@@ -118,6 +118,39 @@ class WhisperRecognizerTests(unittest.TestCase):
         self.assertEqual(inputs["sampling_rate"], 16_000)
         self.assertEqual(generate_kwargs, {"language": "ar"})
 
+    def test_transformers_backend_retries_without_language_for_outdated_generation_config(self):
+        class FakeNumpy:
+            float32 = "float32"
+
+            def array(self, values, *, dtype):
+                return {"kind": "ndarray", "values": values, "dtype": dtype}
+
+        class OutdatedGenerationConfigPipeline:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, inputs, *, generate_kwargs):
+                self.calls.append((inputs, generate_kwargs))
+                if len(self.calls) == 1:
+                    raise ValueError(
+                        "The generation config is outdated and is thus not "
+                        "compatible with the `language` argument to `generate`."
+                    )
+                return {"text": "أَلْهَاكُمُ التَّكَاثُرُ"}
+
+        pipeline = OutdatedGenerationConfigPipeline()
+
+        with patch.dict("sys.modules", {"numpy": FakeNumpy()}):
+            backend = TransformersWhisperBackend(
+                pipeline_factory=lambda **kwargs: pipeline,
+                config=WhisperConfig(model_id="test/quran-whisper"),
+            )
+            payload = backend.transcribe(samples=[0.0], sample_rate_hz=16_000, language="ar")
+
+        self.assertEqual(payload["text"], "أَلْهَاكُمُ التَّكَاثُرُ")
+        self.assertEqual(pipeline.calls[0][1], {"language": "ar"})
+        self.assertEqual(pipeline.calls[1][1], {})
+
 
 if __name__ == "__main__":
     unittest.main()

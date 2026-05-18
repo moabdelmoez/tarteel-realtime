@@ -81,12 +81,26 @@ class TransformersWhisperBackend:
     def transcribe(self, *, samples: list[float], sample_rate_hz: int, language: str) -> dict[str, Any]:
         import numpy as np
 
-        result = self._pipeline({
+        inputs = {
             "raw": np.array(samples, dtype=np.float32),
             "sampling_rate": sample_rate_hz,
-        }, generate_kwargs={"language": language})
+        }
+        try:
+            result = self._pipeline(inputs, generate_kwargs={"language": language})
+        except ValueError as exc:
+            if not _is_outdated_generation_config_error(exc):
+                raise
+            result = self._pipeline(inputs, generate_kwargs={})
         return {
             "text": result.get("text", ""),
             "confidence": result.get("confidence", 0.0),
             "is_final": True,
         }
+
+
+def _is_outdated_generation_config_error(exc: ValueError) -> bool:
+    message = str(exc)
+    return (
+        "generation config is outdated" in message
+        and "language" in message
+    )
