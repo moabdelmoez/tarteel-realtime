@@ -143,6 +143,47 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(len(built_configs), 1)
         self.assertEqual(recognized_pcm, [b"\x00\x01\x02\x03"])
 
+    def test_buffered_whisper_factory_reuses_model_across_sessions_with_separate_buffers(self):
+        built_configs = []
+        recognized_pcm = []
+
+        class StubRecognizer:
+            def __init__(self, config):
+                built_configs.append(config)
+
+            def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+                recognized_pcm.append(chunk.pcm)
+                return RecognitionResult(
+                    transcript="مَلِكِ",
+                    confidence=0.9,
+                    chunk_sequence=chunk.sequence_number,
+                    is_final=True,
+                )
+
+        factory = create_buffered_whisper_recognizer_factory(
+            AsrAppSettings(
+                tanzil_path=Path("unused.txt"),
+                model_id="local/quran-whisper",
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+            ),
+            recognizer_builder=StubRecognizer,
+        )
+
+        first_session = factory()
+        second_session = factory()
+        first_session.recognize(AudioChunk(0, b"\x00\x01", 1_000))
+        second_session.recognize(AudioChunk(10, b"\x10\x11", 1_000))
+        first_session.recognize(AudioChunk(1, b"\x02\x03", 1_000))
+        second_session.recognize(AudioChunk(11, b"\x12\x13", 1_000))
+
+        self.assertEqual(len(built_configs), 1)
+        self.assertEqual(recognized_pcm, [
+            b"\x00\x01\x02\x03",
+            b"\x10\x11\x12\x13",
+        ])
+
     def test_create_asr_app_uses_same_websocket_contract_with_injected_recognizer(self):
         with TemporaryDirectory() as directory:
             tanzil_path = Path(directory) / "quran-simple-clean.txt"

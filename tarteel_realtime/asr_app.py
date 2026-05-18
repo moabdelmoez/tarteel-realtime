@@ -4,6 +4,7 @@ import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from fastapi import FastAPI
 
@@ -34,10 +35,13 @@ class LazyRecognizer:
     def __init__(self, recognizer_factory: Callable[[], SpeechRecognizer]) -> None:
         self._recognizer_factory = recognizer_factory
         self._recognizer: SpeechRecognizer | None = None
+        self._lock = Lock()
 
     def recognize(self, chunk: AudioChunk) -> RecognitionResult:
         if self._recognizer is None:
-            self._recognizer = self._recognizer_factory()
+            with self._lock:
+                if self._recognizer is None:
+                    self._recognizer = self._recognizer_factory()
         return self._recognizer.recognize(chunk)
 
 
@@ -68,8 +72,10 @@ def create_lazy_whisper_recognizer_factory(
         device=settings.device,
     )
 
+    shared_recognizer = LazyRecognizer(lambda: builder(config))
+
     def create_recognizer() -> SpeechRecognizer:
-        return LazyRecognizer(lambda: builder(config))
+        return shared_recognizer
 
     return create_recognizer
 

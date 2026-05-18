@@ -1175,3 +1175,38 @@
   - The tarteel-ai model looks promising on raw transcript quality, but the current session state machine is too strict after lock.
   - The public RunPod backend is currently running `tarteel-ai/whisper-base-ar-quran`.
 - Next best step: implement post-lock tolerant progression recovery. When exact alignment emits `wrong` for a real ASR chunk, the session should be able to consult progression-aware tolerant location before surfacing a hard correction.
+
+### Session 032
+
+- Date: 2026-05-18
+- Goal: Stabilize the real-ASR WebSocket model lifecycle after the simulator showed `Socket is not connected`.
+- Completed:
+  - Investigated the RunPod logs for the simulator failure.
+  - Confirmed live simulator audio was reaching the backend as 3200-byte, 100ms PCM chunks at 16 kHz with non-zero audio levels.
+  - Identified the backend failure as a CUDA `device-side assert triggered` during Whisper model construction on a WebSocket session, not as an iPhone microphone transport failure.
+  - Added a regression proving two buffered ASR sessions reuse one inner Whisper recognizer/model while keeping separate per-session audio buffers.
+  - Updated the lazy Whisper factory so the heavy model is shared across ASR WebSocket sessions, with locked one-time initialization.
+- Verification run:
+  - Red regression first failed with `AssertionError: 2 != 1`, proving the model was previously built once per session.
+  - `uv run python -B -m unittest tests.test_asr_app.AsrAppTests.test_buffered_whisper_factory_reuses_model_across_sessions_with_separate_buffers -v`.
+  - `uv run python -B -m unittest tests.test_asr_app tests.test_buffered_recognition -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+- Evidence captured:
+  - Focused model-lifecycle regression passed: 1 test.
+  - Focused ASR app and buffering tests passed: 10 tests.
+  - Full Python deterministic suite passed: 106 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_app.py`
+  - `tests/test_asr_app.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - This fixes repeated GPU model construction across WebSocket sessions; it does not yet change post-lock tolerant progression recovery.
+  - RunPod still needs to pull this commit, restart the ASR backend, and verify that repeated public WSS calls do not recreate/crash the model.
+- Next best step: commit, push, deploy the lifecycle fix to RunPod, restart the ASR backend with `tarteel-ai/whisper-base-ar-quran`, and re-run two sequential WSS smoke calls against the same server process.
