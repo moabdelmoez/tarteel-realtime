@@ -1,0 +1,206 @@
+# Tarteel Realtime MVP
+
+Technical MVP for Quran recitation location and correction.
+
+## Run The Dev API
+
+```bash
+uv run uvicorn tarteel_realtime.dev_app:app --reload
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+The dev app exposes `WS /ws/recitation` and uses a built-in fake recognizer script:
+
+1. First chunk recognizes `مَلِكِ` and emits `locked` at `114:2:1`.
+2. Second chunk recognizes `الْفَلَقِ` and emits `wrong` against expected `114:2:2`.
+
+Each WebSocket message is JSON:
+
+```json
+{
+  "sequence_number": 0,
+  "pcm_base64": "AAE=",
+  "sample_rate_hz": 16000
+}
+```
+
+`pcm_base64` is expected to contain little-endian signed PCM16 audio. The ASR adapter decodes it to normalized float samples before model inference.
+
+In another terminal, send two dummy chunks to the dev WebSocket:
+
+```bash
+uv run python -m tarteel_realtime.ws_client
+```
+
+The dev recognizer script should emit a `locked` event followed by a `wrong` event.
+
+## Quran Text Data
+
+The production path should use a pinned Tanzil UTF-8 text file, loaded with `QuranCorpus.from_tanzil_file(...)`.
+
+Recommended local placement once downloaded:
+
+```text
+data/tanzil/quran-simple-clean.txt
+```
+
+The repo includes `fixtures/quran/sample-tanzil.txt` for deterministic smoke tests only. The full Quran file should stay local at the path above.
+
+After placing the full file, record its source metadata and checksum:
+
+```bash
+uv run python -m tarteel_realtime.quran_data --tanzil-path data/tanzil/quran-simple-clean.txt --source-name Tanzil --source-url "record-the-source-url-you-used" --write-manifest
+```
+
+Check the pinned file before using it for real evaluation:
+
+```bash
+uv run python -m tarteel_realtime.quran_data --check-manifest
+```
+
+Do not edit the canonical Tanzil file in place. If matching needs simplified text, derive normalized data at runtime or in generated artifacts.
+
+## Run Offline Evaluation
+
+Run the sample fake-transcript evaluation fixture:
+
+```bash
+uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2
+```
+
+When the full Tanzil file is downloaded to `data/tanzil/quran-simple-clean.txt`, the `--tanzil-path` flag can be omitted. Add `--mvp-scope` to evaluate only Al-Fatihah and Juz Amma from a larger Tanzil file.
+
+```bash
+uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope
+```
+
+## ASR Adapter
+
+The current app uses `FakeRecognizer` for deterministic development. `WhisperRecognizer` defines the optional Quran Whisper integration boundary, but model dependencies are intentionally not part of the default install yet.
+
+Run one local smoke transcription with the tested command wrapper. Raw `.pcm16le` input uses `--sample-rate`; `.wav` input must be mono 16-bit PCM and uses the file's embedded sample rate.
+
+```bash
+uv run python -m tarteel_realtime.asr_smoke path/to/audio.pcm16le --model-id basharalrfooh/whisper-small-quran --sample-rate 16000
+uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran
+```
+
+Add `--tanzil-path` when you want the smoke output to include a Quran locator decision for the transcript:
+
+```bash
+uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2
+```
+
+For a real model run, keep dependencies opt-in with `uv`, for example:
+
+```bash
+uv run --with transformers --with torch python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --mvp-scope
+```
+
+On the RunPod L4 smoke environment verified on 2026-05-16, the reproducible GPU command used CUDA-12-compatible Torch pins and an explicit `torchvision` install so `transformers.pipeline` does not import the pod's system `torchvision`:
+
+```bash
+UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0
+```
+
+This path prints one compact JSON transcription payload. It does not store raw audio.
+
+## Real ASR WebSocket Backend
+
+The default backend remains `tarteel_realtime.dev_app:app` with `FakeRecognizer`. The real ASR backend is a separate opt-in app that uses the same `WS /ws/recitation` contract and lazy-loads the Whisper model on the first audio chunk.
+
+The real ASR backend buffers short mic chunks in memory before calling Whisper. Default buffering is:
+
+```text
+TARTEEL_ASR_MIN_AUDIO_MS=2000
+TARTEEL_ASR_FLUSH_MS=1500
+TARTEEL_ASR_TAIL_MS=500
+```
+
+Before each model call it waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of PCM16 audio, then keeps `TARTEEL_ASR_TAIL_MS` as overlap so words near a boundary are not cut off.
+
+Local or CPU smoke command:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
+uv run --with transformers --with torch uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --reload
+```
+
+RunPod L4 command, keeping ASR dependencies opt-in:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
+TARTEEL_WHISPER_DEVICE=cuda:0 \
+UV_NO_PROGRESS=1 uv run --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
+```
+
+Send one mono PCM16 WAV or raw PCM16LE file through the WebSocket:
+
+```bash
+uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav
+```
+
+By default, `--audio-path` is sent as one whole-file chunk. To simulate live microphone chunks, add a chunk duration:
+
+```bash
+uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000
+```
+
+For the first RunPod L40S chunked-WAV proof on 2026-05-17, Surah 114:2 locked reliably with a larger first buffer:
+
+```bash
+TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt \
+TARTEEL_MINIMUM_LOCK_WORDS=2 \
+TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
+TARTEEL_WHISPER_DEVICE=cuda:0 \
+TARTEEL_ASR_MIN_AUDIO_MS=4200 \
+TARTEEL_ASR_FLUSH_MS=4200 \
+TARTEEL_ASR_TAIL_MS=0 \
+UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000
+```
+
+Then, from the same pod shell:
+
+```bash
+uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000
+```
+
+Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
+
+## iOS Prototype
+
+The first native SwiftUI prototype lives under `ios/`.
+
+Run the deterministic backend first:
+
+```bash
+uv run uvicorn tarteel_realtime.dev_app:app --reload
+```
+
+Then open:
+
+```text
+ios/TarteelPrototype/TarteelPrototype.xcodeproj
+```
+
+The app defaults to the `Simulator` backend preset:
+
+```text
+ws://127.0.0.1:8000/ws/recitation
+```
+
+Switch to `Custom` for a LAN, tunnel, or later RunPod real-ASR WebSocket URL. For a physical iPhone, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP in the app. More details are in `ios/README.md`.
+
+## Verify
+
+```bash
+uv run python -B -m unittest discover
+uv run python -m compileall -q tarteel_realtime tests
+```

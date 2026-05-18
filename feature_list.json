@@ -1,0 +1,307 @@
+{
+  "project": "tarteel-realtime",
+  "last_updated": "2026-05-18",
+  "rules": {
+    "single_active_feature": true,
+    "passing_requires_evidence": true,
+    "do_not_skip_verification": true,
+    "use_uv_for_python_execution": true,
+    "do_not_use_pip_directly": true
+  },
+  "status_legend": {
+    "not_started": "Work has not begun.",
+    "in_progress": "The feature is the current active task. Only one feature may have this status.",
+    "blocked": "Work cannot continue until a documented blocker is resolved.",
+    "passing": "Required verification has passed and evidence is recorded."
+  },
+  "features": [
+    {
+      "id": "core-001",
+      "priority": 1,
+      "area": "quran-data",
+      "title": "Quran data foundation",
+      "user_visible_behavior": "The system can parse local Tanzil-format Quran text, normalize Arabic, address ayahs and words by stable refs, and scope to Al-Fatihah plus Juz Amma.",
+      "status": "passing",
+      "verification": [
+        "uv run python -B -m unittest tests.test_quran_data tests.test_scope",
+        "uv run python -B -m unittest discover"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/quran.py and tarteel_realtime/scope.py.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "Full Tanzil file is intentionally not committed; fixtures/quran/sample-tanzil.txt is a smoke fixture."
+    },
+    {
+      "id": "core-002",
+      "priority": 2,
+      "area": "alignment",
+      "title": "Word-sequence alignment engine",
+      "user_visible_behavior": "After a recitation location is known, the system classifies fake transcripts as correct, wrong, or uncertain.",
+      "status": "passing",
+      "verification": [
+        "uv run python -B -m unittest tests.test_alignment",
+        "uv run python -B -m unittest discover"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/alignment.py.",
+        "Covers correct partial recitation, wrong word, skipped word, extra word, silence, repetition, and self-correction.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "This is deterministic text alignment, not tajweed or phoneme scoring."
+    },
+    {
+      "id": "core-003",
+      "priority": 3,
+      "area": "locator",
+      "title": "Ayah locator engine",
+      "user_visible_behavior": "The system can lock onto unique Quran phrases and return candidate ayahs for ambiguous repeated phrases.",
+      "status": "passing",
+      "verification": [
+        "uv run python -B -m unittest tests.test_locator",
+        "uv run python -B -m unittest discover"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/locator.py.",
+        "Tests cover unique phrase lock, inside-ayah starts, repeated phrase ambiguity, short phrase ambiguity, no match, and empty transcript.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "Locator currently uses exact normalized text matching over fake transcripts."
+    },
+    {
+      "id": "core-004",
+      "priority": 4,
+      "area": "evaluation",
+      "title": "Offline evaluator and CLI",
+      "user_visible_behavior": "A developer can run JSONL fake-transcript evaluation fixtures and see locator/alignment/wrong-detection metrics.",
+      "status": "passing",
+      "verification": [
+        "uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope",
+        "uv run python -B -m unittest tests.test_evaluator tests.test_evaluate_cli"
+      ],
+      "evidence": [
+        "Sample evaluator returned total_cases: 3, locator_accuracy: 1.000, alignment_accuracy: 1.000, wrong_detection_rate: 1.000.",
+        "Implemented in tarteel_realtime/evaluator.py and tarteel_realtime/evaluate.py.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "Uses fake transcripts only; no ASR/audio dataset integration yet."
+    },
+    {
+      "id": "core-005",
+      "priority": 5,
+      "area": "recognition-session",
+      "title": "Fake recognizer and streaming session engine",
+      "user_visible_behavior": "A fake recognizer can drive a recitation session through locating, lock candidates, locked, progress, wrong, and uncertain events.",
+      "status": "passing",
+      "verification": [
+        "uv run python -B -m unittest tests.test_recognition tests.test_session",
+        "uv run python -B -m unittest discover"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/recognition.py and tarteel_realtime/session.py.",
+        "Session tests verify lock, progress, wrong, uncertain, locating, and ambiguous candidate flows.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "This is the core state machine that the iPhone/WebSocket client will eventually consume."
+    },
+    {
+      "id": "backend-001",
+      "priority": 6,
+      "area": "backend",
+      "title": "FastAPI dev backend and manual client",
+      "user_visible_behavior": "A developer can run the dev server, call /health, and send dummy chunks over WebSocket to receive session events.",
+      "status": "passing",
+      "verification": [
+        "uv run uvicorn tarteel_realtime.dev_app:app --reload",
+        "uv run python -m tarteel_realtime.ws_client",
+        "uv run python -B -m unittest tests.test_api tests.test_dev_app tests.test_ws_client"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/api.py, tarteel_realtime/dev_app.py, and tarteel_realtime/ws_client.py.",
+        "Manual server startup confirmed by user; / returns 404 because only /health and /ws/recitation are implemented.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "Root / page is intentionally not implemented."
+    },
+    {
+      "id": "asr-001",
+      "priority": 7,
+      "area": "asr",
+      "title": "Optional Whisper adapter boundary and PCM16 decoding",
+      "user_visible_behavior": "The system has a stable recognizer adapter boundary for future Quran Whisper inference and decodes PCM16 audio to normalized samples.",
+      "status": "passing",
+      "verification": [
+        "uv run python -B -m unittest tests.test_audio tests.test_whisper_adapter",
+        "uv run python -B -m unittest discover"
+      ],
+      "evidence": [
+        "Implemented in tarteel_realtime/audio.py and tarteel_realtime/whisper_adapter.py.",
+        "Tests verify PCM16 decoding, odd-byte rejection, backend payload shape, default fields, and missing dependency errors.",
+        "Latest full suite after harness setup: 55 tests passed."
+      ],
+      "notes": "Real model inference is verified under asr-002, but Whisper/Torch dependencies remain optional and outside the default install."
+    },
+    {
+      "id": "asr-002",
+      "priority": 8,
+      "area": "asr",
+      "title": "Real Quran Whisper model spike",
+      "user_visible_behavior": "A developer can opt into model dependencies and run one local transcription through WhisperRecognizer without changing deterministic tests.",
+      "status": "passing",
+      "verification": [
+        "Use uv to add optional ASR dependencies; do not use pip directly.",
+        "Run uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter.",
+        "On RunPod L4, run UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0.",
+        "Run uv run python -B -m unittest discover after the spike."
+      ],
+      "evidence": [
+        "Added tarteel_realtime/asr_smoke.py with an injectable recognizer factory for deterministic tests.",
+        "Added tests/test_asr_smoke.py covering PCM16 file ingestion, JSON output, config wiring, and missing optional backend handling.",
+        "Added mono PCM16 WAV ingestion with embedded sample-rate handling and clean unsupported-WAV errors.",
+        "Added optional locator scoring to the ASR smoke payload when --tanzil-path is provided.",
+        "Fixed Transformers 5 ASR input contract by sending numpy.float32 arrays to the pipeline.",
+        "Focused ASR adapter/smoke tests passed after the adapter fix: 10 tests.",
+        "Full deterministic suite passed after the real model spike: 62 tests; compile check passed.",
+        "RunPod L4 verified torch 2.7.1+cu126 with CUDA available on driver 570.195.03.",
+        "RunPod real model smoke for 114002.wav returned transcript مَلِكِ النَّاسِ and locator locked to 114:2.",
+        "RunPod real model smoke for 114001.wav returned transcript قُلْ أَعُوذُ بِرَبِّ النَّاسِ and locator locked to 114:1."
+      ],
+      "notes": "Passing for the narrow model spike: two local recitation WAVs transcribed through WhisperRecognizer on RunPod GPU and located against the sample Tanzil fixture. Keep optional/heavy model dependencies isolated so the default test suite remains fast."
+    },
+    {
+      "id": "data-001",
+      "priority": 9,
+      "area": "quran-data",
+      "title": "Full Tanzil data integration",
+      "user_visible_behavior": "A developer can place the full pinned Tanzil file at data/tanzil/quran-simple-clean.txt and run MVP-scoped evaluation without sample fixtures.",
+      "status": "passing",
+      "verification": [
+        "Place the full pinned Tanzil file at data/tanzil/quran-simple-clean.txt.",
+        "Run uv run python -m tarteel_realtime.quran_data --tanzil-path data/tanzil/quran-simple-clean.txt --source-name Tanzil --source-url <source-url> --write-manifest.",
+        "Run uv run python -m tarteel_realtime.quran_data --check-manifest.",
+        "Run uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope.",
+        "Run uv run python -B -m unittest tests.test_quran_data_manifest tests.test_evaluate_cli.",
+        "Run uv run python -B -m unittest discover."
+      ],
+      "evidence": [
+        "Added tarteel_realtime/quran_data.py with default data paths, SHA-256 inspection, manifest write/load, manifest validation, and a CLI entrypoint.",
+        "Added tests/test_quran_data_manifest.py covering shared defaults, checksum/reference inspection, manifest round-trip validation, checksum mismatch detection, and CLI write/check mode.",
+        "Added data/tanzil/README.md and data/tanzil/.gitignore so the full Quran text stays local while the workflow remains documented.",
+        "Smoke manifest inspection over fixtures/quran/sample-tanzil.txt returned sha256 a9d046629634eebb96bc374f75882f0f89dd622e18940d94a2e925e9eee8c9f2, ayah_count 3, first_ref 113:1, last_ref 114:2.",
+        "Repository smoke evaluator fixture now has an automated regression test and returns locator_accuracy 1.000, alignment_accuracy 1.000, wrong_detection_rate 1.000.",
+        "Full Tanzil file at data/tanzil/quran-simple-clean.txt parsed to ayah_count 6236, first_ref 1:1, last_ref 114:6.",
+        "Recorded data/tanzil/quran-simple-clean.metadata.json with sha256 054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49 and bytes 794313.",
+        "Default-path MVP evaluation passed against the full Tanzil file with locator_accuracy 1.000, alignment_accuracy 1.000, wrong_detection_rate 1.000.",
+        "Focused evaluator/data manifest tests passed: 9 tests. Full deterministic suite passed: 67 tests. Compile check passed."
+      ],
+      "notes": "Do not mutate the canonical Tanzil file. Derived normalized data may be generated later. The full text file is locally ignored; the metadata file records the pinned local copy."
+    },
+    {
+      "id": "mobile-001",
+      "priority": 10,
+      "area": "ios",
+      "title": "Native iPhone prototype",
+      "user_visible_behavior": "A user can tap a mic, stream audio chunks to the backend, and see voice-first correction events.",
+      "status": "passing",
+      "verification": [
+        "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore.",
+        "Run xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build.",
+        "Launch the app in Simulator and verify the initial mic screen renders.",
+        "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend."
+      ],
+      "evidence": [
+        "Added ios/TarteelClientCore Swift package with tested backend event decoding, audio chunk JSON encoding, and mobile session-state reduction.",
+        "Swift client core tests passed: 4 tests.",
+        "Added ios/TarteelPrototype native SwiftUI app with AVAudioEngine microphone capture, URLSessionWebSocketTask transport, configurable backend URL, and Info.plist microphone/local-network/ATS development permissions.",
+        "iOS simulator build succeeded for TarteelPrototype with Xcode 26.5 using CODE_SIGNING_ALLOWED=NO.",
+        "Installed and launched dev.mostafa.TarteelPrototype in iPhone 17 simulator; initial UI screenshot captured at /private/tmp/tarteel-prototype-launch.png.",
+        "Backend WebSocket smoke with uv run python -m tarteel_realtime.ws_client --chunks 2 returned locked then wrong events for the fake recognizer.",
+        "User manually verified the iPhone simulator mic flow is working fine against the dev backend.",
+        "Full Python deterministic suite passed: 67 tests. Compile check passed."
+      ],
+      "notes": "Passing for the native fake-backend prototype. This does not yet use real ASR in the WebSocket server."
+    },
+    {
+      "id": "backend-002",
+      "priority": 11,
+      "area": "backend-asr",
+      "title": "Real ASR WebSocket backend spike",
+      "user_visible_behavior": "A developer can run an opt-in backend mode that uses the Quran Whisper recognizer instead of the fake recognizer and returns recitation session events over the same WebSocket contract.",
+      "status": "passing",
+      "verification": [
+        "Keep fake backend as the default path.",
+        "Do not add heavyweight Whisper/Torch dependencies to the default install.",
+        "Add deterministic tests for ASR backend factory/configuration using injected recognizers.",
+        "Run uv run python -B -m unittest discover locally.",
+        "On RunPod GPU, run the real ASR WebSocket backend with optional dependencies and verify at least one Surah 114 audio sample produces a locked event over WS."
+      ],
+      "evidence": [
+        "Added tarteel_realtime/asr_app.py with env-driven ASR backend settings, lazy Whisper recognizer construction, and injected-recognizer test seams.",
+        "Extended tarteel_realtime/ws_client.py so a mono PCM16 WAV or raw PCM16LE file can be sent through the existing WebSocket contract.",
+        "Added deterministic tests in tests/test_asr_app.py and expanded tests/test_ws_client.py.",
+        "uv run python -B -m unittest discover passed: 74 tests.",
+        "uv run python -m compileall -q tarteel_realtime tests passed.",
+        "RunPod L4 GPU verified NVIDIA L4 driver 570.195.03 with 23034 MiB VRAM.",
+        "RunPod real ASR WebSocket server started with UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000.",
+        "RunPod WebSocket client for /workspace/tarteel-realtime-run/114002.wav returned type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1.",
+        "RunPod WebSocket client for /workspace/tarteel-realtime-run/114001.wav returned type locked, transcript قُلْ أَعُوذُ بِرَبِّ النَّاسِ, ayah_ref 114:1, start_ref 114:1:1."
+      ],
+      "notes": "Passing for opt-in real ASR WebSocket proof using whole-file WAV chunks. The next risk is true live microphone chunk buffering/cadence; current Whisper path is not yet optimized for tiny streaming chunks."
+    },
+    {
+      "id": "backend-003",
+      "priority": 12,
+      "area": "backend-streaming",
+      "title": "Rolling ASR audio buffer for live mic chunks",
+      "user_visible_behavior": "The real ASR backend can accept short iPhone microphone chunks, buffer enough audio for useful recognition, throttle model calls, and keep returning the existing recitation session events.",
+      "status": "passing",
+      "verification": [
+        "Keep the fake dev backend as the default path.",
+        "Add deterministic tests for audio buffering, flush cadence, silence/empty chunks, and injected recognizer calls.",
+        "Do not store raw user audio beyond in-memory rolling buffers.",
+        "Run uv run python -B -m unittest discover locally.",
+        "On RunPod GPU, send a Surah 114 WAV through the WebSocket using realistic chunk-ms settings and verify a locked event is produced."
+      ],
+      "evidence": [
+        "Added tarteel_realtime/buffered_recognition.py with BufferedRecognizer and BufferedRecognitionConfig.",
+        "BufferedRecognizer waits for minimum_audio_ms, throttles subsequent model calls with flush_interval_ms, and keeps tail_audio_ms overlap in memory.",
+        "RecitationSession now emits waiting_for_audio_buffer as locating before lock or uncertain after lock when the buffered recognizer has no final transcript yet.",
+        "ASR app settings now expose TARTEEL_ASR_MIN_AUDIO_MS, TARTEEL_ASR_FLUSH_MS, and TARTEEL_ASR_TAIL_MS, and the opt-in ASR app uses the buffered Whisper recognizer factory by default.",
+        "Added deterministic tests in tests/test_buffered_recognition.py and expanded tests/test_session.py and tests/test_asr_app.py.",
+        "uv run python -B -m unittest discover passed: 80 tests.",
+        "uv run python -m compileall -q tarteel_realtime tests passed.",
+        "RunPod NVIDIA L40S verified with driver 580.126.09 and 46068 MiB VRAM.",
+        "RunPod one-shot model warmup for 114002.wav returned transcript مَلِكِ النَّاسِ and locator locked to 114:2.",
+        "RunPod buffered ASR WebSocket ran with TARTEEL_ASR_MIN_AUDIO_MS=4200, TARTEEL_ASR_FLUSH_MS=4200, TARTEEL_ASR_TAIL_MS=0.",
+        "RunPod WebSocket client sent fixtures/local_audio/114002.wav with --chunk-ms 1000 and received four waiting_for_audio_buffer locating events followed by type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1.",
+        "RunPod ASR server was stopped after verification; no background jobs were left running."
+      ],
+      "notes": "Passing for the narrow chunked-WAV proof. The 4.2s first buffer is a pragmatic MVP setting for Whisper stability; future work should tune latency and eventually use a streaming/segmentation-aware model path."
+    },
+    {
+      "id": "mobile-002",
+      "priority": 13,
+      "area": "ios-real-asr",
+      "title": "Point iPhone prototype at real ASR backend",
+      "user_visible_behavior": "A developer can run the iPhone prototype against the opt-in real ASR backend and observe buffering plus locked events from live microphone audio instead of the fake recognizer.",
+      "status": "in_progress",
+      "verification": [
+        "Keep the fake dev backend as the default simulator smoke path.",
+        "Do not make Whisper/Torch dependencies part of the iOS or default backend install.",
+        "Document the RunPod/backend URL flow needed for the iPhone app to reach the real ASR backend.",
+        "Run Swift client core tests after any iOS event-state change.",
+        "Run uv run python -B -m unittest discover locally after backend/client contract changes.",
+        "Manually verify the simulator or physical iPhone can connect to the real ASR backend and surface waiting_for_audio_buffer plus locked events."
+      ],
+      "evidence": [
+        "Phase 1 completed without GPU: added BackendEndpointPreset for Simulator vs Custom backend selection.",
+        "Updated iOS app UI with a backend preset segmented control; Custom keeps the existing URL field available for later LAN/tunnel/RunPod endpoints.",
+        "RecitationSessionState now treats reason waiting_for_audio_buffer as normal real-ASR latency: pre-lock shows Gathering audio / Keep reciting, post-lock stays in Listening / Keep reciting.",
+        "Added Swift tests for backend presets and pre/post-lock buffering state.",
+        "Swift client core tests passed: 8 tests.",
+        "iOS simulator build succeeded with xcodebuild and CODE_SIGNING_ALLOWED=NO."
+      ],
+      "notes": "Phase 1 is complete. The feature remains in progress until the real RunPod backend is connected to the simulator or phone and manually verified with live mic chunks."
+    }
+  ]
+}

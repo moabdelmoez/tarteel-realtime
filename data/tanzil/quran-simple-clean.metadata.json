@@ -1,0 +1,11 @@
+{
+  "format": "tanzil-pipe-v1",
+  "path": "data/tanzil/quran-simple-clean.txt",
+  "source_name": "Tanzil",
+  "source_url": "http://tanzil.net/updates/",
+  "sha256": "054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49",
+  "bytes": 794313,
+  "ayah_count": 6236,
+  "first_ref": "1:1",
+  "last_ref": "114:6"
+}

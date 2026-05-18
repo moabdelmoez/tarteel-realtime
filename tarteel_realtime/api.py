@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import base64
+from collections.abc import Callable
+from typing import Any
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+from tarteel_realtime.quran import QuranCorpus, QuranRef
+from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
+from tarteel_realtime.session import RecitationSession, SessionEvent
+
+
+def create_app(
+    *,
+    corpus: QuranCorpus,
+    recognizer_factory: Callable[[], SpeechRecognizer],
+    minimum_lock_words: int = 3,
+) -> FastAPI:
+    app = FastAPI(title="Tarteel Realtime MVP")
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.websocket("/ws/recitation")
+    async def recitation_socket(websocket: WebSocket) -> None:
+        await websocket.accept()
+        session = RecitationSession(
+            corpus=corpus,
+            recognizer=recognizer_factory(),
+            minimum_lock_words=minimum_lock_words,
+        )
+
+        try:
+            while True:
+                payload = await websocket.receive_json()
+                event = session.handle_chunk(_audio_chunk_from_payload(payload))
+                await websocket.send_json(_event_to_payload(event))
+        except WebSocketDisconnect:
+            return
+
+    return app
+
+
+def _audio_chunk_from_payload(payload: dict[str, Any]) -> AudioChunk:
+    return AudioChunk(
+        sequence_number=int(payload["sequence_number"]),
+        pcm=base64.b64decode(payload["pcm_base64"]),
+        sample_rate_hz=int(payload["sample_rate_hz"]),
+    )
+
+
+def _event_to_payload(event: SessionEvent) -> dict[str, Any]:
+    return {
+        "type": event.type.value,
+        "transcript": event.transcript,
+        "confidence": event.confidence,
+        "chunk_sequence": event.chunk_sequence,
+        "reason": event.reason,
+        "candidate_refs": [_ref_to_string(ref) for ref in event.candidate_refs],
+        "ayah_ref": _ref_to_string(event.ayah_ref),
+        "start_ref": _ref_to_string(event.start_ref),
+        "next_expected_ref": _ref_to_string(event.next_expected_ref),
+        "consumed_words": event.consumed_words,
+        "expected_ref": _ref_to_string(event.expected_ref),
+        "expected_word": event.expected_word,
+        "recognized_word": event.recognized_word,
+    }
+
+
+def _ref_to_string(ref: QuranRef | None) -> str | None:
+    if ref is None:
+        return None
+    return str(ref)

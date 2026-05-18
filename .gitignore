@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.DS_Store
+
+# Swift/Xcode local build and user state
+.build/
+ios/TarteelClientCore/.build/
+**/xcuserdata/
+*.xcuserstate
+
+# Local Quran/audio artifacts. Keep metadata/docs in git, upload artifacts to R2 later.
+data/tanzil/quran-simple-clean.txt
+fixtures/local_audio/
+ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs/

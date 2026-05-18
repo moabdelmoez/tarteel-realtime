@@ -1,0 +1,551 @@
+# Progress Log
+
+## Current Verified State
+
+- Repository root: `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime`
+- Standard startup path: `uv run uvicorn tarteel_realtime.dev_app:app --reload`
+- Standard verification path:
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+- Standard smoke paths:
+  - `uv run python -m tarteel_realtime.ws_client`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+  - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
+  - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
+- Current highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend
+- Current blocker: mobile phase 1 is complete without GPU; the iPhone app still needs a real ASR backend URL/tunnel and manual mic verification against RunPod
+- Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
+
+## Session Log
+
+### Session 001
+
+- Date: 2026-05-14
+- Goal: Explore feasibility of a Tarteel-like iPhone Quran memorization MVP, then implement the backend/evaluation foundation one feature at a time.
+- Completed:
+  - Saved MVP plan in `plans/quran-recitation-mvp-plan.md`.
+  - Built Quran data foundation: Tanzil parsing, refs, word mapping, normalization, local file loader, and MVP corpus scoping.
+  - Built deterministic correction core: alignment engine, locator engine, offline evaluator, fake recognizer, session state machine.
+  - Built FastAPI dev backend: `/health` and `/ws/recitation`.
+  - Built manual WebSocket client and evaluator CLI.
+  - Built optional Whisper adapter boundary and PCM16 decoding.
+- Verification run:
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - sample evaluator command with `--mvp-scope`
+- Evidence captured:
+  - Latest verified count before harness setup: 55 unit tests passing.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - Core package under `tarteel_realtime/`
+  - Tests under `tests/`
+  - Fixtures under `fixtures/`
+  - Project docs in `README.md` and `plans/quran-recitation-mvp-plan.md`
+- Known risk or unresolved issue:
+  - No real ASR model has been downloaded or benchmarked.
+  - No iPhone client exists yet.
+  - Full Tanzil Quran file is not present; only sample fixtures are included.
+  - Audio playback/QUL Al-Husary integration is not implemented.
+- Next best step: add an opt-in model spike path for a Quran-fine-tuned Whisper model without disturbing deterministic tests.
+
+### Session 002
+
+- Date: 2026-05-14
+- Goal: Add harness engineering state files so future Codex sessions can resume without losing context.
+- Completed:
+  - Added `codex-progress.md` based on the upstream `claude-progress.md` template.
+  - Added `feature_list.json` to track feature state and verification evidence.
+  - Added `session-handoff.md` for compact restart context.
+  - Added `clean-state-checklist.md` for end-of-session discipline.
+- Verification run:
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active)==1"`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+- Evidence captured:
+  - `feature_list.json` parsed successfully.
+  - Exactly one active feature: `asr-002`.
+  - Full suite passed: 55 tests.
+  - Compile check passed.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+- Known risk or unresolved issue:
+  - Harness files are new and should be kept updated after each future slice.
+- Next best step: verify all checks with `uv`, then continue the ASR model spike.
+
+### Session 003
+
+- Date: 2026-05-14
+- Goal: Continue `asr-002` by adding an opt-in ASR smoke command around the existing Whisper adapter.
+- Completed:
+  - Added `tarteel_realtime/asr_smoke.py`.
+  - Added `tests/test_asr_smoke.py`.
+  - Documented the smoke command and opt-in `uv run --with ...` dependency path in `README.md`.
+  - Updated harness state to keep `asr-002` active until a real model/audio run is verified.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active)==1"`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+- Evidence captured:
+  - Focused ASR adapter/smoke tests passed: 5 tests.
+  - Full suite passed: 57 tests.
+  - Feature list parsed successfully and exactly one feature remains active: `asr-002`.
+  - Compile check passed.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_smoke.py`
+  - `tests/test_asr_smoke.py`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+- Known risk or unresolved issue:
+  - The smoke CLI is tested with an injected recognizer; it has not downloaded or run a real Whisper model.
+  - No real PCM16 Quran recitation sample has been added.
+- Next best step: use `uv` to run the smoke command with optional ASR dependencies and a small local PCM16 sample, then record whether the transcription is usable.
+
+### Session 004
+
+- Date: 2026-05-16
+- Goal: Make the ASR smoke path easier to run with real-world local audio by accepting mono PCM16 WAV files.
+- Completed:
+  - Added mono PCM16 WAV loading in `tarteel_realtime/asr_smoke.py`.
+  - Kept raw `.pcm16le` support; raw files still use `--sample-rate`.
+  - Added tests for WAV sample-rate inference and clean rejection of unsupported stereo WAV input.
+  - Updated README and harness state for the `.wav` smoke command.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active)==1"`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+- Evidence captured:
+  - Focused ASR adapter/smoke tests passed: 7 tests.
+  - Full suite passed: 59 tests.
+  - Feature list parsed successfully and exactly one feature remains active: `asr-002`.
+  - Compile check passed.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_smoke.py`
+  - `tests/test_asr_smoke.py`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The smoke CLI is still tested with injected recognizers only; it has not downloaded or run a real Whisper model.
+  - A real local Quran recitation sample is still needed for the actual ASR feasibility check.
+- Next best step: run `uv run --with transformers --with torch python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran` against a small local Quran recitation WAV and record the transcription quality.
+
+### Session 005
+
+- Date: 2026-05-16
+- Goal: Make the ASR smoke output immediately useful for Quran feasibility by optionally locating the transcript.
+- Completed:
+  - Added `--tanzil-path`, `--minimum-lock-words`, and `--mvp-scope` to `tarteel_realtime.asr_smoke`.
+  - Added JSON `locator` output when a Tanzil corpus is provided.
+  - Added clean error handling for missing/invalid Tanzil setup in the smoke command.
+  - Updated README and harness state with the transcribe-plus-locate command.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_asr_smoke`
+  - `uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active)==1"`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+- Evidence captured:
+  - Focused ASR adapter/smoke tests passed: 9 tests.
+  - Full suite passed: 61 tests.
+  - Feature list parsed successfully and exactly one feature remains active: `asr-002`.
+  - Compile check passed.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_smoke.py`
+  - `tests/test_asr_smoke.py`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The locator payload is deterministic and tested with fake recognizer output; real Whisper inference is still unverified.
+  - A real local Quran recitation sample and full Tanzil file are still needed for the end-to-end model smoke run.
+- Next best step: run the real smoke command with optional dependencies, full Tanzil data, and a short Quran recitation WAV:
+  `uv run --with transformers --with torch python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --mvp-scope`
+
+### Session 006
+
+- Date: 2026-05-16
+- Goal: Finish `asr-002` by running the real Quran Whisper model on RunPod GPU with local recitation audio.
+- Completed:
+  - Verified available fixtures: `fixtures/local_audio/114001.mp3`, `fixtures/local_audio/114002.mp3`, and `fixtures/quran/sample-tanzil.txt`.
+  - Converted MP3 samples to mono 16 kHz PCM WAVs on RunPod under `/workspace/tarteel-realtime-run/`.
+  - Diagnosed RunPod model stack issues: latest `torch==2.12.0` pulled CUDA 13 and failed against the pod driver; Transformers also required a compatible `torchvision` because of pipeline imports.
+  - Pinned the working GPU stack to `torch==2.7.1`, `torchvision==0.22.1`, CUDA runtime `12.6`, with `torch.cuda.is_available()` true on NVIDIA L4.
+  - Fixed `TransformersWhisperBackend` to send `numpy.float32` arrays to the Transformers 5 ASR pipeline instead of Python lists.
+  - Marked `asr-002` passing and moved active feature state to `data-001`.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_whisper_adapter.WhisperRecognizerTests.test_transformers_backend_sends_numpy_array_to_pipeline tests.test_whisper_adapter`
+  - `uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['data-001']"`
+  - RunPod: `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke /workspace/tarteel-realtime-run/114002.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
+  - RunPod: same command for `/workspace/tarteel-realtime-run/114001.wav` with `--minimum-lock-words 3`.
+- Evidence captured:
+  - Focused ASR adapter/smoke tests passed locally: 10 tests.
+  - Focused ASR adapter/smoke tests passed on RunPod: 10 tests.
+  - Full local deterministic suite passed: 62 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature is active: `data-001`.
+  - RunPod GPU check: `torch 2.7.1+cu126`, CUDA runtime `12.6`, CUDA available `True`, device count `1`, NVIDIA L4 driver `570.195.03`.
+  - Real model smoke for `114002.wav`: transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`, locator `locked` to `114:2`, runtime `0m7.712s`.
+  - Real model smoke for `114001.wav`: transcript `قُلْ أَعُوذُ بِرَبِّ النَّاسِ`, normalized `قل اعوذ برب الناس`, locator `locked` to `114:1`, runtime `0m7.592s`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `tarteel_realtime/whisper_adapter.py`
+  - `tests/test_whisper_adapter.py`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The successful ASR spike used the sample Tanzil fixture for Surah 114, not the full Quran file.
+  - Heavy ASR dependencies remain opt-in and should not enter the default dependency set without explicit approval.
+  - RunPod pods may restart with a fresh root filesystem; keep reproducible setup commands in docs/handoff.
+- Next best step: start `data-001` by adding a pinned full Tanzil file workflow with checksum/source metadata and evaluation commands that can run against `data/tanzil/quran-simple-clean.txt`.
+
+### Session 007
+
+- Date: 2026-05-17
+- Goal: Continue `data-001` by adding a local full-Tanzil metadata/checksum workflow before running full-corpus evaluation.
+- Completed:
+  - Added `tarteel_realtime/quran_data.py` with default Tanzil and manifest paths, SHA-256 inspection, manifest write/load, checksum validation, and a CLI entrypoint.
+  - Shared the evaluator's default Tanzil path with the new data module.
+  - Added `tests/test_quran_data_manifest.py` for shared defaults, reference bounds, checksum/byte metadata, manifest round-trip validation, mismatch detection, and CLI write/check mode.
+  - Added a regression test for the repository smoke evaluator fixture.
+  - Restored the sample Tanzil fixture's ambiguity coverage by including Surah 113:1 alongside Surah 114.
+  - Added `data/tanzil/README.md` and `data/tanzil/.gitignore` so the real Quran text has a documented local home without being committed.
+  - Updated `README.md` with `uv` commands for writing/checking Tanzil metadata and running evaluation from the default full-data path.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_quran_data_manifest`
+  - `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['data-001']"`
+  - `uv run python -m tarteel_realtime.quran_data --tanzil-path fixtures/quran/sample-tanzil.txt --source-name sample-fixture`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+- Evidence captured:
+  - Focused Tanzil manifest tests passed: 4 tests.
+  - Focused evaluator plus Tanzil manifest tests passed: 9 tests.
+  - Full deterministic suite passed: 67 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature is active: `data-001`.
+  - Sample fixture manifest inspection returned SHA-256 `a9d046629634eebb96bc374f75882f0f89dd622e18940d94a2e925e9eee8c9f2`, `ayah_count: 3`, `first_ref: 113:1`, `last_ref: 114:2`.
+  - Sample evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `tarteel_realtime/quran_data.py`
+  - `tarteel_realtime/evaluate.py`
+  - `tests/test_quran_data_manifest.py`
+  - `tests/test_evaluate_cli.py`
+  - `fixtures/quran/sample-tanzil.txt`
+  - `data/tanzil/README.md`
+  - `data/tanzil/.gitignore`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+- Known risk or unresolved issue:
+  - The real full Tanzil file is still not present at `data/tanzil/quran-simple-clean.txt`, so default-path evaluation with `--mvp-scope` is not honestly verified yet.
+- Next best step: place the full pinned Tanzil file at `data/tanzil/quran-simple-clean.txt`, write/check its manifest, then run `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope`.
+
+### Session 008
+
+- Date: 2026-05-17
+- Goal: Verify the newly added full Tanzil file, record its manifest, and finish `data-001`.
+- Completed:
+  - Confirmed `data/tanzil/quran-simple-clean.txt` exists locally.
+  - Parsed the full file through `tarteel_realtime.quran_data`.
+  - Wrote `data/tanzil/quran-simple-clean.metadata.json`.
+  - Validated the metadata manifest against the local file.
+  - Ran default-path MVP evaluation without `--tanzil-path`.
+  - Marked `data-001` passing and moved the active feature to `mobile-001`.
+- Verification run:
+  - `uv run python -m tarteel_realtime.quran_data --tanzil-path data/tanzil/quran-simple-clean.txt --source-name Tanzil --source-url http://tanzil.net/updates/ --write-manifest`
+  - `uv run python -m tarteel_realtime.quran_data --check-manifest`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope`
+  - `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+- Evidence captured:
+  - Full Tanzil file metadata: SHA-256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, bytes `794313`, ayah count `6236`, first ref `1:1`, last ref `114:6`.
+  - Default-path MVP evaluator returned `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+  - Focused evaluator plus Tanzil manifest tests passed: 9 tests.
+  - Full deterministic suite passed: 67 tests.
+  - Compile check passed.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `data/tanzil/quran-simple-clean.metadata.json`
+  - `feature_list.json`
+  - `codex-progress.md`
+- Known risk or unresolved issue:
+  - `data/tanzil/quran-simple-clean.txt` is intentionally local/ignored; if another machine needs the same run, copy the exact file and validate against the metadata.
+  - Real-time backend still does not stream the real Whisper model; the deterministic dev backend uses `FakeRecognizer`.
+- Next best step: start `mobile-001` by creating the smallest iPhone prototype that captures mic audio, sends PCM chunks to `WS /ws/recitation`, and renders `locked/progress/wrong` events against the fake backend first.
+
+### Session 009
+
+- Date: 2026-05-17
+- Goal: Start `mobile-001` with a native SwiftUI iPhone prototype against the deterministic fake backend.
+- Completed:
+  - Added `ios/TarteelClientCore`, a Swift package for mobile-side backend contracts.
+  - Added tested Swift models for backend event decoding, audio chunk JSON encoding, and mobile session-state reduction.
+  - Added `ios/TarteelPrototype`, a native SwiftUI app target.
+  - Implemented a first-screen mic UI with a configurable backend WebSocket URL.
+  - Added `AVAudioEngine` microphone capture that converts input to mono 16 kHz PCM16 chunks.
+  - Added `URLSessionWebSocketTask` transport for `WS /ws/recitation`.
+  - Added explicit iOS permissions/config in `Info.plist` for microphone, local network, and cleartext development WebSocket traffic.
+  - Added `ios/README.md` and updated the root `README.md` with iOS run instructions.
+- Verification run:
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - `xcrun simctl boot 5F1E7676-EF55-490C-91B0-ED07291C16B1`.
+  - `xcrun simctl install 5F1E7676-EF55-490C-91B0-ED07291C16B1 /private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app`.
+  - `xcrun simctl launch 5F1E7676-EF55-490C-91B0-ED07291C16B1 dev.mostafa.TarteelPrototype`.
+  - `xcrun simctl io 5F1E7676-EF55-490C-91B0-ED07291C16B1 screenshot /private/tmp/tarteel-prototype-launch.png`.
+  - `uv run uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000`.
+  - `uv run python -m tarteel_realtime.ws_client --chunks 2`.
+  - `uv run python -B -m unittest discover`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+- Evidence captured:
+  - Swift client core tests passed: 4 tests.
+  - iOS simulator build succeeded with Xcode 26.5.
+  - App installed and launched in iPhone 17 simulator with process id `45030`.
+  - Initial UI screenshot captured at `/private/tmp/tarteel-prototype-launch.png`.
+  - Backend WebSocket smoke returned a `locked` event followed by a `wrong` event.
+  - Full Python deterministic suite passed: 67 tests.
+  - Compile check passed.
+- Commits: none; workspace is not initialized as a git repository.
+- Files or artifacts updated:
+  - `ios/TarteelClientCore/`
+  - `ios/TarteelPrototype/`
+  - `ios/README.md`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `clean-state-checklist.md`
+- Known risk or unresolved issue:
+  - The app build/launch and backend event stream are verified, but the CLI environment did not provide a simple way to tap the simulator mic button. Interactive mic-tap verification in Simulator or on a physical iPhone remains the next honest check.
+  - The dev backend still uses `FakeRecognizer`; no real Whisper streaming path is wired into the WebSocket server yet.
+- Next best step: manually tap the mic in the simulator or on-device while the dev backend is running, confirm the UI renders `locked` then `wrong`, then mark `mobile-001` passing or fix any discovered runtime issue.
+
+### Session 010
+
+- Date: 2026-05-17
+- Goal: Record the user's simulator mic verification and choose the next implementation slice.
+- Completed:
+  - Marked `mobile-001` passing after user manually verified the iPhone simulator mic flow works fine against the dev backend.
+  - Added `backend-002` as the new active slice.
+- Verification run:
+  - User manual simulator verification of the mic flow.
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['backend-002']"`
+- Evidence captured:
+  - Exactly one active feature remains: `backend-002`.
+- Next best step: implement `backend-002`, an opt-in real ASR WebSocket backend mode that keeps the fake backend as default, preserves deterministic tests, and uses RunPod GPU only for final real-model verification.
+
+### Session 011
+
+- Date: 2026-05-17
+- Goal: Implement the local half of `backend-002`: an opt-in real ASR WebSocket backend path with deterministic test seams.
+- Completed:
+  - Added `tarteel_realtime/asr_app.py`, an env-configured ASR backend factory using the full Tanzil file path by default.
+  - Kept real Whisper/Torch dependencies optional by lazy-loading the Whisper recognizer only after the first audio chunk arrives.
+  - Added injected-recognizer tests for settings parsing, lazy recognizer construction, and the WebSocket event contract.
+  - Extended `tarteel_realtime/ws_client.py` so it can send a mono PCM16 WAV or raw PCM16LE file through `WS /ws/recitation`.
+  - Documented local and RunPod commands for the real ASR backend.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_asr_app`
+  - `uv run python -B -m unittest tests.test_ws_client`
+  - `uv run python -B -m unittest tests.test_asr_app tests.test_ws_client`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+- Evidence captured:
+  - Focused ASR backend and WebSocket client tests passed: 10 tests.
+  - Full deterministic Python suite passed: 74 tests.
+  - Compile check passed.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_app.py`
+  - `tarteel_realtime/ws_client.py`
+  - `tests/test_asr_app.py`
+  - `tests/test_ws_client.py`
+  - `README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+- Known risk or unresolved issue:
+  - No GPU or real model server run happened in this session.
+  - `backend-002` remains in progress until RunPod verifies a real Surah 114 audio sample returns a `locked` event over WebSocket.
+- Next best step: start the RunPod pod, run the opt-in ASR backend command from `README.md`, then send a mono PCM16 WAV with `uv run python -m tarteel_realtime.ws_client --audio-path path/to/mono-16k.wav` and record the first real WebSocket event.
+
+### Session 012
+
+- Date: 2026-05-17
+- Goal: Finish `backend-002` by verifying the opt-in ASR WebSocket backend on RunPod GPU with real Surah 114 audio.
+- Completed:
+  - Connected to RunPod pod `kvsv4jpm4vrq6j`.
+  - Reinstalled `uv` on the pod because the binary was not present after restart.
+  - Patched the pod checkout with the ASR backend and file-backed WebSocket client files needed for this verification.
+  - Started the opt-in ASR WebSocket backend with lazy Quran Whisper loading.
+  - Sent real Surah 114 WAV files through `WS /ws/recitation`.
+  - Stopped the background ASR server after verification.
+  - Marked `backend-002` passing and added `backend-003` as the next active slice.
+- Verification run:
+  - RunPod: `nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader`
+  - RunPod: `python -m compileall -q tarteel_realtime/asr_app.py tarteel_realtime/ws_client.py tarteel_realtime/quran_data.py`
+  - RunPod: `uv run python -B -c "import tarteel_realtime.asr_app; print('asr_app import ok')"`
+  - RunPod server: `UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000`
+  - RunPod client: `uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path /workspace/tarteel-realtime-run/114002.wav`
+  - RunPod client: `uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path /workspace/tarteel-realtime-run/114001.wav`
+  - Local: `uv run python -B -m json.tool feature_list.json`
+  - Local: active feature check now expects `['backend-003']`.
+- Evidence captured:
+  - GPU: NVIDIA L4, driver `570.195.03`, memory `23034 MiB`.
+  - Server startup completed: Uvicorn running on `http://127.0.0.1:8000`.
+  - `114002.wav` returned `{"type":"locked","transcript":"مَلِكِ النَّاسِ","ayah_ref":"114:2","start_ref":"114:2:1"}`.
+  - `114001.wav` returned `{"type":"locked","transcript":"قُلْ أَعُوذُ بِرَبِّ النَّاسِ","ayah_ref":"114:1","start_ref":"114:1:1"}`.
+- Files or artifacts updated:
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - `backend-002` is passing for whole-file WAV chunks over WebSocket.
+  - The real backend is not yet suitable for tiny live mic chunks because each chunk would be recognized independently without buffering or cadence control.
+- Next best step: implement `backend-003`, a rolling ASR audio buffer so the real backend can accept iPhone mic chunks, call the model at a controlled cadence, and still emit the same session events.
+
+### Session 013
+
+- Date: 2026-05-17
+- Goal: Implement the local half of `backend-003`: rolling ASR buffering for short live mic chunks.
+- Completed:
+  - Added `tarteel_realtime/buffered_recognition.py`.
+  - Implemented `BufferedRecognizer`, which waits for `minimum_audio_ms`, throttles calls with `flush_interval_ms`, and keeps `tail_audio_ms` overlap in memory.
+  - Updated `RecitationSession` to return `waiting_for_audio_buffer` as `locating` before lock and `uncertain` after lock when the buffered recognizer has no final transcript yet.
+  - Added ASR app env/config support for `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, and `TARTEEL_ASR_TAIL_MS`.
+  - Made the opt-in ASR app use the buffered Whisper recognizer factory by default.
+  - Updated README with buffering settings and `--chunk-ms` verification command.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app`
+  - `uv run python -B -m unittest discover`
+  - `uv run python -m compileall -q tarteel_realtime tests`
+- Evidence captured:
+  - Focused buffering/session/ASR app tests passed: 16 tests.
+  - Full deterministic Python suite passed: 80 tests.
+  - Compile check passed.
+- Files or artifacts updated:
+  - `tarteel_realtime/buffered_recognition.py`
+  - `tarteel_realtime/session.py`
+  - `tarteel_realtime/asr_app.py`
+  - `tests/test_buffered_recognition.py`
+  - `tests/test_session.py`
+  - `tests/test_asr_app.py`
+  - `README.md`
+  - `feature_list.json`
+  - `clean-state-checklist.md`
+  - `codex-progress.md`
+- Known risk or unresolved issue:
+  - No RunPod verification happened in this session.
+  - `backend-003` remains in progress until a chunked WAV, for example `--chunk-ms 1000`, returns a real `locked` event over the ASR WebSocket on GPU.
+- Next best step: start RunPod only when ready, run the opt-in ASR backend, then verify `uv run python -m tarteel_realtime.ws_client --audio-path /workspace/tarteel-realtime-run/114002.wav --chunk-ms 1000` produces a `locked` event.
+
+### Session 014
+
+- Date: 2026-05-17
+- Goal: Finish `backend-003` by proving rolling ASR buffering on RunPod GPU with chunked WAV input.
+- Completed:
+  - Worked around broken RunPod `scp`/one-shot SSH command behavior by using the interactive SSH shell, a small base64 tarball, and targeted file repair.
+  - Recreated the pod project files under `/workspace/tarteel-realtime` and verified Python compilation.
+  - Installed `uv` on the pod and used `uv run` for all Python/model commands.
+  - Installed `ffmpeg` on the pod and converted public Surah 114 Husary MP3 files to mono 16 kHz PCM WAV fixtures.
+  - Warmed the real Quran Whisper model with a one-shot smoke run for `114002.wav`.
+  - Started the opt-in ASR WebSocket backend with a 4.2s rolling buffer.
+  - Sent `114002.wav` over the WebSocket as 1000ms chunks and verified a real `locked` event after buffer accumulation.
+  - Stopped the background ASR server and exited SSH.
+  - Marked `backend-003` passing and added `mobile-002` as the new active slice.
+- Verification run:
+  - RunPod: `python3 -m compileall -q tarteel_realtime`
+  - RunPod: `uv --version` returned `uv 0.11.14`.
+  - RunPod: `nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader`
+  - RunPod: `ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav`
+  - RunPod: `uv run --python 3.13 --with transformers --with 'torch==2.7.1' python -m tarteel_realtime.asr_smoke fixtures/local_audio/114002.wav --device cuda:0 --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2`
+  - RunPod server: `TARTEEL_ASR_MIN_AUDIO_MS=4200 TARTEEL_ASR_FLUSH_MS=4200 TARTEEL_ASR_TAIL_MS=0 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000`
+  - RunPod client: `uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`
+- Evidence captured:
+  - GPU: NVIDIA L40S, driver `580.126.09`, memory `46068 MiB`.
+  - One-shot model smoke returned transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`, locator `locked` to `114:2`.
+  - Chunked WebSocket output returned four `locating` events with `reason: waiting_for_audio_buffer`, then `{"type":"locked","transcript":"مَلِكِ النَّاسِ","ayah_ref":"114:2","start_ref":"114:2:1","consumed_words":2}`.
+  - ASR server log showed WebSocket accepted, model loaded, connection closed, and clean shutdown.
+- Files or artifacts updated:
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The first-lock buffer is currently tuned to `4200ms` for stable Whisper recognition on a short ayah, so it proves capability more than final UX latency.
+  - Real phone microphone audio has not yet been routed to the RunPod ASR backend.
+  - Heavy ASR dependencies remain opt-in and should stay out of the default install.
+- Next best step: implement `mobile-002` by documenting/setting up the network bridge from iPhone or Simulator to the real ASR backend, then manually verify `waiting_for_audio_buffer` and `locked` events in the app UI.
+
+### Session 015
+
+- Date: 2026-05-18
+- Goal: Start `mobile-002` phase 1 without GPU by preparing the iOS app for real-ASR latency and custom backend URLs.
+- Completed:
+  - Added reducer handling for real-ASR `waiting_for_audio_buffer` events.
+  - Added `BackendEndpointPreset` with `Simulator` and `Custom` modes.
+  - Added a backend preset segmented picker to the SwiftUI app.
+  - Kept the fake simulator backend as the default path.
+  - Left the URL field available only in `Custom` mode for later LAN, tunnel, or RunPod endpoints.
+  - Updated iOS and root README guidance for `Simulator` vs `Custom`.
+- Verification run:
+  - Red tests first: Swift reducer tests failed because buffering events showed the old empty `Listening` / `Keep reciting` behavior.
+  - Red tests first: Swift backend preset tests failed because `BackendEndpointPreset` did not exist.
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
+- Evidence captured:
+  - Swift client core tests passed: 8 tests.
+  - iOS simulator build succeeded with CODE_SIGNING_ALLOWED=NO.
+- Files or artifacts updated:
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/BackendEndpointPreset.swift`
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationEvent.swift`
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/BackendEndpointPresetTests.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/ContentView.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/RecitationViewModel.swift`
+  - `ios/TarteelPrototype/TarteelPrototype.xcodeproj/project.pbxproj`
+  - `README.md`
+  - `ios/README.md`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The app has not yet been manually connected to a real ASR backend.
+  - No GPU was used in this phase, by design.
+  - We still need a network bridge/tunnel plan before phone or simulator real-ASR verification.
+- Next best step: choose and set up the real-backend bridge for phase 2, then start RunPod briefly and manually verify the iOS app receives `waiting_for_audio_buffer` followed by `locked` from live mic chunks.
