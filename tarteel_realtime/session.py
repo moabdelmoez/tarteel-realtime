@@ -69,6 +69,11 @@ class RecitationSession:
         if self._next_expected_ref is None:
             locator_decision = self._locator.locate(recognition.transcript)
             if locator_decision.status == LocatorStatus.NOT_FOUND:
+                tolerant_decision = self._locator.locate_tolerant(recognition.transcript)
+                if tolerant_decision.status != LocatorStatus.NOT_FOUND:
+                    locator_decision = tolerant_decision
+
+            if locator_decision.status == LocatorStatus.NOT_FOUND:
                 return SessionEvent(
                     type=SessionEventType.LOCATING,
                     transcript=recognition.transcript,

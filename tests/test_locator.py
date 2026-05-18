@@ -10,6 +10,14 @@ SAMPLE_TANZIL_LINES = [
     "113|1|قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
     "114|1|قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
     "114|2|مَلِكِ النَّاسِ",
+    "102|1|بسم الله الرحمن الرحيم ألهاكم التكاثر",
+    "102|2|حتى زرتم المقابر",
+    "102|3|كلا سوف تعلمون",
+    "102|4|ثم كلا سوف تعلمون",
+    "102|5|كلا لو تعلمون علم اليقين",
+    "102|6|لترون الجحيم",
+    "102|7|ثم لترونها عين اليقين",
+    "102|8|ثم لتسألن يومئذ عن النعيم",
 ]
 
 
@@ -70,6 +78,32 @@ class QuranLocatorTests(unittest.TestCase):
         self.assertEqual(decision.status, LocatorStatus.NOT_FOUND)
         self.assertEqual(decision.reason, "no_recognized_words")
         self.assertEqual(decision.candidates, ())
+
+    def test_tolerant_locator_handles_truncated_surah_102_words(self):
+        decision = self.locator.locate_tolerant("حَتَّى زُرْتُمُ الْمَقَى")
+
+        self.assertEqual(decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(decision.reason, "tolerant_match")
+        self.assertEqual(decision.best.ayah_ref, QuranRef(surah=102, ayah=2))
+        self.assertEqual(decision.best.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
+
+    def test_tolerant_locator_handles_short_surah_102_asr_substitutions(self):
+        cases = [
+            ("كَلَّا سَوْفَ تَعْلَى", QuranRef(surah=102, ayah=3), QuranRef(surah=102, ayah=3, word_index=1)),
+            ("إِلَّا سَوْفَ تَعْلَمُونَ", QuranRef(surah=102, ayah=3), QuranRef(surah=102, ayah=3, word_index=1)),
+            ("عَلَّمُونَ عِلْمَ الْيَقِينِ", QuranRef(surah=102, ayah=5), QuranRef(surah=102, ayah=5, word_index=3)),
+            ("وَأُنَّهَا عَيْنَ الْيَقِينِ", QuranRef(surah=102, ayah=7), QuranRef(surah=102, ayah=7, word_index=2)),
+            ("ثُمَّ لَتُسْأَلُونَ", QuranRef(surah=102, ayah=8), QuranRef(surah=102, ayah=8, word_index=1)),
+        ]
+
+        for transcript, ayah_ref, start_ref in cases:
+            with self.subTest(transcript=transcript):
+                decision = self.locator.locate_tolerant(transcript)
+
+                self.assertEqual(decision.status, LocatorStatus.LOCKED)
+                self.assertEqual(decision.reason, "tolerant_match")
+                self.assertEqual(decision.best.ayah_ref, ayah_ref)
+                self.assertEqual(decision.best.start_ref, start_ref)
 
 
 if __name__ == "__main__":

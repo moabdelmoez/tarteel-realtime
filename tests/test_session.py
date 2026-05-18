@@ -9,6 +9,14 @@ SAMPLE_TANZIL_LINES = [
     "113|1|قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
     "114|1|قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
     "114|2|مَلِكِ النَّاسِ",
+    "102|1|بسم الله الرحمن الرحيم ألهاكم التكاثر",
+    "102|2|حتى زرتم المقابر",
+    "102|3|كلا سوف تعلمون",
+    "102|4|ثم كلا سوف تعلمون",
+    "102|5|كلا لو تعلمون علم اليقين",
+    "102|6|لترون الجحيم",
+    "102|7|ثم لترونها عين اليقين",
+    "102|8|ثم لتسألن يومئذ عن النعيم",
 ]
 
 
@@ -152,6 +160,20 @@ class RecitationSessionTests(unittest.TestCase):
 
         self.assertEqual(event.type, SessionEventType.LOCATING)
         self.assertEqual(event.reason, "no_match")
+
+    def test_tolerant_locator_fallback_locks_when_exact_match_fails(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer(["حَتَّى زُرْتُمُ الْمَقَى"]),
+            minimum_lock_words=2,
+        )
+
+        event = session.handle_chunk(chunk())
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "tolerant_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=2))
+        self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
 
 
 if __name__ == "__main__":
