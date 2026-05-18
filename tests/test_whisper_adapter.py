@@ -132,6 +132,7 @@ class WhisperRecognizerTests(unittest.TestCase):
             def __call__(self, inputs, *, generate_kwargs):
                 self.calls.append((inputs, generate_kwargs))
                 if len(self.calls) == 1:
+                    inputs.pop("raw")
                     raise ValueError(
                         "The generation config is outdated and is thus not "
                         "compatible with the `language` argument to `generate`."
@@ -150,6 +151,7 @@ class WhisperRecognizerTests(unittest.TestCase):
         self.assertEqual(payload["text"], "أَلْهَاكُمُ التَّكَاثُرُ")
         self.assertEqual(pipeline.calls[0][1], {"language": "ar"})
         self.assertEqual(pipeline.calls[1][1], {})
+        self.assertIn("raw", pipeline.calls[1][0])
 
 
 if __name__ == "__main__":
