@@ -1275,3 +1275,46 @@
   - The canonical text currently comes from `quran-simple-clean.txt`, so full-Tanzil `ayah_text` is simple clean Quran text without tashkeel.
   - This slice changes display truth, not correction logic; post-lock tolerant progression recovery is still the next behavior slice.
 - Next best step: manually retry the simulator mic flow and judge success by the `Ayah` plus `Ayah text` rows, then implement post-lock tolerant progression recovery.
+
+### Session 034
+
+- Date: 2026-05-18
+- Goal: Stop quiet/no-speech mic windows from crashing the real ASR WebSocket on RunPod.
+- Completed:
+  - Investigated the repeated iPhone `Socket is not connected` symptom from RunPod logs.
+  - Confirmed the app was sending valid 3200-byte, 100ms PCM chunks at 16 kHz before the server closed the socket.
+  - Identified the backend exception as a CUDA `device-side assert triggered` inside Transformers Whisper inference during the first ASR flush.
+  - Reproduced the failure with a synthetic low-noise WAV sent in 100ms chunks, proving quiet/no-speech audio could poison the GPU process.
+  - Added a speech-energy gate in `BufferedRecognizer`: when a ready-to-flush buffer has RMS below the minimum speech threshold, it returns the normal waiting event, clears that quiet window, and does not call Whisper.
+  - Added `buffered_rms` plus `action=wait_quiet` diagnostics for skipped quiet windows.
+  - Committed and pushed the fix as `182ba72`.
+  - Pulled `182ba72` onto RunPod, restarted the ASR backend, and verified the public endpoint.
+- Verification run:
+  - Red test first failed because a quiet two-sample window was flushed into the inner recognizer.
+  - `uv run python -B -m unittest tests.test_buffered_recognition.BufferedRecognizerTests.test_skips_quiet_windows_until_speech_energy_is_present -v`.
+  - `uv run python -B -m unittest tests.test_buffered_recognition -v`.
+  - `uv run python -B -m unittest -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - RunPod: `uv run python -B -m unittest tests.test_buffered_recognition.BufferedRecognizerTests.test_skips_quiet_windows_until_speech_energy_is_present -v`.
+  - Public low-noise replay: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path /tmp/tarteel-low-noise-5s.wav --chunk-ms 100`.
+  - Public positive replay: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`.
+  - Public health: `curl -sS --max-time 20 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+- Evidence captured:
+  - Focused quiet-window regression passed locally and on RunPod.
+  - Full Python deterministic suite passed with 107 tests.
+  - Compile check passed.
+  - Public low-noise replay returned locating/waiting events instead of closing the WebSocket.
+  - RunPod log showed `buffered_rms=35 action=wait_quiet`, confirming Whisper was not called on the quiet window.
+  - Public 114:2 WAV replay still returned `locked`, `ayah_ref=114:2`, `ayah_text=ملك الناس`, and transcript `مَلِكِ النَّاسِ`.
+  - Public `/health` returned `{"status":"ok"}` after both probes.
+- Files or artifacts updated:
+  - `tarteel_realtime/buffered_recognition.py`
+  - `tests/test_buffered_recognition.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - This prevents quiet/no-speech windows from reaching Whisper; it does not guarantee every noisy or out-of-distribution live mic window is safe.
+  - Generic ASR exception-to-UI error handling is still not implemented; this slice fixes the reproduced crash trigger.
+  - Post-lock tolerant progression recovery remains the next product behavior slice.
+- Next best step: retry the simulator mic. Start reciting promptly after tapping the mic; if the debug panel stays on Gathering audio during silence and then locks once speech is present, proceed to post-lock tolerant progression recovery.

@@ -30,6 +30,8 @@
   - CPU-only RunPod bootstrap prepared `114001.wav` and `114002.wav` from R2 MP3 artifacts and validated the full Tanzil manifest.
   - Public RunPod real-ASR backend is live on `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`.
   - Public RunPod `/health` returned HTTP 200 and public WSS streaming of `114002.wav` returned buffering events followed by `locked` at `114:2`.
+  - Quiet/no-speech WebSocket audio is now gated before Whisper inference: ready-to-flush buffers below the speech RMS threshold return `waiting_for_audio_buffer`, clear the quiet window, and log `action=wait_quiet`.
+  - The reproduced low-noise CUDA crash probe now returns locating/waiting events instead of closing the socket; RunPod logs show `buffered_rms=35 action=wait_quiet`.
   - iPhone simulator mic-tap crash from explicit `AVAudioNode.installTap(... format: inputFormat)` has been fixed, built, installed, and launched in the simulator.
   - iPhone app now shows a visible MVP status panel with Connection, Last event, Ayah, and Transcript rows.
   - RunPod backend diagnostics are live from commit `8fd73a7`, logging chunk bytes, approximate audio milliseconds, buffered milliseconds, wait/flush actions, event type, reason, and ayah ref.
@@ -148,6 +150,12 @@
   - iOS state now stores `currentAyahText`; the visible app detail and status panel prefer canonical ayah text over noisy raw ASR transcript.
   - The iPhone status panel now shows `Ayah text` instead of `Transcript`.
   - Commit `b2a3cd6` is deployed on RunPod and the public WSS smoke returned `ayah_text=ملك الناس` for locked `114:2`.
+  - Quiet-window regression passed locally and on RunPod after commit `182ba72`.
+  - Latest local full Python deterministic suite after quiet-window gate: 107 tests passing.
+  - Latest local compile check after quiet-window gate passed.
+  - Public low-noise WSS replay with `--chunk-ms 100` returned locating/waiting events instead of closing the socket.
+  - Public positive WSS replay for `fixtures/local_audio/114002.wav --chunk-ms 1000` still returned `locked`, `ayah_ref=114:2`, `ayah_text=ملك الناس`, and transcript `مَلِكِ النَّاسِ`.
+  - Public `/health` returned `{"status":"ok"}` after the low-noise and positive probes.
 
 ## Changed This Session
 
@@ -186,6 +194,8 @@
   - Deployed the lifecycle fix to RunPod and verified repeated public WSS calls against the same server process.
   - Added canonical ayah text to backend events and the iOS display path.
   - Replaced the visible transcript status row with an ayah text row in the simulator UI.
+  - Added a speech-energy gate to the buffered ASR path so quiet/no-speech windows are skipped before Whisper and cannot trigger the reproduced CUDA socket close.
+  - Deployed the quiet-window gate to RunPod at commit `182ba72` and verified low-noise plus positive WSS probes.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -201,8 +211,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, clipped-fragment recovery, and tarteel-ai adapter compatibility fixes are deployed. Clean Surah 102 now shows the next major blocker is post-lock exact alignment, because tarteel-ai cleaner transcripts still become `wrong` after lock.
-  - The model lifecycle fix is deployed and smoke-tested on RunPod.
+  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, clipped-fragment recovery, tarteel-ai adapter compatibility, model lifecycle fix, canonical ayah UI, and quiet/no-speech gate are deployed. Clean Surah 102 now shows the next major blocker is post-lock exact alignment, because tarteel-ai cleaner transcripts still become `wrong` after lock.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -212,7 +221,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, repeated WebSocket sessions no longer rebuild the GPU model, and the UI now displays canonical ayah text from the locator. The next product behavior step is a simulator retry followed by post-lock tolerant progression recovery before a final model choice is meaningful.
+- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, repeated WebSocket sessions no longer rebuild the GPU model, the UI now displays canonical ayah text from the locator, and quiet/no-speech buffers no longer hit Whisper. The next product behavior step is a simulator retry followed by post-lock tolerant progression recovery before a final model choice is meaningful.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -221,6 +230,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
+  - Quiet/no-speech live starts should stay in Gathering audio instead of closing the socket.
   - The normal UI shows `Ayah` and `Ayah text`; raw transcript is diagnostic only.
   - Clean Surah 102 audio should progress through more than isolated locks; after the tarteel-ai comparison, the next pass should reduce post-lock `wrong` events by using progression-aware tolerant recovery before surfacing a hard correction.
   - Repeated WSS calls against one RunPod server process should reuse the loaded Whisper model instead of constructing it again.
