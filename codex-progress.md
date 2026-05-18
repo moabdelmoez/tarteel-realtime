@@ -1221,3 +1221,57 @@
   - This fixes repeated GPU model construction across WebSocket sessions; it does not yet change post-lock tolerant progression recovery.
   - The public RunPod backend is currently running the lifecycle fix with `tarteel-ai/whisper-base-ar-quran`.
 - Next best step: retry the simulator mic flow against the same WSS endpoint, then implement post-lock tolerant progression recovery so plausible post-lock ASR chunks are not surfaced as hard wrongs too early.
+
+### Session 033
+
+- Date: 2026-05-18
+- Goal: Use the located ayah as the product signal by showing canonical ayah text instead of raw ASR transcript in the iPhone UI.
+- Completed:
+  - Added optional `ayah_text` to backend WebSocket event payloads whenever an event has an `ayah_ref` or `start_ref`.
+  - Updated the Swift event model to decode `ayah_text`.
+  - Updated iOS session state to store `currentAyahText` and prefer canonical ayah text over raw ASR transcript for the visible detail.
+  - Changed the simulator status panel row from `Transcript` to `Ayah text`.
+  - Kept raw transcript in state for diagnostics, but removed it from the normal visible status panel.
+  - Built, installed, and launched the updated iPhone simulator app.
+  - Committed and pushed the slice to GitHub as `b2a3cd6`.
+  - Pulled `b2a3cd6` onto RunPod, restarted the ASR backend, and verified the public WSS endpoint returns canonical `ayah_text`.
+- Verification run:
+  - Red backend test first failed with `KeyError: 'ayah_text'`.
+  - Red UI source test first failed because the panel still showed `Transcript`.
+  - Red Swift tests first failed because `RecitationEvent` had no `ayahText` and `RecitationSessionState` had no `currentAyahText`.
+  - `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_streams_session_events_from_audio_chunks tests.test_ios_status_panel.IOSStatusPanelSourceTests.test_status_panel_shows_real_asr_success_signals -v`.
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - `xcrun simctl install booted /private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app`.
+  - `xcrun simctl launch booted dev.mostafa.TarteelPrototype`.
+  - RunPod: `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_streams_session_events_from_audio_chunks -v`.
+  - Public health: `curl -i --max-time 20 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+  - Public WSS: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`.
+- Evidence captured:
+  - Focused backend/UI source tests passed: 2 tests.
+  - Swift client core tests passed: 11 tests.
+  - Full Python deterministic suite passed: 106 tests.
+  - Compile check passed.
+  - iOS simulator app build succeeded.
+  - Updated app installed and launched in the booted iPhone 17 simulator with process id `58839`.
+  - RunPod pulled `b2a3cd6` and focused backend payload test passed.
+  - Public `/health` returned HTTP 200.
+  - Public WSS smoke returned `locked`, `ayah_ref=114:2`, `ayah_text=ملك الناس`, and transcript `مَلِكِ النَّاسِ`.
+- Files or artifacts updated:
+  - `tarteel_realtime/api.py`
+  - `tests/test_api.py`
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationEvent.swift`
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationEventTests.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/ContentView.swift`
+  - `tests/test_ios_status_panel.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The canonical text currently comes from `quran-simple-clean.txt`, so full-Tanzil `ayah_text` is simple clean Quran text without tashkeel.
+  - This slice changes display truth, not correction logic; post-lock tolerant progression recovery is still the next behavior slice.
+- Next best step: manually retry the simulator mic flow and judge success by the `Ayah` plus `Ayah text` rows, then implement post-lock tolerant progression recovery.

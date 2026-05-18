@@ -144,6 +144,10 @@
   - Commit `c62b236` is deployed on RunPod and the public real-ASR backend is restarted on `0.0.0.0:8000`.
   - Public `/health` returned HTTP 200 after the restart.
   - Two sequential public WSS smokes for `fixtures/local_audio/114002.wav --chunk-ms 1000` both returned `locked` at `114:2`; the second call completed without the model-construction CUDA crash.
+  - Backend WebSocket events now include optional `ayah_text` for located ayahs.
+  - iOS state now stores `currentAyahText`; the visible app detail and status panel prefer canonical ayah text over noisy raw ASR transcript.
+  - The iPhone status panel now shows `Ayah text` instead of `Transcript`.
+  - Commit `b2a3cd6` is deployed on RunPod and the public WSS smoke returned `ayah_text=ملك الناس` for locked `114:2`.
 
 ## Changed This Session
 
@@ -180,6 +184,8 @@
   - Updated the ASR app model lifecycle so the heavy Whisper recognizer is shared across WebSocket sessions instead of being rebuilt for each session.
   - Added a regression covering shared model construction with separate per-session buffers.
   - Deployed the lifecycle fix to RunPod and verified repeated public WSS calls against the same server process.
+  - Added canonical ayah text to backend events and the iOS display path.
+  - Replaced the visible transcript status row with an ayah text row in the simulator UI.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -206,7 +212,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, and repeated WebSocket sessions no longer rebuild the GPU model. The next product behavior step is a simulator retry followed by post-lock tolerant progression recovery before a final model choice is meaningful.
+- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, repeated WebSocket sessions no longer rebuild the GPU model, and the UI now displays canonical ayah text from the locator. The next product behavior step is a simulator retry followed by post-lock tolerant progression recovery before a final model choice is meaningful.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -215,6 +221,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
+  - The normal UI shows `Ayah` and `Ayah text`; raw transcript is diagnostic only.
   - Clean Surah 102 audio should progress through more than isolated locks; after the tarteel-ai comparison, the next pass should reduce post-lock `wrong` events by using progression-aware tolerant recovery before surfacing a hard correction.
   - Repeated WSS calls against one RunPod server process should reuse the loaded Whisper model instead of constructing it again.
 - What must not change during that step:
