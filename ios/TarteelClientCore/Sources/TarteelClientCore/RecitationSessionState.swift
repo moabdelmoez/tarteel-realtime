@@ -137,6 +137,19 @@ public struct RecitationSessionState: Equatable, Sendable {
                 lastChunkSequence: event.chunkSequence
             )
         case .locating:
+            if currentAyahRef != nil || currentAyahText != nil {
+                return RecitationSessionState(
+                    phase: .listening,
+                    currentAyahRef: currentAyahRef,
+                    currentAyahText: currentAyahText,
+                    headline: "Listening",
+                    detail: currentAyahText ?? event.transcript,
+                    lastEventType: event.type,
+                    lastEventReason: event.reason,
+                    lastTranscript: event.transcript,
+                    lastChunkSequence: event.chunkSequence
+                )
+            }
             return RecitationSessionState(
                 phase: .connecting,
                 currentAyahRef: currentAyahRef,
@@ -158,7 +171,7 @@ public struct RecitationSessionState: Equatable, Sendable {
                 currentAyahRef: currentAyahRef,
                 currentAyahText: currentAyahText,
                 headline: "Listening",
-                detail: "Keep reciting",
+                detail: currentAyahText ?? "Keep reciting",
                 lastEventType: event.type,
                 lastEventReason: event.reason,
                 lastTranscript: event.transcript,

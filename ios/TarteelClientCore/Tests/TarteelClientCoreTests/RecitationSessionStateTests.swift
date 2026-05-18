@@ -143,7 +143,42 @@ struct RecitationSessionStateTests {
         #expect(state.currentAyahRef == "114:2")
         #expect(state.currentAyahText == "مَلِكِ النَّاسِ")
         #expect(state.headline == "Listening")
-        #expect(state.detail == "Keep reciting")
+        #expect(state.detail == "مَلِكِ النَّاسِ")
+    }
+
+    @Test func postLockLocatingEventShowsCanonicalAyahInsteadOfRawTranscript() {
+        let event = RecitationEvent(
+            type: .locating,
+            transcript: "بل ستنت نفعل",
+            confidence: 0.0,
+            chunkSequence: 22,
+            reason: "no_match",
+            candidateRefs: [],
+            ayahText: nil,
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: nil,
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+        let lockedState = RecitationSessionState(
+            phase: .listening,
+            currentAyahRef: "102:7",
+            currentAyahText: "ثم لترونها عين اليقين",
+            headline: "Listening",
+            detail: "ثم لترونها عين اليقين"
+        )
+
+        let state = lockedState.applying(event)
+
+        #expect(state.phase == .listening)
+        #expect(state.currentAyahRef == "102:7")
+        #expect(state.currentAyahText == "ثم لترونها عين اليقين")
+        #expect(state.headline == "Listening")
+        #expect(state.detail == "ثم لترونها عين اليقين")
+        #expect(state.lastTranscript == "بل ستنت نفعل")
     }
 
     @Test func repeatedPreLockBufferingDoesNotHideLastMeaningfulDiagnostic() {
