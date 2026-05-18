@@ -31,11 +31,10 @@ If `list` works but upload fails with `AccessDenied` during `PutObject`, recreat
 
 ## Download On RunPod
 
+The current repo is public, so a fresh pod can clone it over HTTPS. Put the R2 exports in `/workspace/tarteel-r2.env` manually, or configure them with RunPod secrets, then source the file inside the pod. Do not use `scp` for this workflow.
+
 ```bash
-export R2_ENDPOINT_URL="https://bb8b1b9ffb067e41f5657c9f1400c42b.r2.cloudflarestorage.com"
-export R2_BUCKET="tarteel-realtime"
-export R2_ACCESS_KEY_ID="replace-with-r2-access-key-id"
-export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
+source /workspace/tarteel-r2.env
 
 git clone https://github.com/moabdelmoez/tarteel-realtime.git /workspace/tarteel-realtime
 cd /workspace/tarteel-realtime
@@ -51,11 +50,8 @@ ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fix
 From a RunPod shell:
 
 ```bash
+source /workspace/tarteel-r2.env
 export TARTEEL_DOWNLOAD_R2_ARTIFACTS=1
-export R2_ENDPOINT_URL="https://bb8b1b9ffb067e41f5657c9f1400c42b.r2.cloudflarestorage.com"
-export R2_BUCKET="tarteel-realtime"
-export R2_ACCESS_KEY_ID="replace-with-r2-access-key-id"
-export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
 bash scripts/runpod_bootstrap.sh
 ```
 
@@ -63,7 +59,7 @@ When `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3
 
 ## Private GitHub Repos On RunPod
 
-The default `TARTEEL_REPO_URL` is an HTTPS GitHub URL. If the repository is private, a fresh pod cannot clone it without GitHub credentials. The bootstrap sets `GIT_TERMINAL_PROMPT=0` so missing auth fails fast instead of hanging at a username/password prompt.
+The default `TARTEEL_REPO_URL` is an HTTPS GitHub URL. This works while the repo remains public. If the repository becomes private, a fresh pod cannot clone it without GitHub credentials. The bootstrap sets `GIT_TERMINAL_PROMPT=0` so missing auth fails fast instead of hanging at a username/password prompt.
 
 Preferred setup for private repos:
 
@@ -82,4 +78,4 @@ export TARTEEL_RUN_TESTS=0
 bash scripts/runpod_bootstrap.sh
 ```
 
-Do not stream `.env` into the RunPod SSH gateway from an automated PTY; the gateway can echo stdin before the shell is ready. Prefer RunPod environment variables/secrets or paste exports manually into the pod terminal.
+Do not stream `.env` into the RunPod SSH gateway from an automated PTY; the gateway can echo stdin before the shell is ready. Prefer RunPod environment variables/secrets or paste exports manually into `/workspace/tarteel-r2.env` inside the pod.

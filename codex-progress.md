@@ -13,7 +13,7 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
 - Current highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend
-- Current blocker: mobile phase 1 is complete without GPU; the iPhone app still needs a real ASR backend URL/tunnel and manual mic verification against RunPod
+- Current blocker: CPU-only RunPod bootstrap is verified; the iPhone app still needs a real ASR backend URL/tunnel and manual mic verification against RunPod GPU
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
@@ -717,3 +717,40 @@
   - The bootstrap has not completed on RunPod yet because the pod needs GitHub read access.
   - R2 env should be provided via RunPod env/secrets or manual exports, not streamed through the PTY.
 - Next best step: configure GitHub read access on the pod, preferably with a read-only deploy key, then rerun `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 TARTEEL_RUN_TESTS=0 bash scripts/runpod_bootstrap.sh`.
+
+### Session 021
+
+- Date: 2026-05-18
+- Goal: Complete the CPU-only RunPod bootstrap dry run after switching the GitHub repository to public read access and manually providing R2 env vars on the pod.
+- Completed:
+  - Reconnected to CPU-only pod `kvsv4jpm4vrq6j`.
+  - Used the public GitHub repo path, avoiding `scp` entirely.
+  - Used the user-provided `/workspace/tarteel-r2.env` file for R2 variables without printing secret values.
+  - Ran the updated bootstrap from `/workspace/tarteel-realtime`.
+  - Downloaded the full Tanzil text plus Surah 114 MP3 proof files from R2.
+  - Converted `114001.mp3` and `114002.mp3` to mono 16 kHz PCM WAV files on the pod.
+  - Validated the full Tanzil metadata manifest on the pod.
+  - Ran the deterministic Python test suite on the CPU pod after hydration.
+- Verification run:
+  - RunPod CPU pod: `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 TARTEEL_RUN_TESTS=0 bash scripts/runpod_bootstrap.sh`
+  - RunPod CPU pod: `git rev-parse --short HEAD`
+  - RunPod CPU pod: `ls -lh data/tanzil/quran-simple-clean.txt fixtures/local_audio/114001.mp3 fixtures/local_audio/114002.mp3 fixtures/local_audio/114001.wav fixtures/local_audio/114002.wav`
+  - RunPod CPU pod: `sha256sum data/tanzil/quran-simple-clean.txt fixtures/local_audio/114001.mp3 fixtures/local_audio/114002.mp3`
+  - RunPod CPU pod: `uv run python -m tarteel_realtime.quran_data --check-manifest`
+  - RunPod CPU pod: `uv run python -B -m unittest discover`
+- Evidence captured:
+  - Pod repo commit: `3fa03d6`.
+  - Downloaded artifact checksums matched expected R2/local values: Tanzil `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, `114001.mp3` `a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253`, `114002.mp3` `d8ea32af92008a2ff7986eba33f19fc4fd1a53bc3de832c9193a01149ac392dd`.
+  - Prepared WAV files on pod: `114001.wav` 248K and `114002.wav` 148K.
+  - Manifest check returned `ayah_count: 6236`, `first_ref: 1:1`, `last_ref: 114:6`, `bytes: 794313`.
+  - CPU pod full deterministic suite passed: 88 tests.
+  - SSH session was closed after verification.
+- Files or artifacts updated:
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - This was a CPU-only dry run; no Whisper model inference was run.
+  - The phone still has not been pointed at a live real-ASR RunPod backend.
+  - R2 credentials remain external/manual and must not be committed or streamed through SSH.
+- Next best step: start the GPU pod only for the real-ASR mobile verification slice, run the opt-in ASR backend, expose it through the chosen URL/tunnel path, and verify the iPhone app receives `waiting_for_audio_buffer` followed by `locked`.

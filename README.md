@@ -197,14 +197,17 @@ If upload fails with `AccessDenied` during `PutObject`, the credentials are auth
 Download on RunPod:
 
 ```bash
+source /workspace/tarteel-r2.env
 uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
+uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114001.mp3
 uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3
+ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114001.wav
 ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
 ```
 
 The full RunPod/R2 workflow is documented in `docs/runpod-r2.md`.
 
-For private GitHub repositories, configure a read-only deploy key or another GitHub auth method on RunPod before running the bootstrap. The bootstrap disables interactive Git prompts so missing auth fails fast.
+The current GitHub repo is public, so a fresh RunPod pod can clone it over HTTPS. If the repo becomes private again, configure a read-only deploy key or another GitHub auth method before running the bootstrap. Do not use `scp` for pod setup; add R2 credentials manually to `/workspace/tarteel-r2.env` or through RunPod secrets.
 
 ## iOS Prototype
 

@@ -328,9 +328,13 @@
         "RunPod bootstrap now downloads the two local audio MP3s and prepares mono 16 kHz PCM WAVs for ASR proof commands.",
         "CPU-only RunPod dry run reached GitHub clone and surfaced that the private repo needs explicit GitHub auth on the pod.",
         "Bootstrap now sets GIT_TERMINAL_PROMPT=0 so private repo auth failures fail fast instead of hanging.",
+        "GitHub repo was made public for pod read access, avoiding fragile copy flows and avoiding scp.",
+        "CPU-only RunPod bootstrap completed from commit 3fa03d6 with manually provided R2 env vars in /workspace/tarteel-r2.env.",
+        "CPU-only RunPod bootstrap downloaded Tanzil sha256 054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49, 114001.mp3 sha256 a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253, and 114002.mp3 sha256 d8ea32af92008a2ff7986eba33f19fc4fd1a53bc3de832c9193a01149ac392dd.",
+        "CPU-only RunPod bootstrap prepared fixtures/local_audio/114001.wav and fixtures/local_audio/114002.wav, validated the full Tanzil manifest, and uv run python -B -m unittest discover passed with 88 tests.",
         "uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap passed: 8 tests."
       ],
-      "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token. Fresh RunPod bootstrap is locally verified by script tests and syntax checks; it still needs a non-GPU pod dry run."
+      "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token. Fresh RunPod bootstrap is verified on a CPU-only pod; GPU is next needed only for real ASR inference."
     }
   ]
 }

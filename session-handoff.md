@@ -26,6 +26,8 @@
   - R2 upload/download is verified for the full Tanzil text and local Surah 114 MP3s.
   - RunPod bootstrap script exists for clone/update, uv/ffmpeg setup, cache paths, optional R2 artifact download, MP3-to-WAV preparation, compile checks, and tests.
   - RunPod bootstrap disables interactive Git prompts; private repos require a deploy key, `gh auth setup-git`, or another GitHub auth method on the pod.
+  - Public GitHub clone plus R2 artifact hydration has been verified on a CPU-only RunPod pod without using `scp`.
+  - CPU-only RunPod bootstrap prepared `114001.wav` and `114002.wav` from R2 MP3 artifacts and validated the full Tanzil manifest.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -60,6 +62,11 @@
   - R2 artifact list returned `data/tanzil/quran-simple-clean.txt`, `fixtures/local_audio/114001.mp3`, and `fixtures/local_audio/114002.mp3`.
   - R2 download verification matched local SHA-256 for `data/tanzil/quran-simple-clean.txt` and `fixtures/local_audio/114002.mp3`.
   - CPU-only RunPod SSH dry run reached GitHub clone, but clone prompted for credentials because the repo is private.
+  - After the repo was made public and `/workspace/tarteel-r2.env` was provided manually on the pod, CPU-only RunPod bootstrap completed from commit `3fa03d6`.
+  - CPU-only RunPod bootstrap downloaded Tanzil sha256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, `114001.mp3` sha256 `a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253`, and `114002.mp3` sha256 `d8ea32af92008a2ff7986eba33f19fc4fd1a53bc3de832c9193a01149ac392dd`.
+  - CPU-only RunPod bootstrap prepared `fixtures/local_audio/114001.wav` and `fixtures/local_audio/114002.wav`.
+  - CPU-only RunPod manifest check returned `ayah_count: 6236`, `first_ref: 1:1`, `last_ref: 114:6`.
+  - CPU-only RunPod `uv run python -B -m unittest discover` passed with 88 tests.
 
 ## Changed This Session
 
@@ -77,6 +84,7 @@
   - Added the Cloudflare R2 artifact workflow without storing secrets.
   - Added an optional RunPod bootstrap script for repeatable pod setup.
   - Updated RunPod bootstrap to download Surah 114 MP3 proof files and prepare mono 16 kHz PCM WAVs.
+  - Verified the RunPod bootstrap on a CPU-only pod after switching GitHub read access to public and manually adding R2 environment variables on the pod.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -91,8 +99,7 @@
   - The phone has not yet been pointed at the real ASR backend; it has only been verified against the fake backend.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
-  - Fresh RunPod bootstrap has not yet been dry-run on a pod after the MP3/WAV hydration update.
-  - A fresh RunPod pod still needs GitHub read access before the bootstrap can clone the private repo.
+  - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -127,7 +134,8 @@
   - `uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio`
   - `uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt`
   - `uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3`
-  - `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 bash scripts/runpod_bootstrap.sh`
+  - On RunPod, create `/workspace/tarteel-r2.env` manually with exported R2 env vars, then run `source /workspace/tarteel-r2.env`
+  - `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 TARTEEL_RUN_TESTS=0 bash scripts/runpod_bootstrap.sh`
 - Startup: `uv run uvicorn tarteel_realtime.dev_app:app --reload`
 - Verification:
   - `uv run python -B -m unittest discover`
