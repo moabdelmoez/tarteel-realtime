@@ -204,6 +204,8 @@ ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fix
 
 The full RunPod/R2 workflow is documented in `docs/runpod-r2.md`.
 
+For private GitHub repositories, configure a read-only deploy key or another GitHub auth method on RunPod before running the bootstrap. The bootstrap disables interactive Git prompts so missing auth fails fast.
+
 ## iOS Prototype
 
 The first native SwiftUI prototype lives under `ios/`.

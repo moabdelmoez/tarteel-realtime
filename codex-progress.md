@@ -684,3 +684,36 @@
   - The updated bootstrap has not yet been dry-run on RunPod.
   - No GPU is needed for this slice; GPU is next needed for real model verification.
 - Next best step: dry-run the updated bootstrap on a cheap/stopped-then-started RunPod pod without running the ASR model, then proceed to the real iPhone-to-ASR backend verification slice.
+
+### Session 020
+
+- Date: 2026-05-18
+- Goal: Dry-run the updated bootstrap on a CPU-only RunPod pod.
+- Completed:
+  - Connected to CPU-only pod `kvsv4jpm4vrq6j`.
+  - Confirmed the RunPod SSH gateway does not support regular `scp` and echoes stdin before the shell is ready.
+  - Cleaned the pod temp env file/history after a failed stdin transfer attempt.
+  - Moved a stale non-git `/workspace/tarteel-realtime` directory aside.
+  - Attempted a fresh clone from `https://github.com/moabdelmoez/tarteel-realtime.git`.
+  - Stopped the clone prompt when GitHub requested username/password.
+  - Added `GIT_TERMINAL_PROMPT=0` to bootstrap so missing private-repo auth fails fast.
+  - Documented the private GitHub repo dependency and the preferred read-only deploy-key path for RunPod.
+- Verification run:
+  - CPU pod: `git clone https://github.com/moabdelmoez/tarteel-realtime.git /workspace/tarteel-realtime`
+  - Red test first: `uv run python -B -m unittest tests.test_runpod_bootstrap` failed because `GIT_TERMINAL_PROMPT=0` was missing.
+  - `uv run python -B -m unittest tests.test_runpod_bootstrap`
+- Evidence captured:
+  - CPU pod clone reached GitHub but prompted for credentials, confirming the repo is private from the pod.
+  - RunPod bootstrap tests passed after adding `GIT_TERMINAL_PROMPT=0`: 3 tests.
+- Files or artifacts updated:
+  - `README.md`
+  - `docs/runpod-r2.md`
+  - `scripts/runpod_bootstrap.sh`
+  - `tests/test_runpod_bootstrap.py`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The bootstrap has not completed on RunPod yet because the pod needs GitHub read access.
+  - R2 env should be provided via RunPod env/secrets or manual exports, not streamed through the PTY.
+- Next best step: configure GitHub read access on the pod, preferably with a read-only deploy key, then rerun `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 TARTEEL_RUN_TESTS=0 bash scripts/runpod_bootstrap.sh`.

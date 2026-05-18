@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_URL="${TARTEEL_REPO_URL:-https://github.com/moabdelmoez/tarteel-realtime.git}"
 APP_DIR="${TARTEEL_APP_DIR:-/workspace/tarteel-realtime}"
+export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"
 
 download_r2_artifact() {
   local key="$1"

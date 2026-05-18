@@ -326,7 +326,9 @@
         "Added concise R2 error reporting for AccessDenied and other client failures.",
         "R2 upload/download was verified for data/tanzil/quran-simple-clean.txt and fixtures/local_audio/114001.mp3 plus 114002.mp3; downloaded checksum matched the local source.",
         "RunPod bootstrap now downloads the two local audio MP3s and prepares mono 16 kHz PCM WAVs for ASR proof commands.",
-        "uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap passed: 7 tests."
+        "CPU-only RunPod dry run reached GitHub clone and surfaced that the private repo needs explicit GitHub auth on the pod.",
+        "Bootstrap now sets GIT_TERMINAL_PROMPT=0 so private repo auth failures fail fast instead of hanging.",
+        "uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap passed: 8 tests."
       ],
       "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token. Fresh RunPod bootstrap is locally verified by script tests and syntax checks; it still needs a non-GPU pod dry run."
     }

@@ -29,6 +29,9 @@ class RunPodBootstrapTests(unittest.TestCase):
         self.assertIn("-ar 16000", SCRIPT)
         self.assertIn("-sample_fmt s16", SCRIPT)
 
+    def test_git_clone_fails_fast_without_interactive_credential_prompt(self) -> None:
+        self.assertIn('export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"', SCRIPT)
+
 
 if __name__ == "__main__":
     unittest.main()

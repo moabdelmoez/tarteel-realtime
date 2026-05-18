@@ -25,6 +25,7 @@
   - Cloudflare R2 artifact workflow exists for ignored Tanzil/audio artifacts using S3-compatible R2 environment variables.
   - R2 upload/download is verified for the full Tanzil text and local Surah 114 MP3s.
   - RunPod bootstrap script exists for clone/update, uv/ffmpeg setup, cache paths, optional R2 artifact download, MP3-to-WAV preparation, compile checks, and tests.
+  - RunPod bootstrap disables interactive Git prompts; private repos require a deploy key, `gh auth setup-git`, or another GitHub auth method on the pod.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -58,6 +59,7 @@
   - `bash -n scripts/runpod_bootstrap.sh`.
   - R2 artifact list returned `data/tanzil/quran-simple-clean.txt`, `fixtures/local_audio/114001.mp3`, and `fixtures/local_audio/114002.mp3`.
   - R2 download verification matched local SHA-256 for `data/tanzil/quran-simple-clean.txt` and `fixtures/local_audio/114002.mp3`.
+  - CPU-only RunPod SSH dry run reached GitHub clone, but clone prompted for credentials because the repo is private.
 
 ## Changed This Session
 
@@ -90,6 +92,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
   - Fresh RunPod bootstrap has not yet been dry-run on a pod after the MP3/WAV hydration update.
+  - A fresh RunPod pod still needs GitHub read access before the bootstrap can clone the private repo.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.

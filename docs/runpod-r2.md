@@ -60,3 +60,26 @@ bash scripts/runpod_bootstrap.sh
 ```
 
 When `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3` and `114002.mp3` and prepares mono 16 kHz PCM WAVs for the ASR smoke commands. Set `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
+
+## Private GitHub Repos On RunPod
+
+The default `TARTEEL_REPO_URL` is an HTTPS GitHub URL. If the repository is private, a fresh pod cannot clone it without GitHub credentials. The bootstrap sets `GIT_TERMINAL_PROMPT=0` so missing auth fails fast instead of hanging at a username/password prompt.
+
+Preferred setup for private repos:
+
+```bash
+ssh-keygen -t ed25519 -f /workspace/tarteel-realtime-deploy -N "" -C "runpod-tarteel-readonly"
+cat /workspace/tarteel-realtime-deploy.pub
+```
+
+Add the printed public key to GitHub as a read-only deploy key for `moabdelmoez/tarteel-realtime`, then run:
+
+```bash
+export GIT_SSH_COMMAND="ssh -i /workspace/tarteel-realtime-deploy -o StrictHostKeyChecking=accept-new"
+export TARTEEL_REPO_URL="git@github.com:moabdelmoez/tarteel-realtime.git"
+export TARTEEL_DOWNLOAD_R2_ARTIFACTS=1
+export TARTEEL_RUN_TESTS=0
+bash scripts/runpod_bootstrap.sh
+```
+
+Do not stream `.env` into the RunPod SSH gateway from an automated PTY; the gateway can echo stdin before the shell is ready. Prefer RunPod environment variables/secrets or paste exports manually into the pod terminal.
