@@ -1,4 +1,5 @@
 import unittest
+import struct
 
 from tarteel_realtime.buffered_recognition import BufferedRecognitionConfig, BufferedRecognizer
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult
@@ -89,6 +90,27 @@ class BufferedRecognizerTests(unittest.TestCase):
 
         self.assertEqual(result.transcript, "")
         self.assertEqual(inner.chunks, [])
+
+    def test_skips_quiet_windows_until_speech_energy_is_present(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+            ),
+        )
+
+        quiet = recognizer.recognize(chunk(0, b"\x00\x00\x00\x00"))
+        loud_pcm = struct.pack("<hh", 1000, -1000)
+        loud = recognizer.recognize(chunk(1, loud_pcm))
+
+        self.assertEqual(quiet.transcript, "")
+        self.assertEqual(quiet.confidence, 0.0)
+        self.assertFalse(quiet.is_final)
+        self.assertEqual(loud.transcript, "flush-1")
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [loud_pcm])
 
     def test_logs_buffer_diagnostics_without_audio_content(self):
         inner = RecordingRecognizer()
