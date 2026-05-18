@@ -323,7 +323,8 @@
         "Added docs/runpod-r2.md with Mac upload, RunPod download, and bootstrap commands.",
         "Added scripts/runpod_bootstrap.sh to install uv/ffmpeg when needed, clone or update the repo, set persistent cache directories, optionally download R2 artifacts, and run compile/tests.",
         "Added tests/test_r2_artifacts.py covering default keys, outside-repo rejection, hidden platform file skipping, and S3 credential validation.",
-        "uv run python -B -m unittest tests.test_r2_artifacts passed: 4 tests."
+        "Added concise R2 error reporting for AccessDenied and other client failures.",
+        "uv run python -B -m unittest tests.test_r2_artifacts passed: 5 tests."
       ],
       "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token."
     }

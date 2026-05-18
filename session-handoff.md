@@ -52,7 +52,7 @@
   - Swift client core tests now pass with 8 tests, including backend presets and buffering state.
   - iOS simulator build succeeded after adding backend presets and buffering UI behavior.
   - GitHub bootstrap audit confirmed `.venv`, `.DS_Store`, Xcode user state, full Tanzil text, local audio, and downloaded QUL metadata are ignored.
-  - `uv run python -B -m unittest tests.test_r2_artifacts` with 4 tests passing.
+  - `uv run python -B -m unittest tests.test_r2_artifacts` with 5 tests passing.
   - `bash -n scripts/runpod_bootstrap.sh`.
 
 ## Changed This Session
@@ -85,6 +85,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
   - Cloudflare R2 upload/download has not been manually verified yet because S3-compatible R2 credentials are still needed.
+  - R2 `list` authenticated, but upload failed with `AccessDenied` during `PutObject`; the token needs write permission for the bucket.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.

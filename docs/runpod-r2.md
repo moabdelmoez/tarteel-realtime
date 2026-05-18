@@ -27,6 +27,8 @@ uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio
 uv run --with boto3 python scripts/r2_artifacts.py list
 ```
 
+If `list` works but upload fails with `AccessDenied` during `PutObject`, recreate or edit the R2 S3 token so it has Object Read & Write access to the `tarteel-realtime` bucket.
+
 ## Download On RunPod
 
 ```bash

@@ -616,3 +616,34 @@
   - A general Cloudflare API token should be rotated if it was exposed and should not be used for this S3 artifact helper.
   - The app still has not been manually connected to a real ASR backend.
 - Next best step: create scoped R2 S3 credentials, upload the ignored local artifacts from the Mac, then use the bootstrap script on the next RunPod pod before the real-ASR mobile verification slice.
+
+### Session 018
+
+- Date: 2026-05-18
+- Goal: Validate newly added local R2 credentials and upload ignored artifacts.
+- Completed:
+  - Loaded R2 settings from `.env` through `uv run --env-file .env`.
+  - Confirmed the R2 helper can authenticate enough to run `list`.
+  - Tried uploading `data/tanzil/quran-simple-clean.txt` and `fixtures/local_audio`.
+  - Added concise R2 error handling so upload failures report one actionable line instead of a Python traceback.
+  - Documented the `AccessDenied` / `PutObject` troubleshooting path in README and R2 docs.
+- Verification run:
+  - `uv run --env-file .env --with boto3 python scripts/r2_artifacts.py list`
+  - `uv run --env-file .env --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simple-clean.txt`
+  - `uv run python -B -m unittest tests.test_r2_artifacts`
+- Evidence captured:
+  - R2 `list` exited 0.
+  - R2 upload failed with `AccessDenied` during `PutObject`, which means the token lacks write access to the bucket.
+  - R2 helper tests passed: 5 tests.
+- Files or artifacts updated:
+  - `README.md`
+  - `docs/runpod-r2.md`
+  - `scripts/r2_artifacts.py`
+  - `tests/test_r2_artifacts.py`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - R2 artifacts are not uploaded yet.
+  - The R2 S3 token must be recreated or updated with Object Read & Write permission for the `tarteel-realtime` bucket.
+- Next best step: fix the R2 token permissions, then rerun the upload commands for Tanzil text and local audio.

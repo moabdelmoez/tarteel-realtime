@@ -9,6 +9,16 @@ from unittest import mock
 from scripts import r2_artifacts
 
 
+class FakeClientError(Exception):
+    operation_name = "PutObject"
+    response = {
+        "Error": {
+            "Code": "AccessDenied",
+            "Message": "Access Denied",
+        }
+    }
+
+
 class R2ArtifactsTests(unittest.TestCase):
     def test_default_key_uses_repo_relative_posix_path(self) -> None:
         path = r2_artifacts.REPO_ROOT / "data" / "tanzil" / "quran-simple-clean.txt"
@@ -50,6 +60,10 @@ class R2ArtifactsTests(unittest.TestCase):
         with mock.patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(RuntimeError, "R2_ACCESS_KEY_ID"):
                 r2_artifacts.load_r2_config()
+
+    def test_r2_errors_are_reported_without_traceback_noise(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "AccessDenied.*PutObject"):
+            r2_artifacts.raise_r2_error(FakeClientError())
 
 
 if __name__ == "__main__":

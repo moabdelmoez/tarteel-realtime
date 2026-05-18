@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -82,6 +83,18 @@ def make_s3_client(config: R2Config):
     )
 
 
+def raise_r2_error(exc: Exception) -> None:
+    response = getattr(exc, "response", {}) or {}
+    error = response.get("Error", {})
+    code = error.get("Code") or exc.__class__.__name__
+    message = error.get("Message") or str(exc)
+    operation = getattr(exc, "operation_name", "R2 request")
+    raise RuntimeError(
+        f"R2 {code} during {operation}: {message}. "
+        "Check that the R2 S3 token is scoped to Object Read & Write for this bucket."
+    ) from exc
+
+
 def upload(source: Path, key: str | None) -> None:
     config = load_r2_config()
     client = make_s3_client(config)
@@ -94,7 +107,10 @@ def upload(source: Path, key: str | None) -> None:
         object_key = key or default_object_key(path)
         if source.is_dir() and key:
             object_key = f"{key.rstrip('/')}/{path.relative_to(source).as_posix()}"
-        client.upload_file(str(path), config.bucket, object_key)
+        try:
+            client.upload_file(str(path), config.bucket, object_key)
+        except Exception as exc:
+            raise_r2_error(exc)
         print(f"uploaded s3://{config.bucket}/{object_key} sha256={sha256_file(path)}")
 
 
@@ -103,17 +119,23 @@ def download(key: str, destination: Path | None) -> None:
     client = make_s3_client(config)
     target = (destination or REPO_ROOT / key).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    client.download_file(config.bucket, key, str(target))
+    try:
+        client.download_file(config.bucket, key, str(target))
+    except Exception as exc:
+        raise_r2_error(exc)
     print(f"downloaded s3://{config.bucket}/{key} -> {target} sha256={sha256_file(target)}")
 
 
 def list_objects(prefix: str) -> None:
     config = load_r2_config()
     client = make_s3_client(config)
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=config.bucket, Prefix=prefix):
-        for item in page.get("Contents", []):
-            print(f"{item['Key']}\t{item['Size']}")
+    try:
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=config.bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                print(f"{item['Key']}\t{item['Size']}")
+    except Exception as exc:
+        raise_r2_error(exc)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -135,13 +157,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-    if args.command == "upload":
-        upload(args.source, args.key)
-    elif args.command == "download":
-        download(args.key, args.destination)
-    elif args.command == "list":
-        list_objects(args.prefix)
+    try:
+        args = build_parser().parse_args()
+        if args.command == "upload":
+            upload(args.source, args.key)
+        elif args.command == "download":
+            download(args.key, args.destination)
+        elif args.command == "list":
+            list_objects(args.prefix)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

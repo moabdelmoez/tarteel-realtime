@@ -192,6 +192,8 @@ uv run --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simp
 uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio
 ```
 
+If upload fails with `AccessDenied` during `PutObject`, the credentials are authenticating but do not have write access to the bucket. Use an R2 S3 token with Object Read & Write scope for `tarteel-realtime`.
+
 Download on RunPod:
 
 ```bash
