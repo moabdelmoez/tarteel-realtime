@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
+import logging
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -9,6 +10,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from tarteel_realtime.quran import QuranCorpus, QuranRef
 from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
 from tarteel_realtime.session import RecitationSession, SessionEvent
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -35,7 +39,19 @@ def create_app(
         try:
             while True:
                 payload = await websocket.receive_json()
-                event = session.handle_chunk(_audio_chunk_from_payload(payload))
+                chunk = _audio_chunk_from_payload(payload)
+                event = session.handle_chunk(chunk)
+                logger.info(
+                    "recitation_chunk sequence=%s pcm_bytes=%s sample_rate_hz=%s "
+                    "approx_audio_ms=%s event_type=%s reason=%s ayah_ref=%s",
+                    chunk.sequence_number,
+                    len(chunk.pcm),
+                    chunk.sample_rate_hz,
+                    _pcm_bytes_to_ms(len(chunk.pcm), sample_rate_hz=chunk.sample_rate_hz),
+                    event.type.value,
+                    event.reason,
+                    _ref_to_string(event.ayah_ref),
+                )
                 await websocket.send_json(_event_to_payload(event))
         except WebSocketDisconnect:
             return
@@ -73,3 +89,8 @@ def _ref_to_string(ref: QuranRef | None) -> str | None:
     if ref is None:
         return None
     return str(ref)
+
+
+def _pcm_bytes_to_ms(byte_count: int, *, sample_rate_hz: int) -> int:
+    bytes_per_sample = 2
+    return byte_count * 1_000 // (sample_rate_hz * bytes_per_sample)

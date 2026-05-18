@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -37,8 +41,26 @@ class BufferedRecognizer:
         if chunk.pcm:
             self._append(chunk)
         if not self._ready_to_flush():
+            logger.info(
+                "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
+                "buffered_ms=%s unflushed_ms=%s action=wait",
+                chunk.sequence_number,
+                len(chunk.pcm),
+                chunk.sample_rate_hz,
+                self._buffered_ms,
+                self._unflushed_ms,
+            )
             return _waiting_result(chunk.sequence_number)
 
+        logger.info(
+            "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
+            "buffered_ms=%s unflushed_ms=%s action=flush",
+            chunk.sequence_number,
+            len(chunk.pcm),
+            chunk.sample_rate_hz,
+            self._buffered_ms,
+            self._unflushed_ms,
+        )
         result = self._recognizer.recognize(AudioChunk(
             sequence_number=chunk.sequence_number,
             pcm=bytes(self._buffer),

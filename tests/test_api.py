@@ -78,6 +78,25 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(wrong["recognized_word"], "الفلق")
         self.assertEqual(wrong["reason"], "word_mismatch")
 
+    def test_websocket_logs_privacy_safe_chunk_diagnostics(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+        )
+        client = TestClient(app)
+
+        with self.assertLogs("tarteel_realtime.api", level="INFO") as logs:
+            with client.websocket_connect("/ws/recitation") as websocket:
+                websocket.send_json(chunk_payload(0))
+                websocket.receive_json()
+
+        joined_logs = "\n".join(logs.output)
+        self.assertIn("pcm_bytes=2", joined_logs)
+        self.assertIn("sample_rate_hz=16000", joined_logs)
+        self.assertIn("event_type=locked", joined_logs)
+        self.assertIn("ayah_ref=114:2", joined_logs)
+
 
 if __name__ == "__main__":
     unittest.main()

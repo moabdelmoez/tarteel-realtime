@@ -90,6 +90,28 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(result.transcript, "")
         self.assertEqual(inner.chunks, [])
 
+    def test_logs_buffer_diagnostics_without_audio_content(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=3,
+                flush_interval_ms=3,
+                tail_audio_ms=0,
+            ),
+        )
+
+        with self.assertLogs("tarteel_realtime.buffered_recognition", level="INFO") as logs:
+            recognizer.recognize(chunk(0, b"aa"))
+            recognizer.recognize(chunk(1, b"bb"))
+            recognizer.recognize(chunk(2, b"cc"))
+
+        joined_logs = "\n".join(logs.output)
+        self.assertIn("buffered_ms=1", joined_logs)
+        self.assertIn("buffered_ms=3", joined_logs)
+        self.assertIn("action=wait", joined_logs)
+        self.assertIn("action=flush", joined_logs)
+
 
 if __name__ == "__main__":
     unittest.main()
