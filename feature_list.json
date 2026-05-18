@@ -311,9 +311,12 @@
         "Added a visible MVP status panel with Connection, Last event, Ayah, and Transcript rows so manual RunPod success criteria are observable.",
         "RecitationSessionState now exposes debugLastEventText, debugAyahText, and debugTranscriptText for UI status and tests.",
         "Added tests/test_ios_status_panel.py to pin the visible success signals in ContentView.",
-        "After the status panel update, Swift client core passed with 8 tests, focused iOS source checks passed with 2 tests, full Python suite passed with 90 tests, iOS simulator build succeeded, RunPod health returned HTTP 200, and the updated app launched in iPhone 17 simulator."
+        "After the status panel update, Swift client core passed with 8 tests, focused iOS source checks passed with 2 tests, full Python suite passed with 90 tests, iOS simulator build succeeded, RunPod health returned HTTP 200, and the updated app launched in iPhone 17 simulator.",
+        "Added backend diagnostics for mobile stuck-buffer debugging: WebSocket chunk byte counts, approximate audio milliseconds, rolling buffered milliseconds, wait/flush action, event type, reason, and ayah ref.",
+        "Diagnostics were deployed on RunPod from commit 8fd73a7, and the known 114002.wav WSS smoke produced the expected good pattern: 32000-byte 1s chunks, buffered_ms reaching 4702, action=flush, then event_type=locked and ayah_ref=114:2.",
+        "After diagnostics, focused logging tests passed with 2 tests, focused backend/session tests passed with 21 tests, and full Python suite passed with 92 tests."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, the simulator mic-tap crash is fixed, and visible pass/fail signals are installed. The feature remains in progress until the simulator or phone is manually verified with live mic chunks."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. The feature remains in progress until the simulator or phone is manually verified with live mic chunks."
     },
     {
       "id": "infra-001",

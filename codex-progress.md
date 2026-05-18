@@ -865,3 +865,39 @@
 - Known risk or unresolved issue:
   - The app now shows objective success signals, but the user still needs to retry the live mic against RunPod and report whether the panel reaches `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.
 - Next best step: choose `Custom`, set `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`, tap mic, recite `مَلِكِ النَّاسِ` for 5-8 seconds, and use the debug panel as the pass/fail indicator.
+
+### Session 025
+
+- Date: 2026-05-18
+- Goal: Add backend diagnostics for the `mobile-002` stuck `waiting_for_audio_buffer` state.
+- Completed:
+  - Inspected existing RunPod logs and confirmed they only showed WebSocket open/close plus model warnings, not chunk sizes or buffer state.
+  - Added privacy-safe backend diagnostics for each WebSocket chunk: sequence, PCM byte count, sample rate, approximate audio milliseconds, event type, reason, and ayah ref.
+  - Added rolling-buffer diagnostics for wait/flush decisions: incoming bytes, buffered milliseconds, unflushed milliseconds, and action.
+  - Restarted the RunPod ASR server from commit `8fd73a7` with diagnostics visible in `/tmp/tarteel-asr.log`.
+  - Verified diagnostics using the known `114002.wav` public WSS smoke.
+- Verification run:
+  - Red tests first: focused logging tests failed because no diagnostics existed.
+  - `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_logs_privacy_safe_chunk_diagnostics tests.test_buffered_recognition.BufferedRecognizerTests.test_logs_buffer_diagnostics_without_audio_content`.
+  - `uv run python -B -m unittest tests.test_api tests.test_buffered_recognition tests.test_asr_app tests.test_session`.
+  - `uv run python -B -m unittest discover`.
+  - RunPod: `git pull --ff-only`, restart Uvicorn with the existing ASR env settings, and confirm `ss -ltnp | grep ':8000'`.
+  - Local: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`.
+  - RunPod: `tail -n 160 /tmp/tarteel-asr.log | tr -d '\000'`.
+- Evidence captured:
+  - Focused diagnostic tests passed: 2 tests.
+  - Focused backend/session tests passed: 21 tests.
+  - Full Python deterministic suite passed: 92 tests.
+  - Public WSS smoke still returned `locked` for `114:2`.
+  - Good diagnostic pattern from known WAV: `incoming_bytes=32000`, `approx_audio_ms=1000`, `buffered_ms` climbed from `1000` to `4702`, `action=flush`, then `event_type=locked`, `ayah_ref=114:2`.
+- Files or artifacts updated:
+  - `tarteel_realtime/api.py`
+  - `tarteel_realtime/buffered_recognition.py`
+  - `tests/test_api.py`
+  - `tests/test_buffered_recognition.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The user's live simulator mic still needs one retry while the backend logs are tailed. The diagnostics should distinguish empty/tiny iOS chunks from backend buffering/model recognition problems.
+- Next best step: retry the simulator mic, then inspect `/tmp/tarteel-asr.log` for `incoming_bytes`, `buffered_ms`, `action=flush`, and final `event_type`.

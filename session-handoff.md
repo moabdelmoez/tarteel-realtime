@@ -32,6 +32,7 @@
   - Public RunPod `/health` returned HTTP 200 and public WSS streaming of `114002.wav` returned buffering events followed by `locked` at `114:2`.
   - iPhone simulator mic-tap crash from explicit `AVAudioNode.installTap(... format: inputFormat)` has been fixed, built, installed, and launched in the simulator.
   - iPhone app now shows a visible MVP status panel with Connection, Last event, Ayah, and Transcript rows.
+  - RunPod backend diagnostics are live from commit `8fd73a7`, logging chunk bytes, approximate audio milliseconds, buffered milliseconds, wait/flush actions, event type, reason, and ayah ref.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -89,6 +90,10 @@
   - RunPod health endpoint still returned HTTP 200 after the status panel update.
   - Updated app installed and launched in iPhone 17 simulator with process id `8190`.
   - Status panel screenshot captured at `/private/tmp/tarteel-status-panel.png`.
+  - Backend diagnostic tests passed: `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_logs_privacy_safe_chunk_diagnostics tests.test_buffered_recognition.BufferedRecognizerTests.test_logs_buffer_diagnostics_without_audio_content`.
+  - Latest full Python deterministic suite after backend diagnostics: 92 tests passing.
+  - RunPod public WSS smoke for `114002.wav --chunk-ms 1000` still returned `locked` at `114:2`.
+  - Known-good diagnostic log pattern: `incoming_bytes=32000`, `approx_audio_ms=1000`, `buffered_ms=4702`, `action=flush`, `event_type=locked`, `ayah_ref=114:2`.
 
 ## Changed This Session
 
@@ -110,6 +115,7 @@
   - Started the real ASR backend on a GPU pod and verified the public RunPod proxy plus WSS URL from the local machine.
   - Fixed the simulator microphone tap crash by using AVAudioEngine-selected tap format and converting from the actual buffer format.
   - Added the visible MVP status panel so `mobile-002` can be manually judged by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`.
+  - Added backend diagnostics to distinguish empty/tiny iOS chunks from backend buffering or ASR recognition failures.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -187,4 +193,5 @@
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000`
   - Current RunPod health URL while the pod is alive: `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`
   - Current iOS Custom backend URL while the pod is alive: `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`
+  - Current RunPod live log command: `tail -f /tmp/tarteel-asr.log | tr -d '\000'`
   - Stop current RunPod ASR server if needed: `kill $(cat /tmp/tarteel-asr.pid)` from `/workspace/tarteel-realtime` on the pod.
