@@ -1,0 +1,3 @@
+{"case_id":"surah-102-ayah-1-clean-audio-start","transcript":"ألهاكم التكاثر","expected_locator_status":"locked","expected_locator_start_ref":"102:1:5","alignment_start_ref":"102:1:5","expected_alignment_status":"correct"}
+{"case_id":"surah-102-ayah-8-clean-audio","transcript":"ثم لتسألن يومئذ عن النعيم","expected_locator_status":"locked","expected_locator_start_ref":"102:8:1","alignment_start_ref":"102:8:1","expected_alignment_status":"correct"}
+{"case_id":"surah-102-seeded-wrong-word","transcript":"حتى زرتم الجحيم","alignment_start_ref":"102:2:1","expected_alignment_status":"wrong"}

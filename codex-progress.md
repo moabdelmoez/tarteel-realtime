@@ -948,3 +948,39 @@
 - Known risk or unresolved issue:
   - Current evidence points past transport and buffering into audio quality or ASR transcript/location quality. The next live retry should inspect `pcm_rms`, `pcm_peak`, and `transcript_chars`; exact transcript logging should be enabled only deliberately with `TARTEEL_LOG_TRANSCRIPTS=1`.
 - Next best step: retry the simulator mic and judge success by `Last event: locked`, `Ayah: 114:2`, and transcript `مَلِكِ النَّاسِ`. If it still reaches `no_match`, inspect `pcm_rms`, `pcm_peak`, and `transcript_chars` in `/tmp/tarteel-asr.log`.
+
+### Session 027
+
+- Date: 2026-05-18
+- Goal: Add Surah 102 clean-audio coverage to determine whether the latest failures are only simulator microphone related.
+- Completed:
+  - Added Surah 102 text rows to `fixtures/quran/sample-tanzil.txt`.
+  - Added `fixtures/evaluation/surah-102-smoke.jsonl` with deterministic cases for ayah 1, ayah 8, and a seeded wrong-word case.
+  - Downloaded the eight provided Husary Surah 102 MP3 files into ignored local audio under `fixtures/local_audio/surah_102/`.
+  - Built a mono PCM16 16 kHz full-surah WAV at `fixtures/local_audio/surah_102/102-full.wav`.
+  - Sent the full Surah 102 WAV through the public RunPod WSS endpoint with both `--chunk-ms 1000` and `--chunk-ms 5000`.
+- Verification run:
+  - Red test first: `uv run python -B -m unittest tests.test_evaluate_cli.EvaluateCliTests.test_repository_surah_102_fixture_reports_expected_metrics -v` failed because the Surah 102 fixture was missing.
+  - Green focused test: `uv run python -B -m unittest tests.test_evaluate_cli.EvaluateCliTests.test_repository_surah_102_fixture_reports_expected_metrics -v`.
+  - `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/surah-102-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 1000`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+- Evidence captured:
+  - Surah 102 deterministic evaluator returned `total_cases: 3`, `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, and `wrong_detection_rate: 1.000`.
+  - Full Python deterministic suite passed: 96 tests.
+  - Full-surah clean WAV metadata: PCM16LE, 16 kHz, mono, about 63.1 seconds.
+  - Public WSS clean-audio test locked `102:1` at `102:1:5` for transcript `أَلْهَاكُمُ التَّكَاثُرُ`.
+  - Public WSS clean-audio test later locked `102:6` at `102:6:1` for transcript `لَتَرَوُنَّ الْجَحِيمَ`.
+  - Many other windows returned `no_match` with truncated or hallucinated transcripts such as `حَتَّى زُرْتُمُ الْمَقَى`, `كَلَّا سَوْفَ تَعْلَى`, and long repeated `كُلَّمُوا...` text.
+- Files or artifacts updated:
+  - `fixtures/quran/sample-tanzil.txt`
+  - `fixtures/evaluation/surah-102-smoke.jsonl`
+  - `tests/test_evaluate_cli.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - Clean full-surah audio only partially works. This means the current failure is not only simulator microphone quality; it is also the streaming ASR/locator architecture: 4.2s windows can cut ayahs, Whisper can emit partial/hallucinated words, and the current locator requires exact contiguous text inside a single ayah.
+- Next best step: create a new backend slice for robust streaming location: phrase-tolerant matching, per-ayah progression, and smarter flush/finalization around silence or known ayah audio boundaries.

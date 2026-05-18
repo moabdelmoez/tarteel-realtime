@@ -321,9 +321,12 @@
         "Latest verification after the flashing/no_match diagnostic update: full Python suite passed with 95 tests, Swift client core passed with 9 tests, and the iPhone simulator app target build succeeded.",
         "Deployed commit 2b72253 to RunPod, restarted Uvicorn on 0.0.0.0:8000, confirmed public /health returned HTTP 200, and verified 114002.wav still reached locked at 114:2 through the public WSS endpoint.",
         "RunPod logs now show privacy-safe audio-level diagnostics for known-good WAV chunks, for example pcm_rms/pcm_peak plus transcript_chars with transcript_text=<redacted>.",
-        "Installed and launched the updated app in the iPhone 17 simulator with process id 21513; screenshot captured at /private/tmp/tarteel-flashing-fix-installed.png."
+        "Installed and launched the updated app in the iPhone 17 simulator with process id 21513; screenshot captured at /private/tmp/tarteel-flashing-fix-installed.png.",
+        "Added Surah 102 text coverage to fixtures/quran/sample-tanzil.txt and fixtures/evaluation/surah-102-smoke.jsonl; deterministic evaluator returned locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
+        "Downloaded clean Husary Surah 102 ayah MP3s from the provided URLs into ignored local audio, built fixtures/local_audio/surah_102/102-full.wav as mono PCM16 16 kHz, duration about 63 seconds.",
+        "Public WSS clean-audio test with Surah 102 full WAV locked 102:1 and 102:6 but returned no_match for many other 4.2s/5s windows due truncated or hallucinated transcripts, showing the failure is not only simulator microphone audio."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering, but real ASR returns no_match after flush. The feature remains in progress until the simulator or phone is manually verified with live mic chunks reaching locked."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering, but real ASR returns no_match after flush. Clean full-Surah 102 audio also only partially locks, so the next slice should improve streaming ASR/locator robustness before treating mic audio as the main blocker."
     },
     {
       "id": "infra-001",

@@ -144,6 +144,24 @@ class EvaluateCliTests(unittest.TestCase):
         self.assertIn("alignment_accuracy: 1.000", output.getvalue())
         self.assertIn("wrong_detection_rate: 1.000", output.getvalue())
 
+    def test_repository_surah_102_fixture_reports_expected_metrics(self):
+        output = io.StringIO()
+
+        exit_code = main([
+            "fixtures/evaluation/surah-102-smoke.jsonl",
+            "--tanzil-path",
+            "fixtures/quran/sample-tanzil.txt",
+            "--minimum-lock-words",
+            "2",
+            "--mvp-scope",
+        ], stdout=output)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("total_cases: 3", output.getvalue())
+        self.assertIn("locator_accuracy: 1.000", output.getvalue())
+        self.assertIn("alignment_accuracy: 1.000", output.getvalue())
+        self.assertIn("wrong_detection_rate: 1.000", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

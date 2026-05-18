@@ -38,6 +38,8 @@
   - Backend diagnostics now include `pcm_rms`, `pcm_peak`, `transcript_chars`, and optional `transcript_text` when `TARTEEL_LOG_TRANSCRIPTS=1`.
   - RunPod is updated to commit `2b72253` and running the ASR backend on `0.0.0.0:8000` with transcript text redacted.
   - Updated app build is installed and launched in the iPhone 17 simulator.
+  - Surah 102 deterministic text fixture exists and passes against the sample Tanzil fixture.
+  - Clean Husary Surah 102 full-surah audio was tested through the public RunPod WSS endpoint and only partially locked, so current failure is not only simulator mic audio.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -108,6 +110,10 @@
   - RunPod public WSS smoke for `114002.wav --chunk-ms 1000` still returned `locked` at `114:2`.
   - RunPod known-good logs now show `pcm_rms`, `pcm_peak`, `transcript_chars`, and `transcript_text=<redacted>`.
   - Updated app launched in iPhone 17 simulator with process id `21513`; screenshot captured at `/private/tmp/tarteel-flashing-fix-installed.png`.
+  - Surah 102 deterministic evaluator returned `total_cases: 3`, `locator_accuracy: 1.000`, `alignment_accuracy: 1.000`, `wrong_detection_rate: 1.000`.
+  - Latest full Python deterministic suite after Surah 102 fixture: 96 tests passing.
+  - Clean Surah 102 full WAV metadata: PCM16LE, 16 kHz, mono, about 63.1 seconds.
+  - Public WSS clean Surah 102 test locked `102:1` at `102:1:5` and `102:6` at `102:6:1`, but many other windows returned `no_match` due truncated or hallucinated transcripts.
 
 ## Changed This Session
 
@@ -132,6 +138,7 @@
   - Added backend diagnostics to distinguish empty/tiny iOS chunks from backend buffering or ASR recognition failures.
   - Added client-side waiting-event suppression to reduce UI flashing during real ASR buffering.
   - Added audio-level and optional transcript backend diagnostics to separate silent/low mic input from ASR location failures.
+  - Added Surah 102 text/evaluation fixtures and tested clean full-surah Husary audio through public WSS.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -147,7 +154,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics and flashing fix are deployed; the next live manual retry has not yet been performed.
+  - The latest audio-level diagnostics and flashing fix are deployed; clean Surah 102 audio shows the next major blocker is streaming ASR/locator robustness, not only live mic capture.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -157,7 +164,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live and proven with WAV streaming; the remaining risk is manual simulator/phone mic verification against the Custom URL.
+- Why it is next: the public real-ASR WSS endpoint is live, but clean full-surah audio shows the backend needs robust streaming location before live mic testing can be judged fairly.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -166,6 +173,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
+  - Clean Surah 102 audio should progress through more than isolated locks; current behavior only locks selected windows and misses many ayahs.
 - What must not change during that step:
   - Do not remove fake recognizer tests.
   - Do not make heavyweight ASR dependencies required for the default test suite unless explicitly approved.
@@ -205,6 +213,8 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.pcm16le --model-id basharalrfooh/whisper-small-quran --sample-rate 16000`
   - `uv run python -B -m unittest tests.test_audio tests.test_whisper_adapter`
   - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+  - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/surah-102-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`
   - `TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran TARTEEL_WHISPER_DEVICE=cuda:0 UV_NO_PROGRESS=1 uv run --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000`
   - `TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt TARTEEL_MINIMUM_LOCK_WORDS=2 TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran TARTEEL_WHISPER_DEVICE=cuda:0 TARTEEL_ASR_MIN_AUDIO_MS=4200 TARTEEL_ASR_FLUSH_MS=4200 TARTEEL_ASR_TAIL_MS=0 UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000`
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav`
