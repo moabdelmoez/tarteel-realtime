@@ -30,6 +30,7 @@
   - CPU-only RunPod bootstrap prepared `114001.wav` and `114002.wav` from R2 MP3 artifacts and validated the full Tanzil manifest.
   - Public RunPod real-ASR backend is live on `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`.
   - Public RunPod `/health` returned HTTP 200 and public WSS streaming of `114002.wav` returned buffering events followed by `locked` at `114:2`.
+  - iPhone simulator mic-tap crash from explicit `AVAudioNode.installTap(... format: inputFormat)` has been fixed, built, installed, and launched in the simulator.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -75,6 +76,11 @@
   - RunPod ASR server was started with `--host 0.0.0.0 --port 8000` and `ss` showed Uvicorn listening on `0.0.0.0:8000`.
   - Local proxy health check returned HTTP 200 for `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
   - Local public WSS client for `fixtures/local_audio/114002.wav --chunk-ms 1000` returned four `waiting_for_audio_buffer` events followed by `type: locked`, `ayah_ref: 114:2`, `start_ref: 114:2:1`.
+  - Red/green regression for simulator tap format: `uv run python -B -m unittest tests.test_ios_audio_streamer`.
+  - Latest full Python deterministic suite after crash fix: 89 tests passing.
+  - Latest Swift client core after crash fix: 8 tests passing.
+  - Latest iOS simulator build after crash fix succeeded.
+  - Patched app installed and launched in iPhone 17 simulator with process id `3935`.
 
 ## Changed This Session
 
@@ -94,6 +100,7 @@
   - Updated RunPod bootstrap to download Surah 114 MP3 proof files and prepare mono 16 kHz PCM WAVs.
   - Verified the RunPod bootstrap on a CPU-only pod after switching GitHub read access to public and manually adding R2 environment variables on the pod.
   - Started the real ASR backend on a GPU pod and verified the public RunPod proxy plus WSS URL from the local machine.
+  - Fixed the simulator microphone tap crash by using AVAudioEngine-selected tap format and converting from the actual buffer format.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -105,7 +112,7 @@
 - Unverified path:
   - Real ASR model inference and real ASR WebSocket behavior are verified only for two short Surah 114 samples against `fixtures/quran/sample-tanzil.txt`.
   - Real Quran audio datasets and QUL Al-Husary playback are not integrated.
-  - The phone app has a working public real-ASR WSS URL available, but manual mic verification against that URL is still pending.
+  - The phone app has a working public real-ASR WSS URL available and the simulator mic-tap crash fix is installed, but manual mic verification against that URL is still pending.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.

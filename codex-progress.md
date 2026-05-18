@@ -789,3 +789,38 @@
   - The public real-ASR backend is running for manual simulator verification, but the app mic path has not yet been manually verified against it.
   - The RunPod server process is intentionally left running in the pod background for the user's simulator test.
 - Next best step: in the iPhone simulator app, choose `Custom`, set `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`, tap the mic, recite Surah 114:2, and confirm the UI shows normal buffering followed by a locked event.
+
+### Session 023
+
+- Date: 2026-05-18
+- Goal: Fix iPhone simulator crash when tapping the mic during `mobile-002` manual verification.
+- Completed:
+  - Diagnosed the crash report as an `AVAudioNode.installTap` abort from `MicrophoneAudioStreamer.start(onChunk:)`.
+  - Added a regression check that the input tap uses AVAudioEngine's selected format instead of passing an explicit simulator input format.
+  - Updated `MicrophoneAudioStreamer` so `installTap` uses `format: nil` and converts from the actual `AVAudioPCMBuffer.format` received in the tap callback.
+  - Rebuilt, reinstalled, and launched the patched app in the iPhone 17 simulator.
+- Verification run:
+  - Red test first: `uv run python -B -m unittest tests.test_ios_audio_streamer` failed because the tap used `format: inputFormat`.
+  - Green focused test: `uv run python -B -m unittest tests.test_ios_audio_streamer`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - `uv run python -B -m unittest discover`.
+  - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
+  - `curl -i --max-time 15 https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`.
+  - `xcrun simctl install 5F1E7676-EF55-490C-91B0-ED07291C16B1 /private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app`.
+  - `xcrun simctl launch 5F1E7676-EF55-490C-91B0-ED07291C16B1 dev.mostafa.TarteelPrototype`.
+- Evidence captured:
+  - Focused regression passed: 1 test.
+  - Full Python deterministic suite passed: 89 tests.
+  - Swift client core passed: 8 tests.
+  - iOS simulator build succeeded.
+  - RunPod public health endpoint still returned HTTP 200 with `{"status":"ok"}`.
+  - Fixed app launched in the iPhone 17 simulator with process id `3935`.
+- Files or artifacts updated:
+  - `ios/TarteelPrototype/TarteelPrototype/App/MicrophoneAudioStreamer.swift`
+  - `tests/test_ios_audio_streamer.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The crash fix is built and installed, but the user still needs to retry the live mic against the real-ASR WSS URL and report whether the app now reaches buffering/locked events.
+- Next best step: retry the simulator mic with the `Custom` URL `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`.

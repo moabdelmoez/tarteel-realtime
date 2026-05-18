@@ -35,14 +35,23 @@ final class MicrophoneAudioStreamer {
         ) else {
             throw MicrophoneAudioStreamerError.unsupportedFormat
         }
-        guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw MicrophoneAudioStreamerError.unsupportedFormat
-        }
 
-        input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+            let sourceFormat = buffer.format
+            guard sourceFormat.sampleRate > 0, sourceFormat.channelCount > 0 else {
+                return
+            }
+            guard let converter = AVAudioConverter(from: sourceFormat, to: outputFormat) else {
+                return
+            }
+
+            let frameCapacity = max(
+                1,
+                AVAudioFrameCount(Double(buffer.frameLength) * outputFormat.sampleRate / sourceFormat.sampleRate)
+            )
             guard let converted = AVAudioPCMBuffer(
                 pcmFormat: outputFormat,
-                frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * outputFormat.sampleRate / inputFormat.sampleRate)
+                frameCapacity: frameCapacity
             ) else {
                 return
             }
