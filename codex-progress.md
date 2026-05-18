@@ -644,6 +644,43 @@
   - `codex-progress.md`
   - `session-handoff.md`
 - Known risk or unresolved issue:
-  - R2 artifacts are not uploaded yet.
-  - The R2 S3 token must be recreated or updated with Object Read & Write permission for the `tarteel-realtime` bucket.
+  - R2 artifacts were not uploaded in this session because the first token lacked write permission.
 - Next best step: fix the R2 token permissions, then rerun the upload commands for Tanzil text and local audio.
+
+### Session 019
+
+- Date: 2026-05-18
+- Goal: Complete the non-GPU R2/RunPod hydration slice so a fresh pod can fetch proof assets without manual copying.
+- Completed:
+  - Re-ran R2 upload after token permissions were fixed.
+  - Uploaded `data/tanzil/quran-simple-clean.txt`, `fixtures/local_audio/114001.mp3`, and `fixtures/local_audio/114002.mp3`.
+  - Listed the R2 bucket and verified all three objects are present.
+  - Downloaded the Tanzil file and `114002.mp3` to `/private/tmp/tarteel-r2-verify` and verified SHA-256 matches local source files.
+  - Updated `scripts/runpod_bootstrap.sh` to download both local audio MP3s when `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1`.
+  - Added WAV preparation in bootstrap: `114001.mp3` and `114002.mp3` convert to mono 16 kHz signed PCM WAVs with ffmpeg.
+  - Added `TARTEEL_PREPARE_AUDIO_WAVS` as an override; it defaults to the R2 artifact download flag.
+  - Updated R2 docs and README so they reference MP3 downloads plus local WAV conversion, matching the artifacts actually uploaded.
+  - Added `tests/test_runpod_bootstrap.py` to pin the bootstrap artifact and conversion behavior.
+- Verification run:
+  - Red test first: `uv run python -B -m unittest tests.test_runpod_bootstrap` failed because audio downloads and WAV preparation were missing from bootstrap.
+  - `uv run python -B -m unittest tests.test_runpod_bootstrap`
+  - `bash -n scripts/runpod_bootstrap.sh`
+- Evidence captured:
+  - R2 uploads succeeded with SHA-256 values for Tanzil text, `114001.mp3`, and `114002.mp3`.
+  - R2 list returned all three uploaded objects.
+  - R2 download verification matched local SHA-256 for the Tanzil file and `114002.mp3`.
+  - RunPod bootstrap tests passed: 2 tests.
+  - Bootstrap script syntax validation exited 0.
+- Files or artifacts updated:
+  - `README.md`
+  - `clean-state-checklist.md`
+  - `docs/runpod-r2.md`
+  - `scripts/runpod_bootstrap.sh`
+  - `tests/test_runpod_bootstrap.py`
+  - `feature_list.json`
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The updated bootstrap has not yet been dry-run on RunPod.
+  - No GPU is needed for this slice; GPU is next needed for real model verification.
+- Next best step: dry-run the updated bootstrap on a cheap/stopped-then-started RunPod pod without running the ASR model, then proceed to the real iPhone-to-ASR backend verification slice.

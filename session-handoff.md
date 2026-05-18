@@ -23,7 +23,8 @@
   - Local git repository exists on `main` with initial commit `ea25b2a`.
   - GitHub remote exists at `https://github.com/moabdelmoez/tarteel-realtime.git` and local `main` tracks `origin/main`.
   - Cloudflare R2 artifact workflow exists for ignored Tanzil/audio artifacts using S3-compatible R2 environment variables.
-  - RunPod bootstrap script exists for clone/update, uv/ffmpeg setup, cache paths, optional R2 artifact download, compile checks, and tests.
+  - R2 upload/download is verified for the full Tanzil text and local Surah 114 MP3s.
+  - RunPod bootstrap script exists for clone/update, uv/ffmpeg setup, cache paths, optional R2 artifact download, MP3-to-WAV preparation, compile checks, and tests.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -53,7 +54,10 @@
   - iOS simulator build succeeded after adding backend presets and buffering UI behavior.
   - GitHub bootstrap audit confirmed `.venv`, `.DS_Store`, Xcode user state, full Tanzil text, local audio, and downloaded QUL metadata are ignored.
   - `uv run python -B -m unittest tests.test_r2_artifacts` with 5 tests passing.
+  - `uv run python -B -m unittest tests.test_runpod_bootstrap` with 2 tests passing.
   - `bash -n scripts/runpod_bootstrap.sh`.
+  - R2 artifact list returned `data/tanzil/quran-simple-clean.txt`, `fixtures/local_audio/114001.mp3`, and `fixtures/local_audio/114002.mp3`.
+  - R2 download verification matched local SHA-256 for `data/tanzil/quran-simple-clean.txt` and `fixtures/local_audio/114002.mp3`.
 
 ## Changed This Session
 
@@ -70,9 +74,10 @@
   - GitHub was made ready separately; `origin/main` now exists for `https://github.com/moabdelmoez/tarteel-realtime.git`.
   - Added the Cloudflare R2 artifact workflow without storing secrets.
   - Added an optional RunPod bootstrap script for repeatable pod setup.
+  - Updated RunPod bootstrap to download Surah 114 MP3 proof files and prepare mono 16 kHz PCM WAVs.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
-  - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, and `tests/test_r2_artifacts.py`.
+  - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
 
 ## Broken Or Unverified
 
@@ -84,8 +89,7 @@
   - The phone has not yet been pointed at the real ASR backend; it has only been verified against the fake backend.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
-  - Cloudflare R2 upload/download has not been manually verified yet because S3-compatible R2 credentials are still needed.
-  - R2 `list` authenticated, but upload failed with `AccessDenied` during `PutObject`; the token needs write permission for the bucket.
+  - Fresh RunPod bootstrap has not yet been dry-run on a pod after the MP3/WAV hydration update.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -119,6 +123,7 @@
   - `uv run --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simple-clean.txt`
   - `uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio`
   - `uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt`
+  - `uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3`
   - `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1 bash scripts/runpod_bootstrap.sh`
 - Startup: `uv run uvicorn tarteel_realtime.dev_app:app --reload`
 - Verification:

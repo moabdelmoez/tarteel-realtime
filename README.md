@@ -198,6 +198,8 @@ Download on RunPod:
 
 ```bash
 uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
+uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3
+ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
 ```
 
 The full RunPod/R2 workflow is documented in `docs/runpod-r2.md`.

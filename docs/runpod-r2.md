@@ -40,7 +40,10 @@ export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
 git clone https://github.com/moabdelmoez/tarteel-realtime.git /workspace/tarteel-realtime
 cd /workspace/tarteel-realtime
 uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
-uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.wav
+uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114001.mp3
+uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3
+ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114001.wav
+ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
 ```
 
 ## Bootstrap A Fresh Pod
@@ -56,4 +59,4 @@ export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
 bash scripts/runpod_bootstrap.sh
 ```
 
-Set `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
+When `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3` and `114002.mp3` and prepares mono 16 kHz PCM WAVs for the ASR smoke commands. Set `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
