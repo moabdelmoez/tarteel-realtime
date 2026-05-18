@@ -334,9 +334,14 @@
         "Progression tests prove the repeated Surah 102 phrase إِلَّا سَوْفَ تَعْلَمُونَ prefers 102:4:2 after the prior 102:3 lock.",
         "After the progression-aware locator slice, full Python deterministic suite passed with 102 tests and compile check passed.",
         "Deployed commit 0d33982 to RunPod, restarted the ASR backend, and verified focused progression locator/session tests passed on the pod.",
-        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the repeated إِلَّا سَوْفَ تَعْلَمُونَ window to 102:4 with start_ref 102:4:2 instead of re-locking 102:3."
+        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the repeated إِلَّا سَوْفَ تَعْلَمُونَ window to 102:4 with start_ref 102:4:2 instead of re-locking 102:3.",
+        "Added a preferred-ayah-only tolerant threshold so short clipped fragments can recover only when the session progression anchor already points at the expected ayah.",
+        "Clipped-fragment tests prove ثُمَّ لَتَرَى stays not_found cold, but locks to 102:7:1 with preferred_ref 102:7 and after a prior 102:6 session lock.",
+        "After the clipped-fragment slice, full Python deterministic suite passed with 104 tests and compile check passed.",
+        "Deployed commit 6c14cb1 to RunPod, restarted the ASR backend, and verified focused clipped-fragment locator/session tests passed on the pod.",
+        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the clipped ثُمَّ لَتَرَى window to 102:7 with start_ref 102:7:1, while the final أَنَّ يَوْمَئِذٍ عَنِ النَّارِ misrecognition still returns no_match."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase. Hallucinated/clipped windows still miss; next slice should add tolerant post-lock alignment or smarter flushing/finalization."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase and clipped 102:7 phrase. The remaining misses are the long hallucinated كَلَّمُوا... window and final النار misrecognition; next slice should choose between tolerant post-lock alignment, smarter flushing/finalization, or a second Quran Whisper model comparison."
     },
     {
       "id": "infra-001",

@@ -123,6 +123,11 @@
   - Latest local full Python deterministic suite after progression-aware location: 102 tests passing.
   - RunPod focused progression locator/session tests passed: 3 tests.
   - Public WSS clean Surah 102 with both `--chunk-ms 1000` and `--chunk-ms 5000` now maps the repeated `إِلَّا سَوْفَ تَعْلَمُونَ` window to `102:4` with `start_ref=102:4:2` instead of re-locking `102:3`.
+  - Preferred-ayah clipped-fragment recovery was added and deployed to RunPod at commit `6c14cb1`.
+  - Latest local full Python deterministic suite after clipped-fragment recovery: 104 tests passing.
+  - RunPod focused clipped-fragment locator/session tests passed: 2 tests.
+  - Public WSS clean Surah 102 with both `--chunk-ms 1000` and `--chunk-ms 5000` now maps the clipped `ثُمَّ لَتَرَى` window to `102:7` with `start_ref=102:7:1`.
+  - Public WSS clean Surah 102 still rejects the final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` misrecognition as `no_match`.
 
 ## Changed This Session
 
@@ -152,6 +157,8 @@
   - Deployed the tolerant locator slice to RunPod and confirmed it recovers several previously missed Surah 102 windows.
   - Added progression-aware locator preference via optional `preferred_ref` scoring, and session tracking of the next expected word or next ayah after lock/progress.
   - Deployed the progression-aware slice to RunPod and confirmed it fixes the repeated Surah 102 phrase mapping for `102:4`.
+  - Added preferred-ayah-only tolerant recovery for short clipped fragments, so `ثُمَّ لَتَرَى` can recover as `102:7:1` only when progression already points at `102:7`.
+  - Deployed the clipped-fragment slice to RunPod and confirmed clean Surah 102 WSS recovery for both 1s and 5s client chunking.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -167,7 +174,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, and progression-aware locator preference are deployed; clean Surah 102 audio now shows the next major blocker is tolerant post-lock alignment plus ASR windowing/finalization, not only live mic capture.
+  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, and clipped-fragment recovery are deployed; clean Surah 102 audio now shows the next major blocker is the remaining hallucinated/final misrecognized windows plus ASR windowing/finalization, not only live mic capture.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -177,7 +184,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. Remaining misses are hallucinated/clipped windows and exact post-lock alignment limits.
+- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. The clipped `102:7` window is now recovered; remaining misses are hallucinated or badly misrecognized windows and exact post-lock alignment limits.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -186,7 +193,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
-  - Clean Surah 102 audio should progress through more than isolated locks; after the progression-aware deployment it recovers many windows and maps the repeated `102:4` phrase correctly, but hallucinated/clipped windows still return `no_match`.
+  - Clean Surah 102 audio should progress through more than isolated locks; after the clipped-fragment deployment it recovers many windows, maps the repeated `102:4` phrase correctly, and maps clipped `ثُمَّ لَتَرَى` to `102:7:1`, but hallucinated/final misrecognized windows still return `no_match`.
 - What must not change during that step:
   - Do not remove fake recognizer tests.
   - Do not make heavyweight ASR dependencies required for the default test suite unless explicitly approved.

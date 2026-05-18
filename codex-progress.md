@@ -1082,3 +1082,49 @@
   - Progression-aware location fixes repeated phrase preference after a lock, but it still cannot recover ASR hallucinations or heavily clipped/misrecognized windows.
   - The aligner is still exact after a known location, so tolerant post-lock progress/wrong decisions remain a future slice.
 - Next best step: add a post-lock tolerant alignment mode or smarter flush/finalization so clipped windows like `ثُمَّ لَتَرَى` and misrecognized endings do not immediately become hard misses.
+
+### Session 030
+
+- Date: 2026-05-18
+- Goal: Recover the clipped Surah 102 `ثُمَّ لَتَرَى` ASR window without globally weakening tolerant matching.
+- Completed:
+  - Added a preferred-ayah-only tolerant word threshold so short clipped fragments can recover only when the session progression anchor already points at the expected ayah.
+  - Kept cold/global tolerant matching stricter: `ثُمَّ لَتَرَى` remains `not_found` without a `preferred_ref`.
+  - Added locator and session regressions proving `ثُمَّ لَتَرَى` recovers as `102:7:1` only after the prior `102:6` progression anchor.
+  - Committed and pushed backend changes to GitHub as `6c14cb1`.
+  - Pulled `6c14cb1` onto RunPod, restarted the ASR server, and re-ran clean Surah 102 public WSS verification.
+- Verification run:
+  - Red locator test first failed because the progressed tolerant decision was `not_found`.
+  - Red session test first failed because the second event stayed `locating` instead of locking `102:7`.
+  - `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_tolerant_locator_recovers_short_clipped_fragment_only_with_progression -v`.
+  - `uv run python -B -m unittest tests.test_session.RecitationSessionTests.test_progression_recovers_short_clipped_next_ayah_fragment -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+  - Local replay of observed Surah 102 ASR snippets through `RecitationSession`.
+  - RunPod: `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_tolerant_locator_recovers_short_clipped_fragment_only_with_progression tests.test_session.RecitationSessionTests.test_progression_recovers_short_clipped_next_ayah_fragment -v`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 1000`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+- Evidence captured:
+  - Focused locator clipped-fragment test passed: 1 test.
+  - Focused session clipped-fragment test passed: 1 test.
+  - Full Python deterministic suite passed: 104 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+  - Local replay maps `ثُمَّ لَتَرَى` to `102:7:1` after `102:6`, while the final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` fragment remains `no_match`.
+  - RunPod focused clipped-fragment locator/session tests passed: 2 tests.
+  - Public WSS clean Surah 102 with 1s client chunks now maps chunk 44, transcript `ثُمَّ لَتَرَى`, to `102:7` with `start_ref=102:7:1`.
+  - Public WSS clean Surah 102 with 5s chunks now maps chunk 8, transcript `ثُمَّ لَتَرَى`, to `102:7` with `start_ref=102:7:1`.
+  - Public WSS clean Surah 102 still rejects the final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` misrecognition as `no_match`, avoiding a false positive.
+- Files or artifacts updated:
+  - `tarteel_realtime/locator.py`
+  - `tests/test_locator.py`
+  - `tests/test_session.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - This slice recovers one clipped next-ayah fragment, but the long hallucinated `كَلَّمُوا...` window and final `النار` misrecognition still correctly miss.
+  - The aligner is still exact after a known location; tolerant post-lock progress/wrong decisions remain a future slice.
+- Next best step: decide whether to address the remaining Surah 102 misses with smarter ASR windowing/finalization, tolerant post-lock alignment, or by trying `tarteel-ai/whisper-base-ar-quran` as a model-comparison spike.
