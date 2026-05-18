@@ -11,6 +11,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 0,
             reason: "unique_match",
             candidateRefs: [],
+            ayahText: "مَلِكِ النَّاسِ",
             ayahRef: "114:2",
             startRef: "114:2:1",
             nextExpectedRef: nil,
@@ -24,11 +25,38 @@ struct RecitationSessionStateTests {
 
         #expect(state.phase == .listening)
         #expect(state.currentAyahRef == "114:2")
+        #expect(state.currentAyahText == "مَلِكِ النَّاسِ")
         #expect(state.headline == "Locked on 114:2")
         #expect(state.detail == "مَلِكِ النَّاسِ")
         #expect(state.debugLastEventText == "locked (unique_match)")
         #expect(state.debugAyahText == "114:2")
         #expect(state.debugTranscriptText == "مَلِكِ النَّاسِ")
+    }
+
+    @Test func lockedEventShowsCanonicalAyahInsteadOfRawTranscript() {
+        let event = RecitationEvent(
+            type: .locked,
+            transcript: "raw asr noise",
+            confidence: 0.7,
+            chunkSequence: 4,
+            reason: "tolerant_match",
+            candidateRefs: [],
+            ayahText: "أَلْهَاكُمُ التَّكَاثُرُ",
+            ayahRef: "102:1",
+            startRef: "102:1:1",
+            nextExpectedRef: nil,
+            consumedWords: 2,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let state = RecitationSessionState().applying(event)
+
+        #expect(state.currentAyahRef == "102:1")
+        #expect(state.currentAyahText == "أَلْهَاكُمُ التَّكَاثُرُ")
+        #expect(state.detail == "أَلْهَاكُمُ التَّكَاثُرُ")
+        #expect(state.lastTranscript == "raw asr noise")
     }
 
     @Test func wrongEventMovesStateIntoCorrectionMode() {
@@ -39,6 +67,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 1,
             reason: "word_mismatch",
             candidateRefs: [],
+            ayahText: nil,
             ayahRef: nil,
             startRef: nil,
             nextExpectedRef: nil,
@@ -63,6 +92,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 0,
             reason: "waiting_for_audio_buffer",
             candidateRefs: [],
+            ayahText: nil,
             ayahRef: nil,
             startRef: nil,
             nextExpectedRef: nil,
@@ -90,6 +120,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 4,
             reason: "waiting_for_audio_buffer",
             candidateRefs: [],
+            ayahText: nil,
             ayahRef: nil,
             startRef: nil,
             nextExpectedRef: "114:2:3",
@@ -101,6 +132,7 @@ struct RecitationSessionStateTests {
         let lockedState = RecitationSessionState(
             phase: .listening,
             currentAyahRef: "114:2",
+            currentAyahText: "مَلِكِ النَّاسِ",
             headline: "Locked on 114:2",
             detail: "مَلِكِ النَّاسِ"
         )
@@ -109,6 +141,7 @@ struct RecitationSessionStateTests {
 
         #expect(state.phase == .listening)
         #expect(state.currentAyahRef == "114:2")
+        #expect(state.currentAyahText == "مَلِكِ النَّاسِ")
         #expect(state.headline == "Listening")
         #expect(state.detail == "Keep reciting")
     }
@@ -121,6 +154,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 42,
             reason: "no_match",
             candidateRefs: [],
+            ayahText: nil,
             ayahRef: nil,
             startRef: nil,
             nextExpectedRef: nil,
@@ -136,6 +170,7 @@ struct RecitationSessionStateTests {
             chunkSequence: 43,
             reason: "waiting_for_audio_buffer",
             candidateRefs: [],
+            ayahText: nil,
             ayahRef: nil,
             startRef: nil,
             nextExpectedRef: nil,

@@ -95,7 +95,7 @@ private struct DebugStatusPanel: View {
             DebugStatusRow(title: "Connection", value: connectionStatus)
             DebugStatusRow(title: "Last event", value: state.debugLastEventText)
             DebugStatusRow(title: "Ayah", value: state.debugAyahText)
-            DebugStatusRow(title: "Transcript", value: state.debugTranscriptText)
+            DebugStatusRow(title: "Ayah text", value: state.debugAyahBodyText)
 
             if let errorMessage, !errorMessage.isEmpty {
                 DebugStatusRow(title: "Error", value: errorMessage, isError: true)

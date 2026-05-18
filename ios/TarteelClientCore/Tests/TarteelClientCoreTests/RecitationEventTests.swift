@@ -12,6 +12,7 @@ struct RecitationEventTests {
           "chunk_sequence": 1,
           "reason": "word_mismatch",
           "candidate_refs": [],
+          "ayah_text": null,
           "ayah_ref": null,
           "start_ref": null,
           "next_expected_ref": null,
@@ -30,6 +31,32 @@ struct RecitationEventTests {
         #expect(event.expectedWord == "النَّاسِ")
         #expect(event.recognizedWord == "الْفَلَقِ")
         #expect(event.isBlockingCorrection)
+    }
+
+    @Test func decodesCanonicalAyahTextFromBackendPayload() throws {
+        let data = Data("""
+        {
+          "type": "locked",
+          "transcript": "raw asr noise",
+          "confidence": 0.8,
+          "chunk_sequence": 4,
+          "reason": "tolerant_match",
+          "candidate_refs": [],
+          "ayah_text": "مَلِكِ النَّاسِ",
+          "ayah_ref": "114:2",
+          "start_ref": "114:2:1",
+          "next_expected_ref": null,
+          "consumed_words": 2,
+          "expected_ref": null,
+          "expected_word": null,
+          "recognized_word": null
+        }
+        """.utf8)
+
+        let event = try JSONDecoder().decode(RecitationEvent.self, from: data)
+
+        #expect(event.ayahRef == "114:2")
+        #expect(event.ayahText == "مَلِكِ النَّاسِ")
     }
 
     @Test func encodesAudioChunkPayloadForBackendTransport() throws {

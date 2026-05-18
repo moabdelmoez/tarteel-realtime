@@ -61,7 +61,7 @@ def create_app(
                     len(event.transcript),
                     event.transcript if log_transcripts else "<redacted>",
                 )
-                await websocket.send_json(_event_to_payload(event))
+                await websocket.send_json(_event_to_payload(event, corpus=corpus))
         except WebSocketDisconnect:
             return
 
@@ -76,7 +76,7 @@ def _audio_chunk_from_payload(payload: dict[str, Any]) -> AudioChunk:
     )
 
 
-def _event_to_payload(event: SessionEvent) -> dict[str, Any]:
+def _event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, Any]:
     return {
         "type": event.type.value,
         "transcript": event.transcript,
@@ -84,6 +84,7 @@ def _event_to_payload(event: SessionEvent) -> dict[str, Any]:
         "chunk_sequence": event.chunk_sequence,
         "reason": event.reason,
         "candidate_refs": [_ref_to_string(ref) for ref in event.candidate_refs],
+        "ayah_text": _ayah_text_for_event(event, corpus=corpus),
         "ayah_ref": _ref_to_string(event.ayah_ref),
         "start_ref": _ref_to_string(event.start_ref),
         "next_expected_ref": _ref_to_string(event.next_expected_ref),
@@ -92,6 +93,13 @@ def _event_to_payload(event: SessionEvent) -> dict[str, Any]:
         "expected_word": event.expected_word,
         "recognized_word": event.recognized_word,
     }
+
+
+def _ayah_text_for_event(event: SessionEvent, *, corpus: QuranCorpus) -> str | None:
+    ref = event.ayah_ref or event.start_ref
+    if ref is None:
+        return None
+    return corpus.get_ayah(ref).text
 
 
 def _ref_to_string(ref: QuranRef | None) -> str | None:

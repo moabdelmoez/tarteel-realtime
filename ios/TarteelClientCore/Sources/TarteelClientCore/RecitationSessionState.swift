@@ -12,6 +12,7 @@ public enum RecitationPhase: String, Equatable, Sendable {
 public struct RecitationSessionState: Equatable, Sendable {
     public let phase: RecitationPhase
     public let currentAyahRef: String?
+    public let currentAyahText: String?
     public let headline: String
     public let detail: String
     public let lastEventType: RecitationEventType?
@@ -22,6 +23,7 @@ public struct RecitationSessionState: Equatable, Sendable {
     public init(
         phase: RecitationPhase = .idle,
         currentAyahRef: String? = nil,
+        currentAyahText: String? = nil,
         headline: String = "Ready",
         detail: String = "Tap the mic to begin",
         lastEventType: RecitationEventType? = nil,
@@ -31,6 +33,7 @@ public struct RecitationSessionState: Equatable, Sendable {
     ) {
         self.phase = phase
         self.currentAyahRef = currentAyahRef
+        self.currentAyahText = currentAyahText
         self.headline = headline
         self.detail = detail
         self.lastEventType = lastEventType
@@ -51,6 +54,10 @@ public struct RecitationSessionState: Equatable, Sendable {
         currentAyahRef ?? "none"
     }
 
+    public var debugAyahBodyText: String {
+        currentAyahText ?? "none"
+    }
+
     public var debugTranscriptText: String {
         lastTranscript.isEmpty ? "none" : lastTranscript
     }
@@ -69,11 +76,13 @@ public struct RecitationSessionState: Equatable, Sendable {
         switch event.type {
         case .locked:
             let ref = event.ayahRef ?? event.startRef ?? "unknown"
+            let ayahText = event.ayahText ?? event.transcript
             return RecitationSessionState(
                 phase: .listening,
                 currentAyahRef: event.ayahRef,
+                currentAyahText: ayahText.isEmpty ? nil : ayahText,
                 headline: "Locked on \(ref)",
-                detail: event.transcript,
+                detail: ayahText,
                 lastEventType: event.type,
                 lastEventReason: event.reason,
                 lastTranscript: event.transcript,
@@ -83,8 +92,9 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .listening,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Continue",
-                detail: event.transcript,
+                detail: currentAyahText ?? event.transcript,
                 lastEventType: event.type,
                 lastEventReason: event.reason,
                 lastTranscript: event.transcript,
@@ -94,6 +104,7 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .needsCorrection,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Correction needed",
                 detail: correctionDetail(for: event),
                 lastEventType: event.type,
@@ -105,8 +116,9 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .uncertain,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Keep reciting",
-                detail: event.transcript,
+                detail: currentAyahText ?? event.transcript,
                 lastEventType: event.type,
                 lastEventReason: event.reason,
                 lastTranscript: event.transcript,
@@ -116,6 +128,7 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .connecting,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Finding your place",
                 detail: event.candidateRefs.joined(separator: ", "),
                 lastEventType: event.type,
@@ -127,6 +140,7 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .connecting,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Listening",
                 detail: event.transcript,
                 lastEventType: event.type,
@@ -142,6 +156,7 @@ public struct RecitationSessionState: Equatable, Sendable {
             return RecitationSessionState(
                 phase: .listening,
                 currentAyahRef: currentAyahRef,
+                currentAyahText: currentAyahText,
                 headline: "Listening",
                 detail: "Keep reciting",
                 lastEventType: event.type,
@@ -154,6 +169,7 @@ public struct RecitationSessionState: Equatable, Sendable {
         return RecitationSessionState(
             phase: .connecting,
             currentAyahRef: currentAyahRef,
+            currentAyahText: currentAyahText,
             headline: "Gathering audio",
             detail: "Keep reciting",
             lastEventType: event.type,

@@ -52,6 +52,7 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(locked["type"], "locked")
         self.assertEqual(locked["start_ref"], "114:2:1")
+        self.assertEqual(locked["ayah_text"], "مَلِكِ النَّاسِ")
         self.assertEqual(locked["next_expected_ref"], "114:2:2")
         self.assertEqual(locked["chunk_sequence"], 0)
         self.assertEqual(progress["type"], "progress")

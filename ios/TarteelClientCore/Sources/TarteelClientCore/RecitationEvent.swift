@@ -16,6 +16,7 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
     public let chunkSequence: Int?
     public let reason: String?
     public let candidateRefs: [String]
+    public let ayahText: String?
     public let ayahRef: String?
     public let startRef: String?
     public let nextExpectedRef: String?
@@ -31,6 +32,7 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         chunkSequence: Int?,
         reason: String?,
         candidateRefs: [String],
+        ayahText: String? = nil,
         ayahRef: String?,
         startRef: String?,
         nextExpectedRef: String?,
@@ -45,6 +47,7 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         self.chunkSequence = chunkSequence
         self.reason = reason
         self.candidateRefs = candidateRefs
+        self.ayahText = ayahText
         self.ayahRef = ayahRef
         self.startRef = startRef
         self.nextExpectedRef = nextExpectedRef
@@ -69,6 +72,7 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         case chunkSequence = "chunk_sequence"
         case reason
         case candidateRefs = "candidate_refs"
+        case ayahText = "ayah_text"
         case ayahRef = "ayah_ref"
         case startRef = "start_ref"
         case nextExpectedRef = "next_expected_ref"
