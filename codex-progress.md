@@ -549,3 +549,32 @@
   - No GPU was used in this phase, by design.
   - We still need a network bridge/tunnel plan before phone or simulator real-ASR verification.
 - Next best step: choose and set up the real-backend bridge for phase 2, then start RunPod briefly and manually verify the iOS app receives `waiting_for_audio_buffer` followed by `locked` from live mic chunks.
+
+### Session 016
+
+- Date: 2026-05-18
+- Goal: Start GitHub setup so RunPod can clone source instead of relying on fragile file copy flows.
+- Completed:
+  - Audited the tree before git initialization.
+  - Expanded `.gitignore` to exclude `.venv`, SwiftPM build output, Xcode user state, `.DS_Store`, local audio fixtures, the full Tanzil text, and downloaded QUL metadata.
+  - Initialized a local git repository on `main`.
+  - Set repo-local git identity to `Mostafa Abdelmoez <moabdelmoez@users.noreply.github.com>`.
+  - Created initial local commit `ea25b2a` with source, tests, docs, harness files, small fixtures, and Tanzil checksum metadata.
+- Verification run:
+  - `git status --short --ignored`
+  - `git check-ignore -v data/tanzil/quran-simple-clean.txt fixtures/local_audio/114001.mp3 ios/TarteelClientCore/.build ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs/ayah-recitation-mahmoud-khalil-al-husary-murattal-hafs-957.json ios/TarteelPrototype/TarteelPrototype.xcodeproj/project.xcworkspace/xcuserdata/mostafa.xcuserdatad/UserInterfaceState.xcuserstate`
+  - `git diff --cached --name-only | rg '(^\\.venv/|quran-simple-clean\\.txt$|fixtures/local_audio|\\.DS_Store|xcuserdata|\\.xcuserstate|ayah-recitation)' || true`
+  - `git commit -m "Initial tarteel realtime MVP"`
+- Evidence captured:
+  - The staged commit excluded local virtualenv, `.DS_Store`, Xcode user state, full Tanzil text, local audio, and downloaded QUL metadata.
+  - `gh --version` is installed: `2.89.0`.
+  - `gh auth status` currently fails because the saved token for `moabdelmoez` is invalid.
+- Files or artifacts updated:
+  - `.gitignore`
+  - `.git/` local repository metadata
+  - `codex-progress.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - GitHub remote is not created yet because `gh` needs re-authentication.
+  - After `gh auth login -h github.com`, create a private repo and push `main`.
+- Next best step: re-authenticate GitHub CLI, create a private `tarteel-realtime` repo, add it as `origin`, and push `main`.

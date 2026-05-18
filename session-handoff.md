@@ -20,6 +20,7 @@
   - Native iOS prototype builds, launches, and has been manually verified by the user in Simulator against the fake backend.
   - iOS app now has `Simulator` and `Custom` backend presets.
   - iOS state reducer now treats `waiting_for_audio_buffer` as normal real-ASR latency before and after lock.
+  - Local git repository exists on `main` with initial commit `ea25b2a`.
   - Harness state files now exist in project root.
 - What verification actually ran:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 4 tests passing.
@@ -47,6 +48,7 @@
   - RunPod chunked WebSocket client for `fixtures/local_audio/114002.wav --chunk-ms 1000` returned four `waiting_for_audio_buffer` locating events followed by `type: locked`, `ayah_ref: 114:2`, `start_ref: 114:2:1`.
   - Swift client core tests now pass with 8 tests, including backend presets and buffering state.
   - iOS simulator build succeeded after adding backend presets and buffering UI behavior.
+  - GitHub bootstrap audit confirmed `.venv`, `.DS_Store`, Xcode user state, full Tanzil text, local audio, and downloaded QUL metadata are ignored.
 
 ## Changed This Session
 
@@ -59,6 +61,8 @@
   - Marked `backend-003` passing after RunPod chunked-WAV verification.
   - Added `mobile-002` as the next active slice.
   - Completed `mobile-002` phase 1 without GPU: backend presets, custom URL path, and buffer-event UX.
+  - Initialized git locally and created initial source commit `ea25b2a`.
+  - Detected invalid GitHub CLI auth token for account `moabdelmoez`.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
 
@@ -72,6 +76,7 @@
   - The phone has not yet been pointed at the real ASR backend; it has only been verified against the fake backend.
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against a `Custom` real-ASR URL.
+  - GitHub remote is not created/pushed yet because `gh auth status` reports the saved token is invalid.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -96,6 +101,10 @@
 
 ## Commands
 
+- GitHub setup:
+  - `gh auth login -h github.com`
+  - `gh repo create tarteel-realtime --private --source=. --remote=origin --push`
+  - If the repo already exists: `git remote add origin git@github.com:<owner>/tarteel-realtime.git` then `git push -u origin main`
 - Startup: `uv run uvicorn tarteel_realtime.dev_app:app --reload`
 - Verification:
   - `uv run python -B -m unittest discover`
