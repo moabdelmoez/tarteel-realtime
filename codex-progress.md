@@ -984,3 +984,52 @@
 - Known risk or unresolved issue:
   - Clean full-surah audio only partially works. This means the current failure is not only simulator microphone quality; it is also the streaming ASR/locator architecture: 4.2s windows can cut ayahs, Whisper can emit partial/hallucinated words, and the current locator requires exact contiguous text inside a single ayah.
 - Next best step: create a new backend slice for robust streaming location: phrase-tolerant matching, per-ayah progression, and smarter flush/finalization around silence or known ayah audio boundaries.
+
+### Session 028
+
+- Date: 2026-05-18
+- Goal: Start the robust streaming-location slice by adding a tolerant locator fallback for real ASR transcripts.
+- Completed:
+  - Added `QuranLocator.locate_tolerant(...)`, a stdlib-only fuzzy word matcher used after exact location fails.
+  - Kept the existing exact locator behavior unchanged for deterministic/fake transcript paths.
+  - Added session fallback wiring so pre-lock `no_match` can become a `locked` event when enough ASR words closely match a Quran phrase.
+  - Added Surah 102 regression coverage for ASR shapes seen in clean audio: truncated words such as `الْمَقَى`, substitutions such as `إِلَّا` for `كَلَّا`, and partial endings such as `تَعْلَى`.
+  - Checked the full Tanzil file manually to confirm the repeated `والأرض` hallucination pattern remains `not_found`.
+  - Committed and pushed backend changes to GitHub as `b7add14`.
+  - Pulled `b7add14` onto RunPod, restarted the ASR server on `0.0.0.0:8000`, and re-ran clean Surah 102 public WSS verification.
+- Verification run:
+  - Red tests first failed because `QuranLocator.locate_tolerant` did not exist.
+  - `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_tolerant_locator_handles_truncated_surah_102_words tests.test_locator.QuranLocatorTests.test_tolerant_locator_handles_short_surah_102_asr_substitutions -v`.
+  - `uv run python -B -m unittest tests.test_session.RecitationSessionTests.test_tolerant_locator_fallback_locks_when_exact_match_fails -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+  - Full-corpus sanity check with `QuranCorpus.from_tanzil_file('data/tanzil/quran-simple-clean.txt')` and `locate_tolerant(...)`.
+  - RunPod: `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_tolerant_locator_handles_truncated_surah_102_words tests.test_locator.QuranLocatorTests.test_tolerant_locator_handles_short_surah_102_asr_substitutions tests.test_session.RecitationSessionTests.test_tolerant_locator_fallback_locks_when_exact_match_fails -v`.
+  - RunPod restart with `TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt`, `TARTEEL_MINIMUM_LOCK_WORDS=2`, `TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran`, `TARTEEL_WHISPER_DEVICE=cuda:0`, `TARTEEL_ASR_MIN_AUDIO_MS=4200`, `TARTEEL_ASR_FLUSH_MS=4200`, and `TARTEEL_ASR_TAIL_MS=0`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 1000`.
+- Evidence captured:
+  - Focused tolerant locator tests passed: 2 tests.
+  - Focused session fallback test passed: 1 test.
+  - Full Python deterministic suite passed: 99 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+  - Full-corpus tolerant locator sanity check locked Surah 102 fragments to `102:2` and `102:3`, while repeated `والأرض` returned `not_found`.
+  - RunPod focused tolerant locator/session tests passed: 3 tests.
+  - Public WSS clean Surah 102 with 5s chunks locked `102:1`, `102:2`, `102:3`, `102:5`, `102:6`, `102:7`, and `102:8`; `102:2`, `102:3`, `102:5`, `102:7`, and `102:8` used `reason=tolerant_match`.
+  - Public WSS clean Surah 102 with 1s client chunks and 5s backend flushes produced the same improved lock pattern: exact locks for `102:1` and `102:6`, tolerant locks for `102:2`, repeated `102:3`, `102:5`, `102:7`, and `102:8`.
+  - Remaining misses were still real: one long hallucinated `كَلَّمُوا...` window, a clipped `ثُمَّ لَتَرَى` window, and a final misrecognized `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` window.
+- Files or artifacts updated:
+  - `tarteel_realtime/locator.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_locator.py`
+  - `tests/test_session.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - Tolerant locating improves pre-lock ASR transcript matching, but repeated phrases can still lock to the earlier repeated ayah because there is no progression bias yet.
+  - This slice does not yet solve post-lock tolerant alignment, silence-aware flushing, or ayah-boundary segmentation.
+- Next best step: add progression-aware location so, after a lock, repeated/partial phrases prefer the expected next ayah or nearby future ayah instead of searching the whole corpus from scratch.

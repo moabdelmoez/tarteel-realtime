@@ -324,9 +324,14 @@
         "Installed and launched the updated app in the iPhone 17 simulator with process id 21513; screenshot captured at /private/tmp/tarteel-flashing-fix-installed.png.",
         "Added Surah 102 text coverage to fixtures/quran/sample-tanzil.txt and fixtures/evaluation/surah-102-smoke.jsonl; deterministic evaluator returned locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
         "Downloaded clean Husary Surah 102 ayah MP3s from the provided URLs into ignored local audio, built fixtures/local_audio/surah_102/102-full.wav as mono PCM16 16 kHz, duration about 63 seconds.",
-        "Public WSS clean-audio test with Surah 102 full WAV locked 102:1 and 102:6 but returned no_match for many other 4.2s/5s windows due truncated or hallucinated transcripts, showing the failure is not only simulator microphone audio."
+        "Public WSS clean-audio test with Surah 102 full WAV locked 102:1 and 102:6 but returned no_match for many other 4.2s/5s windows due truncated or hallucinated transcripts, showing the failure is not only simulator microphone audio.",
+        "Added a tolerant locator fallback after exact no_match for real ASR transcripts, while keeping the exact locator unchanged for deterministic paths.",
+        "Tolerant locator tests cover Surah 102 ASR fragments such as حَتَّى زُرْتُمُ الْمَقَى, كَلَّا سَوْفَ تَعْلَى, إِلَّا سَوْفَ تَعْلَمُونَ, عَلَّمُونَ عِلْمَ الْيَقِينِ, وَأُنَّهَا عَيْنَ الْيَقِينِ, and ثُمَّ لَتُسْأَلُونَ.",
+        "After the tolerant locator slice, full Python deterministic suite passed with 99 tests and compile check passed.",
+        "Deployed commit b7add14 to RunPod, restarted the ASR backend, and verified focused tolerant locator/session tests passed on the pod.",
+        "Public WSS clean Surah 102 with both --chunk-ms 5000 and --chunk-ms 1000 now locks 102:1, 102:2, 102:3, 102:5, 102:6, 102:7, and 102:8; the newly recovered windows use reason=tolerant_match."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering, but real ASR returns no_match after flush. Clean full-Surah 102 audio also only partially locks, so the next slice should improve streaming ASR/locator robustness before treating mic audio as the main blocker."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. The tolerant locator slice improves clean full-Surah 102 substantially, but repeated phrases can still map to an earlier ayah and hallucinated/clipped windows still miss; next slice should add progression-aware location and eventually smarter flushing."
     },
     {
       "id": "infra-001",
