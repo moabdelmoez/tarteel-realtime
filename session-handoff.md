@@ -119,6 +119,10 @@
   - RunPod focused tolerant locator/session tests passed: 3 tests.
   - Public WSS clean Surah 102 after tolerant locator deployment, using both `--chunk-ms 5000` and `--chunk-ms 1000`, now locks `102:1`, `102:2`, `102:3`, `102:5`, `102:6`, `102:7`, and `102:8`.
   - Remaining clean Surah 102 misses are still meaningful: a long hallucinated `كَلَّمُوا...` window, a clipped `ثُمَّ لَتَرَى` window, and a final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` misrecognition.
+  - Progression-aware locator preference was added and deployed to RunPod at commit `0d33982`.
+  - Latest local full Python deterministic suite after progression-aware location: 102 tests passing.
+  - RunPod focused progression locator/session tests passed: 3 tests.
+  - Public WSS clean Surah 102 with both `--chunk-ms 1000` and `--chunk-ms 5000` now maps the repeated `إِلَّا سَوْفَ تَعْلَمُونَ` window to `102:4` with `start_ref=102:4:2` instead of re-locking `102:3`.
 
 ## Changed This Session
 
@@ -146,6 +150,8 @@
   - Added Surah 102 text/evaluation fixtures and tested clean full-surah Husary audio through public WSS.
   - Added `QuranLocator.locate_tolerant(...)` and session fallback wiring so ASR fragments can lock after exact location fails.
   - Deployed the tolerant locator slice to RunPod and confirmed it recovers several previously missed Surah 102 windows.
+  - Added progression-aware locator preference via optional `preferred_ref` scoring, and session tracking of the next expected word or next ayah after lock/progress.
+  - Deployed the progression-aware slice to RunPod and confirmed it fixes the repeated Surah 102 phrase mapping for `102:4`.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -161,7 +167,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics, flashing fix, and tolerant locator fallback are deployed; clean Surah 102 audio shows the next major blocker is progression-aware streaming location plus ASR windowing, not only live mic capture.
+  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, and progression-aware locator preference are deployed; clean Surah 102 audio now shows the next major blocker is tolerant post-lock alignment plus ASR windowing/finalization, not only live mic capture.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -171,7 +177,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live and tolerant location improved clean Surah 102, but repeated phrases still need progression-aware location before live mic testing can be judged fairly.
+- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. Remaining misses are hallucinated/clipped windows and exact post-lock alignment limits.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -180,7 +186,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
-  - Clean Surah 102 audio should progress through more than isolated locks; after the tolerant locator deployment it recovers many windows, but `102:4`-like repeated phrase windows can still resolve to earlier `102:3`.
+  - Clean Surah 102 audio should progress through more than isolated locks; after the progression-aware deployment it recovers many windows and maps the repeated `102:4` phrase correctly, but hallucinated/clipped windows still return `no_match`.
 - What must not change during that step:
   - Do not remove fake recognizer tests.
   - Do not make heavyweight ASR dependencies required for the default test suite unless explicitly approved.

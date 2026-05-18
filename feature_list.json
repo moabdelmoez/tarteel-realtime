@@ -329,9 +329,14 @@
         "Tolerant locator tests cover Surah 102 ASR fragments such as حَتَّى زُرْتُمُ الْمَقَى, كَلَّا سَوْفَ تَعْلَى, إِلَّا سَوْفَ تَعْلَمُونَ, عَلَّمُونَ عِلْمَ الْيَقِينِ, وَأُنَّهَا عَيْنَ الْيَقِينِ, and ثُمَّ لَتُسْأَلُونَ.",
         "After the tolerant locator slice, full Python deterministic suite passed with 99 tests and compile check passed.",
         "Deployed commit b7add14 to RunPod, restarted the ASR backend, and verified focused tolerant locator/session tests passed on the pod.",
-        "Public WSS clean Surah 102 with both --chunk-ms 5000 and --chunk-ms 1000 now locks 102:1, 102:2, 102:3, 102:5, 102:6, 102:7, and 102:8; the newly recovered windows use reason=tolerant_match."
+        "Public WSS clean Surah 102 with both --chunk-ms 5000 and --chunk-ms 1000 now locks 102:1, 102:2, 102:3, 102:5, 102:6, 102:7, and 102:8; the newly recovered windows use reason=tolerant_match.",
+        "Added progression-aware locator preference through optional preferred_ref scoring, and RecitationSession now tracks the next expected word or next ayah as a progression anchor after locks/progress.",
+        "Progression tests prove the repeated Surah 102 phrase إِلَّا سَوْفَ تَعْلَمُونَ prefers 102:4:2 after the prior 102:3 lock.",
+        "After the progression-aware locator slice, full Python deterministic suite passed with 102 tests and compile check passed.",
+        "Deployed commit 0d33982 to RunPod, restarted the ASR backend, and verified focused progression locator/session tests passed on the pod.",
+        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the repeated إِلَّا سَوْفَ تَعْلَمُونَ window to 102:4 with start_ref 102:4:2 instead of re-locking 102:3."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. The tolerant locator slice improves clean full-Surah 102 substantially, but repeated phrases can still map to an earlier ayah and hallucinated/clipped windows still miss; next slice should add progression-aware location and eventually smarter flushing."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase. Hallucinated/clipped windows still miss; next slice should add tolerant post-lock alignment or smarter flushing/finalization."
     },
     {
       "id": "infra-001",

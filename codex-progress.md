@@ -1033,3 +1033,52 @@
   - Tolerant locating improves pre-lock ASR transcript matching, but repeated phrases can still lock to the earlier repeated ayah because there is no progression bias yet.
   - This slice does not yet solve post-lock tolerant alignment, silence-aware flushing, or ayah-boundary segmentation.
 - Next best step: add progression-aware location so, after a lock, repeated/partial phrases prefer the expected next ayah or nearby future ayah instead of searching the whole corpus from scratch.
+
+### Session 029
+
+- Date: 2026-05-18
+- Goal: Add progression-aware location so repeated ASR phrases prefer the expected next ayah.
+- Completed:
+  - Added an optional `preferred_ref` parameter to exact and tolerant Quran location.
+  - Added a small preferred-ayah score bonus that only applies when the session already has a progression anchor.
+  - Updated `RecitationSession` to remember a progression anchor after a lock or completed progress: the next expected word when still inside an ayah, or the next ayah when the current ayah/window is consumed.
+  - Added tests proving exact and tolerant repeated Surah 102 phrases prefer `102:4` when the progression anchor is `102:4`.
+  - Added a session regression where `كَلَّا سَوْفَ تَعْلَى` locks `102:3`, then `إِلَّا سَوْفَ تَعْلَمُونَ` now locks `102:4` instead of re-locking `102:3`.
+  - Committed and pushed backend changes to GitHub as `0d33982`.
+  - Pulled `0d33982` onto RunPod, restarted the ASR server, and re-ran clean Surah 102 public WSS verification.
+- Verification run:
+  - Red locator tests first failed with `TypeError` because `preferred_ref` was not supported.
+  - Red session test first failed because the repeated ASR phrase re-locked `102:3` instead of `102:4`.
+  - `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_exact_locator_prefers_progression_for_repeated_phrase tests.test_locator.QuranLocatorTests.test_tolerant_locator_prefers_progression_for_repeated_phrase -v`.
+  - `uv run python -B -m unittest tests.test_session.RecitationSessionTests.test_progression_prefers_next_ayah_for_repeated_asr_phrase -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+  - Local replay of observed Surah 102 ASR snippets through `RecitationSession`.
+  - RunPod: `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_exact_locator_prefers_progression_for_repeated_phrase tests.test_locator.QuranLocatorTests.test_tolerant_locator_prefers_progression_for_repeated_phrase tests.test_session.RecitationSessionTests.test_progression_prefers_next_ayah_for_repeated_asr_phrase -v`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 1000`.
+  - `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+- Evidence captured:
+  - Focused locator progression tests passed: 2 tests.
+  - Focused session progression test passed: 1 test.
+  - Full Python deterministic suite passed: 102 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+  - Local replay of observed ASR snippets now maps `إِلَّا سَوْفَ تَعْلَمُونَ` to `102:4:2`.
+  - RunPod focused progression tests passed: 3 tests.
+  - Public WSS clean Surah 102 with 1s client chunks now maps chunk 24, transcript `إِلَّا سَوْفَ تَعْلَمُونَ`, to `102:4` with `start_ref=102:4:2`.
+  - Public WSS clean Surah 102 with 5s chunks also maps chunk 4, transcript `إِلَّا سَوْفَ تَعْلَمُونَ`, to `102:4` with `start_ref=102:4:2`.
+  - Remaining misses are unchanged: the long hallucinated `كَلَّمُوا...` window, clipped `ثُمَّ لَتَرَى`, and final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ`.
+- Files or artifacts updated:
+  - `tarteel_realtime/locator.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_locator.py`
+  - `tests/test_session.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - Progression-aware location fixes repeated phrase preference after a lock, but it still cannot recover ASR hallucinations or heavily clipped/misrecognized windows.
+  - The aligner is still exact after a known location, so tolerant post-lock progress/wrong decisions remain a future slice.
+- Next best step: add a post-lock tolerant alignment mode or smarter flush/finalization so clipped windows like `ثُمَّ لَتَرَى` and misrecognized endings do not immediately become hard misses.
