@@ -125,6 +125,19 @@ class QuranLocatorTests(unittest.TestCase):
         self.assertEqual(decision.best.ayah_ref, QuranRef(surah=102, ayah=4))
         self.assertEqual(decision.best.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
 
+    def test_tolerant_locator_recovers_short_clipped_fragment_only_with_progression(self):
+        cold_decision = self.locator.locate_tolerant("ثُمَّ لَتَرَى")
+        progressed_decision = self.locator.locate_tolerant(
+            "ثُمَّ لَتَرَى",
+            preferred_ref=QuranRef(surah=102, ayah=7),
+        )
+
+        self.assertEqual(cold_decision.status, LocatorStatus.NOT_FOUND)
+        self.assertEqual(progressed_decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(progressed_decision.reason, "tolerant_match")
+        self.assertEqual(progressed_decision.best.ayah_ref, QuranRef(surah=102, ayah=7))
+        self.assertEqual(progressed_decision.best.start_ref, QuranRef(surah=102, ayah=7, word_index=1))
+
 
 if __name__ == "__main__":
     unittest.main()

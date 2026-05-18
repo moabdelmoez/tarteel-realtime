@@ -36,6 +36,7 @@ class LocatorDecision:
 
 class QuranLocator:
     _TOLERANT_WORD_THRESHOLD = 0.60
+    _PREFERRED_TOLERANT_WORD_THRESHOLD = 0.54
     _TOLERANT_AVERAGE_THRESHOLD = 0.72
     _AYAH_START_BONUS = 0.01
     _PREFERRED_AYAH_BONUS = 1.0
@@ -198,8 +199,13 @@ class QuranLocator:
                         candidate_words,
                     )
                 )
+                word_threshold = (
+                    self._PREFERRED_TOLERANT_WORD_THRESHOLD
+                    if self._is_preferred_ayah(ayah.ref, preferred_ref)
+                    else self._TOLERANT_WORD_THRESHOLD
+                )
                 if any(
-                    similarity < self._TOLERANT_WORD_THRESHOLD
+                    similarity < word_threshold
                     for similarity in similarities
                 ):
                     continue
@@ -246,9 +252,20 @@ class QuranLocator:
     ) -> float:
         if preferred_ref is None:
             return 0.0
-        if ayah_ref.surah == preferred_ref.surah and ayah_ref.ayah == preferred_ref.ayah:
+        if self._is_preferred_ayah(ayah_ref, preferred_ref):
             return self._PREFERRED_AYAH_BONUS
         return 0.0
+
+    def _is_preferred_ayah(
+        self,
+        ayah_ref: QuranRef,
+        preferred_ref: QuranRef | None,
+    ) -> bool:
+        return (
+            preferred_ref is not None
+            and ayah_ref.surah == preferred_ref.surah
+            and ayah_ref.ayah == preferred_ref.ayah
+        )
 
 
 def _word_similarity(recognized_word: str, candidate_word: str) -> float:

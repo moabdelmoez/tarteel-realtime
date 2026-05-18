@@ -194,6 +194,26 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=4))
         self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
 
+    def test_progression_recovers_short_clipped_next_ayah_fragment(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer([
+                "لَتَرَوُنَّ الْجَحِيمَ",
+                "ثُمَّ لَتَرَى",
+            ]),
+            minimum_lock_words=2,
+        )
+
+        first_event = session.handle_chunk(chunk(0))
+        second_event = session.handle_chunk(chunk(1))
+
+        self.assertEqual(first_event.type, SessionEventType.LOCKED)
+        self.assertEqual(first_event.ayah_ref, QuranRef(surah=102, ayah=6))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "tolerant_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=7))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=7, word_index=1))
+
 
 if __name__ == "__main__":
     unittest.main()
