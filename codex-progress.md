@@ -1128,3 +1128,50 @@
   - This slice recovers one clipped next-ayah fragment, but the long hallucinated `كَلَّمُوا...` window and final `النار` misrecognition still correctly miss.
   - The aligner is still exact after a known location; tolerant post-lock progress/wrong decisions remain a future slice.
 - Next best step: decide whether to address the remaining Surah 102 misses with smarter ASR windowing/finalization, tolerant post-lock alignment, or by trying `tarteel-ai/whisper-base-ar-quran` as a model-comparison spike.
+
+### Session 031
+
+- Date: 2026-05-18
+- Goal: Compare `tarteel-ai/whisper-base-ar-quran` against the current Quran Whisper model on the same clean Surah 102 replay.
+- Completed:
+  - Captured a fresh current-model baseline for `basharalrfooh/whisper-small-quran` using the public WSS endpoint and `fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+  - Restarted the RunPod ASR backend with `TARTEEL_WHISPER_MODEL_ID=tarteel-ai/whisper-base-ar-quran`.
+  - Found and fixed two adapter compatibility issues for the tarteel-ai model:
+    - Transformers rejected the language hint because the model has an older generation config.
+    - Retrying with the same input dict failed because the pipeline mutates the input payload on the failed attempt.
+  - Added regression coverage so the adapter retries without `language` only for the outdated generation-config error and rebuilds the audio input for retry.
+  - Committed and pushed adapter fixes as `87a4d04` and `c0c8e1d`.
+  - Pulled `c0c8e1d` onto RunPod, restarted the ASR server with the tarteel-ai model, and reran the Surah 102 comparison.
+- Verification run:
+  - Red adapter test first errored on the old generation-config `ValueError`.
+  - Red retry-mutation check then failed because the second pipeline call had lost the `raw` input key.
+  - `uv run python -B -m unittest tests.test_whisper_adapter.WhisperRecognizerTests.test_transformers_backend_retries_without_language_for_outdated_generation_config -v`.
+  - `uv run python -B -m unittest tests.test_whisper_adapter -v`.
+  - `uv run python -B -m unittest discover -s tests -v`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`.
+  - RunPod focused adapter test passed after pulling `c0c8e1d`.
+  - Baseline command: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/surah_102/102-full.wav --chunk-ms 5000`.
+  - Tarteel-ai command: same WSS replay after restarting the backend with `TARTEEL_WHISPER_MODEL_ID=tarteel-ai/whisper-base-ar-quran`.
+  - Tarteel-ai sanity command: `uv run python -m tarteel_realtime.ws_client --url wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000`.
+- Evidence captured:
+  - Full Python deterministic suite passed: 105 tests.
+  - Compile check passed.
+  - Feature list parsed successfully and exactly one feature remains active: `mobile-002`.
+  - RunPod focused adapter compatibility test passed.
+  - Current model baseline for Surah 102 produced 13 events: 10 `locked`, 3 `locating`, and 2 `no_match` windows (`كَلَّمُوا...` hallucination and final `النار` misrecognition).
+  - Tarteel-ai Surah 102 replay produced 13 events: 5 `locked`, 1 `lock_candidate`, 6 `wrong`, and 1 `uncertain`.
+  - Tarteel-ai had no `no_match` windows and often cleaner raw transcripts, for example chunk 3 was only `ثُمَّ` instead of a long `كَلَّمُوا...` hallucination.
+  - Tarteel-ai exposed the next architecture problem: after the session is locked, exact post-lock alignment marks later plausible chunks as `wrong` instead of allowing progression-aware tolerant recovery.
+  - Tarteel-ai short Surah 114:2 sanity replay still buffered then locked `114:2` for transcript `مَلِكِ النَّاسِ`.
+- Files or artifacts updated:
+  - `tarteel_realtime/whisper_adapter.py`
+  - `tests/test_whisper_adapter.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The tarteel-ai model looks promising on raw transcript quality, but the current session state machine is too strict after lock.
+  - The public RunPod backend is currently running `tarteel-ai/whisper-base-ar-quran`.
+- Next best step: implement post-lock tolerant progression recovery. When exact alignment emits `wrong` for a real ASR chunk, the session should be able to consult progression-aware tolerant location before surfacing a hard correction.

@@ -339,9 +339,16 @@
         "Clipped-fragment tests prove ثُمَّ لَتَرَى stays not_found cold, but locks to 102:7:1 with preferred_ref 102:7 and after a prior 102:6 session lock.",
         "After the clipped-fragment slice, full Python deterministic suite passed with 104 tests and compile check passed.",
         "Deployed commit 6c14cb1 to RunPod, restarted the ASR backend, and verified focused clipped-fragment locator/session tests passed on the pod.",
-        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the clipped ثُمَّ لَتَرَى window to 102:7 with start_ref 102:7:1, while the final أَنَّ يَوْمَئِذٍ عَنِ النَّارِ misrecognition still returns no_match."
+        "Public WSS clean Surah 102 with both --chunk-ms 1000 and --chunk-ms 5000 now maps the clipped ثُمَّ لَتَرَى window to 102:7 with start_ref 102:7:1, while the final أَنَّ يَوْمَئِذٍ عَنِ النَّارِ misrecognition still returns no_match.",
+        "Compared tarteel-ai/whisper-base-ar-quran against basharalrfooh/whisper-small-quran on the same clean Surah 102 WSS replay.",
+        "Added adapter compatibility handling for models with outdated Whisper generation config: retry without language only for that specific error and rebuild the audio input for retry.",
+        "After the tarteel-ai compatibility slice, full Python deterministic suite passed with 105 tests and compile check passed.",
+        "Deployed commit c0c8e1d to RunPod, restarted the ASR backend with TARTEEL_WHISPER_MODEL_ID=tarteel-ai/whisper-base-ar-quran, and verified focused adapter compatibility on the pod.",
+        "Baseline basharalrfooh Surah 102 replay produced 10 locked events, 3 locating events, and 2 no_match windows.",
+        "Tarteel-ai Surah 102 replay produced cleaner raw transcripts with no no_match windows, but only 5 locked events because exact post-lock alignment surfaced later plausible chunks as wrong.",
+        "Tarteel-ai short Surah 114:2 sanity replay still buffered then locked 114:2 for transcript مَلِكِ النَّاسِ."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase and clipped 102:7 phrase. The remaining misses are the long hallucinated كَلَّمُوا... window and final النار misrecognition; next slice should choose between tolerant post-lock alignment, smarter flushing/finalization, or a second Quran Whisper model comparison."
+      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase and clipped 102:7 phrase. The tarteel-ai model looks better at raw transcription on some windows, but it exposes that post-lock exact alignment is now the main blocker. Next slice should implement post-lock tolerant progression recovery before making a final model choice."
     },
     {
       "id": "infra-001",

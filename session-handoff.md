@@ -128,6 +128,14 @@
   - RunPod focused clipped-fragment locator/session tests passed: 2 tests.
   - Public WSS clean Surah 102 with both `--chunk-ms 1000` and `--chunk-ms 5000` now maps the clipped `ثُمَّ لَتَرَى` window to `102:7` with `start_ref=102:7:1`.
   - Public WSS clean Surah 102 still rejects the final `أَنَّ يَوْمَئِذٍ عَنِ النَّارِ` misrecognition as `no_match`.
+  - Tarteel-ai model comparison was run against the same clean Surah 102 public WSS replay.
+  - Whisper adapter compatibility for `tarteel-ai/whisper-base-ar-quran` was fixed in commits `87a4d04` and `c0c8e1d`.
+  - Latest local full Python deterministic suite after the tarteel-ai compatibility slice: 105 tests passing.
+  - RunPod focused adapter compatibility test passed after pulling `c0c8e1d`.
+  - Baseline `basharalrfooh/whisper-small-quran` Surah 102 replay produced 10 locked events, 3 locating events, and 2 no_match windows.
+  - `tarteel-ai/whisper-base-ar-quran` Surah 102 replay produced 5 locked events, 1 lock_candidate, 6 wrong, 1 uncertain, and no no_match windows; its raw transcripts are often cleaner but expose post-lock exact-alignment limits.
+  - `tarteel-ai/whisper-base-ar-quran` short Surah 114:2 replay still buffered then locked `114:2` for transcript `مَلِكِ النَّاسِ`.
+  - The public RunPod backend is currently running `tarteel-ai/whisper-base-ar-quran`.
 
 ## Changed This Session
 
@@ -159,6 +167,8 @@
   - Deployed the progression-aware slice to RunPod and confirmed it fixes the repeated Surah 102 phrase mapping for `102:4`.
   - Added preferred-ayah-only tolerant recovery for short clipped fragments, so `ثُمَّ لَتَرَى` can recover as `102:7:1` only when progression already points at `102:7`.
   - Deployed the clipped-fragment slice to RunPod and confirmed clean Surah 102 WSS recovery for both 1s and 5s client chunking.
+  - Added Whisper adapter compatibility for tarteel-ai's older generation config and pipeline input mutation during retry.
+  - Deployed the adapter fixes to RunPod and completed an A/B replay between `basharalrfooh/whisper-small-quran` and `tarteel-ai/whisper-base-ar-quran`.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -174,7 +184,7 @@
   - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
   - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
   - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, and clipped-fragment recovery are deployed; clean Surah 102 audio now shows the next major blocker is the remaining hallucinated/final misrecognized windows plus ASR windowing/finalization, not only live mic capture.
+  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, clipped-fragment recovery, and tarteel-ai adapter compatibility fixes are deployed. Clean Surah 102 now shows the next major blocker is post-lock exact alignment, because tarteel-ai cleaner transcripts still become `wrong` after lock.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
   - RunPod pods may restart with a fresh root filesystem; reinstall `uv` and keep caches on the pod root or an intentionally chosen cache path.
@@ -184,7 +194,7 @@
 ## Next Best Step
 
 - Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. The clipped `102:7` window is now recovered; remaining misses are hallucinated or badly misrecognized windows and exact post-lock alignment limits.
+- Why it is next: the public real-ASR WSS endpoint is live, and tolerant plus progression-aware location improved clean Surah 102. The tarteel-ai comparison shows raw transcription can improve, but the session still needs post-lock tolerant progression recovery before a final model choice is meaningful.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -193,7 +203,7 @@
   - The app UI can show `waiting_for_audio_buffer` and then `locked` from the real ASR backend.
   - Manual simulator or physical iPhone verification confirms live mic chunks reach the real ASR backend.
   - During failed live attempts, logs show useful `pcm_rms`, `pcm_peak`, and `transcript_chars` so the next decision is based on evidence rather than guessing.
-  - Clean Surah 102 audio should progress through more than isolated locks; after the clipped-fragment deployment it recovers many windows, maps the repeated `102:4` phrase correctly, and maps clipped `ثُمَّ لَتَرَى` to `102:7:1`, but hallucinated/final misrecognized windows still return `no_match`.
+  - Clean Surah 102 audio should progress through more than isolated locks; after the tarteel-ai comparison, the next pass should reduce post-lock `wrong` events by using progression-aware tolerant recovery before surfacing a hard correction.
 - What must not change during that step:
   - Do not remove fake recognizer tests.
   - Do not make heavyweight ASR dependencies required for the default test suite unless explicitly approved.
