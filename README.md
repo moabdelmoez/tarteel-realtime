@@ -223,9 +223,11 @@ Run the Python LiveKit worker on the machine that has ASR access. For RunPod, se
 
 ```bash
 TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-uv run --env-file .env --with livekit --with livekit-api --with transformers --with torch \
+uv run --env-file .env --with livekit --with livekit-api --with transformers --with torch --with torchaudio \
   python -m tarteel_realtime.livekit_worker
 ```
+
+LiveKit publishes microphone audio at 48 kHz. Include `torchaudio` for the real-ASR worker so the Transformers pipeline can resample that stream before Whisper inference. The fixture WAV smoke path uses mono 16 kHz audio, so it can pass even when this dependency is missing.
 
 For a transport-only smoke without pulling Whisper/Torch, pass a deterministic transcript script:
 
