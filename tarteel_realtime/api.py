@@ -7,8 +7,15 @@ import math
 import struct
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
+from tarteel_realtime.livekit_tokens import (
+    LiveKitDependencyMissing,
+    LiveKitSettings,
+    LiveKitTokenBuilder,
+    livekit_settings_from_env,
+    livekit_token_response,
+)
 from tarteel_realtime.quran import QuranCorpus, QuranRef
 from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer, VoiceActivity
 from tarteel_realtime.session import RecitationSession, SessionEvent
@@ -23,12 +30,31 @@ def create_app(
     recognizer_factory: Callable[[], SpeechRecognizer],
     minimum_lock_words: int = 3,
     log_transcripts: bool = False,
+    livekit_settings: LiveKitSettings | None = None,
+    livekit_token_builder: LiveKitTokenBuilder | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Tarteel Realtime MVP")
 
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/livekit/recitation-token")
+    def livekit_recitation_token(
+        identity: str = "ios-reciter",
+        role: str = "client",
+    ) -> dict[str, str]:
+        try:
+            return livekit_token_response(
+                settings=livekit_settings or livekit_settings_from_env(),
+                identity=identity,
+                role=role,
+                token_builder=livekit_token_builder,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LiveKitDependencyMissing as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.websocket("/ws/recitation")
     async def recitation_socket(websocket: WebSocket) -> None:

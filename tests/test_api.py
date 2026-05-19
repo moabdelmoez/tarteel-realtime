@@ -5,6 +5,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from tarteel_realtime.api import create_app
+from tarteel_realtime.livekit_tokens import LiveKitTokenRequest
 from tarteel_realtime.quran import QuranCorpus
 from tarteel_realtime.recognition import FakeRecognizer, RecognitionResult
 
@@ -169,6 +170,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(seen_voice_activity[0].probability, 0.82)
         self.assertTrue(seen_voice_activity[0].is_speech_active)
         self.assertEqual(seen_voice_activity[0].event, "speech_start")
+
+    def test_livekit_recitation_token_endpoint_returns_local_dev_join_token(self):
+        token_requests = []
+
+        class RecordingTokenBuilder:
+            def build(self, request: LiveKitTokenRequest) -> str:
+                token_requests.append(request)
+                return "signed-dev-token"
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer([]),
+            livekit_token_builder=RecordingTokenBuilder(),
+        )
+
+        response = TestClient(app).get(
+            "/livekit/recitation-token",
+            params={"identity": "ios-simulator", "role": "client"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "url": "ws://127.0.0.1:7880",
+            "room": "tarteel-local-recitation",
+            "identity": "ios-simulator",
+            "role": "client",
+            "token": "signed-dev-token",
+        })
+        self.assertEqual(token_requests[0].identity, "ios-simulator")
+        self.assertEqual(token_requests[0].role, "client")
+        self.assertTrue(token_requests[0].can_publish)
 
 
 if __name__ == "__main__":
