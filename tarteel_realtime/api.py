@@ -123,7 +123,7 @@ def _voice_activity_from_payload(payload: Any) -> VoiceActivity | None:
     )
 
 
-def _event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, Any]:
+def session_event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, Any]:
     return {
         "type": event.type.value,
         "transcript": event.transcript,
@@ -140,6 +140,10 @@ def _event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, 
         "expected_word": event.expected_word,
         "recognized_word": event.recognized_word,
     }
+
+
+def _event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, Any]:
+    return session_event_to_payload(event, corpus=corpus)
 
 
 def _ayah_text_for_event(event: SessionEvent, *, corpus: QuranCorpus) -> str | None:
