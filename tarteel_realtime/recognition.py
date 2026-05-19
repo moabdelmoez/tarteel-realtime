@@ -7,10 +7,24 @@ from tarteel_realtime.quran import normalize_arabic
 
 
 @dataclass(frozen=True)
+class VoiceActivity:
+    probability: float | None = None
+    is_speech_active: bool | None = None
+    event: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.probability is not None and not 0.0 <= self.probability <= 1.0:
+            raise ValueError("voice activity probability must be between 0.0 and 1.0")
+        if self.event is not None and self.event not in {"speech_start", "speech_end"}:
+            raise ValueError("voice activity event must be speech_start or speech_end")
+
+
+@dataclass(frozen=True)
 class AudioChunk:
     sequence_number: int
     pcm: bytes
     sample_rate_hz: int
+    voice_activity: VoiceActivity | None = None
 
     def __post_init__(self) -> None:
         if self.sequence_number < 0:

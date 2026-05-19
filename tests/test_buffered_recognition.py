@@ -2,7 +2,7 @@ import unittest
 import struct
 
 from tarteel_realtime.buffered_recognition import BufferedRecognitionConfig, BufferedRecognizer
-from tarteel_realtime.recognition import AudioChunk, RecognitionResult
+from tarteel_realtime.recognition import AudioChunk, RecognitionResult, VoiceActivity
 
 
 def chunk(sequence_number: int, pcm: bytes, sample_rate_hz: int = 1_000) -> AudioChunk:
@@ -111,6 +111,37 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertFalse(quiet.is_final)
         self.assertEqual(loud.transcript, "flush-1")
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [loud_pcm])
+
+    def test_flushes_on_vad_speech_end_after_minimum_audio_before_interval(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=4,
+                flush_interval_ms=10,
+                tail_audio_ms=0,
+            ),
+        )
+
+        recognizer.recognize(chunk(0, struct.pack("<hh", 1000, -1000)))
+        waiting = recognizer.recognize(chunk(1, b"\x00\x00"))
+        result = recognizer.recognize(AudioChunk(
+            sequence_number=2,
+            pcm=struct.pack("<h", 1000),
+            sample_rate_hz=1_000,
+            voice_activity=VoiceActivity(
+                probability=0.1,
+                is_speech_active=False,
+                event="speech_end",
+            ),
+        ))
+
+        self.assertEqual(waiting.transcript, "")
+        self.assertEqual(result.transcript, "flush-1")
+        self.assertEqual(result.chunk_sequence, 2)
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            struct.pack("<hhhh", 1000, -1000, 0, 1000),
+        ])
 
     def test_logs_buffer_diagnostics_without_audio_content(self):
         inner = RecordingRecognizer()

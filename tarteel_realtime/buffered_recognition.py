@@ -45,7 +45,7 @@ class BufferedRecognizer:
     def recognize(self, chunk: AudioChunk) -> RecognitionResult:
         if chunk.pcm:
             self._append(chunk)
-        if not self._ready_to_flush():
+        if not self._ready_to_flush(chunk):
             logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                 "buffered_ms=%s unflushed_ms=%s action=wait",
@@ -104,12 +104,14 @@ class BufferedRecognizer:
         self._buffer.extend(chunk.pcm)
         self._bytes_since_flush += len(chunk.pcm)
 
-    def _ready_to_flush(self) -> bool:
+    def _ready_to_flush(self, chunk: AudioChunk) -> bool:
         if self._sample_rate_hz is None:
             return False
+        if self._buffered_ms < self._config.minimum_audio_ms:
+            return False
         return (
-            self._buffered_ms >= self._config.minimum_audio_ms
-            and self._unflushed_ms >= self._config.flush_interval_ms
+            self._unflushed_ms >= self._config.flush_interval_ms
+            or _is_vad_speech_end(chunk)
         )
 
     @property
@@ -159,3 +161,10 @@ def _pcm_rms(pcm: bytes) -> int:
     for (sample,) in struct.iter_unpack("<h", pcm[: sample_count * 2]):
         square_sum += sample * sample
     return int(round(math.sqrt(square_sum / sample_count)))
+
+
+def _is_vad_speech_end(chunk: AudioChunk) -> bool:
+    return (
+        chunk.voice_activity is not None
+        and chunk.voice_activity.event == "speech_end"
+    )

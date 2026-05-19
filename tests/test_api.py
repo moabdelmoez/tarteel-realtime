@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from tarteel_realtime.api import create_app
 from tarteel_realtime.quran import QuranCorpus
-from tarteel_realtime.recognition import FakeRecognizer
+from tarteel_realtime.recognition import FakeRecognizer, RecognitionResult
 
 
 SAMPLE_TANZIL_LINES = [
@@ -134,6 +134,41 @@ class ApiTests(unittest.TestCase):
 
         joined_logs = "\n".join(logs.output)
         self.assertIn("transcript_text=مَلِكِ", joined_logs)
+
+    def test_websocket_accepts_vad_metadata_on_audio_chunks(self):
+        seen_voice_activity = []
+
+        class RecordingRecognizer:
+            def recognize(self, audio_chunk):
+                seen_voice_activity.append(audio_chunk.voice_activity)
+                return RecognitionResult(
+                    transcript="مَلِكِ",
+                    confidence=0.9,
+                    chunk_sequence=audio_chunk.sequence_number,
+                    is_final=True,
+                )
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=RecordingRecognizer,
+            minimum_lock_words=1,
+        )
+        client = TestClient(app)
+        payload = chunk_payload(0)
+        payload["voice_activity"] = {
+            "probability": 0.82,
+            "is_speech_active": True,
+            "event": "speech_start",
+        }
+
+        with client.websocket_connect("/ws/recitation") as websocket:
+            websocket.send_json(payload)
+            websocket.receive_json()
+
+        self.assertEqual(len(seen_voice_activity), 1)
+        self.assertEqual(seen_voice_activity[0].probability, 0.82)
+        self.assertTrue(seen_voice_activity[0].is_speech_active)
+        self.assertEqual(seen_voice_activity[0].event, "speech_start")
 
 
 if __name__ == "__main__":

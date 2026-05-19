@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from tarteel_realtime.quran import QuranCorpus, QuranRef
-from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
+from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer, VoiceActivity
 from tarteel_realtime.session import RecitationSession, SessionEvent
 
 
@@ -73,6 +73,27 @@ def _audio_chunk_from_payload(payload: dict[str, Any]) -> AudioChunk:
         sequence_number=int(payload["sequence_number"]),
         pcm=base64.b64decode(payload["pcm_base64"]),
         sample_rate_hz=int(payload["sample_rate_hz"]),
+        voice_activity=_voice_activity_from_payload(payload.get("voice_activity")),
+    )
+
+
+def _voice_activity_from_payload(payload: Any) -> VoiceActivity | None:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise ValueError("voice_activity must be an object")
+    return VoiceActivity(
+        probability=(
+            None
+            if payload.get("probability") is None
+            else float(payload["probability"])
+        ),
+        is_speech_active=(
+            None
+            if payload.get("is_speech_active") is None
+            else bool(payload["is_speech_active"])
+        ),
+        event=payload.get("event"),
     )
 
 
