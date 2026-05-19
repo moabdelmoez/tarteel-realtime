@@ -1,11 +1,20 @@
 import json
 import struct
 import unittest
+from types import SimpleNamespace
 
+from tarteel_realtime.livekit_smoke import (
+    recitation_payload_from_data_packet,
+    sine_pcm16_frame,
+)
 from tarteel_realtime.livekit_worker import (
+    FAKE_TRANSCRIPTS_ENV,
     RECITATION_EVENT_TOPIC,
     LiveKitRecitationWorker,
+    RepeatingFakeRecognizer,
     audio_frame_to_chunk,
+    fake_transcripts_from_env,
+    _recognizer_factory_for_livekit_worker,
 )
 from tarteel_realtime.quran import QuranCorpus
 from tarteel_realtime.recognition import FakeRecognizer
@@ -73,6 +82,57 @@ class LiveKitWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event["type"], "locked")
         self.assertEqual(event["ayah_ref"], "114:2")
         self.assertEqual(event["chunk_sequence"], 0)
+
+    def test_fake_transcripts_from_env_uses_pipe_delimited_script(self):
+        transcripts = fake_transcripts_from_env({
+            FAKE_TRANSCRIPTS_ENV: " مَلِكِ | النَّاسِ || ",
+        })
+
+        self.assertEqual(transcripts, ["مَلِكِ", "النَّاسِ"])
+
+    def test_worker_recognizer_factory_can_use_fake_transcripts_for_smoke(self):
+        recognizer = _recognizer_factory_for_livekit_worker(
+            object(),
+            fake_transcripts=["مَلِكِ"],
+        )()
+
+        self.assertIsInstance(recognizer, RepeatingFakeRecognizer)
+
+    def test_repeating_fake_recognizer_reuses_last_transcript_after_script(self):
+        recognizer = RepeatingFakeRecognizer(["مَلِكِ"])
+
+        first = recognizer.recognize(audio_frame_to_chunk(
+            FakeAudioFrame([1], sample_rate=16_000),
+            sequence_number=0,
+        ))
+        second = recognizer.recognize(audio_frame_to_chunk(
+            FakeAudioFrame([2], sample_rate=16_000),
+            sequence_number=1,
+        ))
+
+        self.assertEqual(first.transcript, "مَلِكِ")
+        self.assertEqual(second.transcript, "مَلِكِ")
+
+    def test_smoke_sine_frame_is_pcm16_at_requested_duration(self):
+        frame = sine_pcm16_frame(sample_rate=16_000, duration_ms=20)
+
+        self.assertEqual(len(frame), 16_000 * 20 // 1_000 * 2)
+
+    def test_smoke_ignores_unrelated_livekit_data_topics(self):
+        packet = SimpleNamespace(topic="other.topic", data=b"{}")
+
+        self.assertIsNone(recitation_payload_from_data_packet(packet))
+
+    def test_smoke_decodes_recitation_event_data_packet(self):
+        packet = SimpleNamespace(
+            topic=RECITATION_EVENT_TOPIC,
+            data=json.dumps({"type": "locked"}).encode("utf-8"),
+        )
+
+        self.assertEqual(
+            recitation_payload_from_data_packet(packet),
+            {"type": "locked"},
+        )
 
 
 if __name__ == "__main__":

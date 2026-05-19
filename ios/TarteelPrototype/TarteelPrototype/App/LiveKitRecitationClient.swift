@@ -23,8 +23,7 @@ final class LiveKitRecitationClient: NSObject {
         #if canImport(LiveKit)
         let room = Room(delegate: self)
         try await room.connect(url: token.url, token: token.token)
-        let audioTrack = LocalAudioTrack.createTrack(name: "recitation-mic")
-        try await room.localParticipant.publish(audioTrack: audioTrack)
+        try await room.localParticipant.setMicrophone(enabled: true)
         self.room = room
         #else
         throw LiveKitRecitationClientError.sdkUnavailable
@@ -66,8 +65,7 @@ extension LiveKitRecitationClient: RoomDelegate {
         _ room: Room,
         participant: RemoteParticipant?,
         didReceiveData data: Data,
-        forTopic topic: String,
-        encryptionType: EncryptionType
+        forTopic topic: String
     ) {
         receive(data: data, topic: topic)
     }

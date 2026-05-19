@@ -212,7 +212,22 @@ uv run --with livekit --with livekit-api --with transformers --with torch \
   python -m tarteel_realtime.livekit_worker
 ```
 
-The iOS prototype now includes a `LiveKit` preset that fetches the token endpoint above. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, microphone chunks can carry `voice_activity` metadata to the backend, and backend buffering flushes early on `speech_end` after minimum audio is present.
+For a transport-only smoke without pulling Whisper/Torch, pass a deterministic transcript script:
+
+```bash
+TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt \
+uv run --with livekit --with livekit-api \
+  python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"
+```
+
+With the worker running, publish synthetic audio and wait for a recitation event:
+
+```bash
+uv run --with livekit --with livekit-api \
+  python -m tarteel_realtime.livekit_smoke
+```
+
+The iOS prototype now includes a `LiveKit` preset that fetches the token endpoint above. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks can carry `voice_activity` metadata through the existing WebSocket fallback path, and backend buffering flushes early on `speech_end` after minimum audio is present.
 
 ## GitHub And R2 Artifact Workflow
 

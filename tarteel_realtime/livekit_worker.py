@@ -20,11 +20,18 @@ from tarteel_realtime.livekit_tokens import (
     livekit_token_response,
 )
 from tarteel_realtime.quran import QuranCorpus
-from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
+from tarteel_realtime.recognition import (
+    AudioChunk,
+    FakeRecognizer,
+    RecognitionResult,
+    RecognizerScriptExhausted,
+    SpeechRecognizer,
+)
 from tarteel_realtime.session import RecitationSession
 
 
 RECITATION_EVENT_TOPIC = "tarteel.recitation.event"
+FAKE_TRANSCRIPTS_ENV = "TARTEEL_LIVEKIT_FAKE_TRANSCRIPTS"
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +80,21 @@ class LiveKitRecitationWorker:
         )
 
 
+class RepeatingFakeRecognizer:
+    def __init__(self, transcripts: list[str]) -> None:
+        self._recognizer = FakeRecognizer(transcripts)
+        self._fallback_transcript = transcripts[-1]
+
+    def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+        try:
+            return self._recognizer.recognize(chunk)
+        except RecognizerScriptExhausted:
+            return RecognitionResult(
+                transcript=self._fallback_transcript,
+                confidence=1.0,
+            )
+
+
 def audio_frame_to_chunk(frame: Any, *, sequence_number: int) -> AudioChunk:
     sample_rate = int(frame.sample_rate)
     channel_count = int(frame.num_channels)
@@ -105,6 +127,7 @@ async def run_livekit_worker(
     *,
     livekit_settings: LiveKitSettings | None = None,
     worker_identity: str = "tarteel-backend-worker",
+    fake_transcripts: list[str] | None = None,
 ) -> None:
     try:
         from livekit import rtc
@@ -116,20 +139,21 @@ async def run_livekit_worker(
     settings = livekit_settings or livekit_settings_from_env()
     asr_settings = asr_settings_from_env()
     corpus = QuranCorpus.from_tanzil_file(asr_settings.tanzil_path)
-    recognizer = create_buffered_whisper_recognizer_factory(asr_settings)()
+    recognizer = _recognizer_factory_for_livekit_worker(
+        asr_settings,
+        fake_transcripts=fake_transcripts,
+    )()
 
     room = rtc.Room()
-    worker = LiveKitRecitationWorker(
-        corpus=corpus,
-        recognizer=recognizer,
-        publisher=room.local_participant,
-        minimum_lock_words=asr_settings.minimum_lock_words,
-    )
     tasks: set[asyncio.Task] = set()
+    worker: LiveKitRecitationWorker | None = None
 
     @room.on("track_subscribed")
     def on_track_subscribed(track, publication, participant) -> None:
         if track.kind != rtc.TrackKind.KIND_AUDIO:
+            return
+        if worker is None:
+            logger.warning("livekit_worker received audio track before worker initialization")
             return
         logger.warning(
             "livekit_worker subscribed audio track=%s participant=%s",
@@ -146,6 +170,12 @@ async def run_livekit_worker(
         role="worker",
     )["token"]
     await room.connect(settings.url, token)
+    worker = LiveKitRecitationWorker(
+        corpus=corpus,
+        recognizer=recognizer,
+        publisher=room.local_participant,
+        minimum_lock_words=asr_settings.minimum_lock_words,
+    )
     logger.warning("livekit_worker connected url=%s room=%s", settings.url, settings.room_name)
 
     try:
@@ -159,10 +189,19 @@ async def run_livekit_worker(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the LiveKit recitation worker.")
     parser.add_argument("--identity", default=os.environ.get("TARTEEL_LIVEKIT_WORKER_IDENTITY", "tarteel-backend-worker"))
+    parser.add_argument(
+        "--fake-transcript",
+        action="append",
+        default=None,
+        help="Use a deterministic transcript for local LiveKit transport smoke tests. Can be passed more than once.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.WARNING)
-    asyncio.run(run_livekit_worker(worker_identity=args.identity))
+    asyncio.run(run_livekit_worker(
+        worker_identity=args.identity,
+        fake_transcripts=args.fake_transcript,
+    ))
     return 0
 
 
@@ -182,6 +221,29 @@ def _frame_int16_samples(frame: Any) -> list[int]:
 
 def _clamp_int16(value: int) -> int:
     return max(-32768, min(32767, value))
+
+
+def _recognizer_factory_for_livekit_worker(
+    asr_settings,
+    *,
+    fake_transcripts: list[str] | None = None,
+):
+    transcripts = fake_transcripts
+    if transcripts is None:
+        transcripts = fake_transcripts_from_env()
+    if transcripts:
+        return lambda: RepeatingFakeRecognizer(transcripts)
+    return create_buffered_whisper_recognizer_factory(asr_settings)
+
+
+def fake_transcripts_from_env(env: dict[str, str] | None = None) -> list[str]:
+    values = os.environ if env is None else env
+    raw_script = values.get(FAKE_TRANSCRIPTS_ENV, "")
+    return [
+        transcript.strip()
+        for transcript in raw_script.split("|")
+        if transcript.strip()
+    ]
 
 
 if __name__ == "__main__":

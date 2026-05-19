@@ -12,8 +12,7 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
         source = (APP_ROOT / "LiveKitRecitationClient.swift").read_text(encoding="utf-8")
 
         self.assertIn("#if canImport(LiveKit)", source)
-        self.assertIn("LocalAudioTrack.createTrack", source)
-        self.assertIn("publish(audioTrack:", source)
+        self.assertIn("setMicrophone(enabled: true)", source)
         self.assertIn("didReceiveData data", source)
         self.assertIn("tarteel.recitation.event", source)
 
@@ -22,7 +21,8 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
 
         self.assertIn("#if canImport(FluidAudio)", source)
         self.assertIn("VadManager", source)
-        self.assertIn("processStreamingChunk", source)
+        self.assertIn("VadManager.chunkSize", source)
+        self.assertIn("manager.process(chunk)", source)
         self.assertIn("VoiceActivityPayload", source)
 
     def test_new_app_sources_are_in_xcode_project(self) -> None:

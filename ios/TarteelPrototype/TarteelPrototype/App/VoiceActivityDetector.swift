@@ -7,40 +7,38 @@ import FluidAudio
 actor VoiceActivityDetector {
     #if canImport(FluidAudio)
     private var manager: VadManager?
-    private var streamState: VadStreamState?
+    private var pendingSamples: [Float] = []
+    private var isSpeechActive = false
     #endif
 
     func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload? {
         #if canImport(FluidAudio)
         guard sampleRate == VadManager.sampleRate else { return nil }
+        pendingSamples.append(contentsOf: pcm.float32Samples)
+        guard pendingSamples.count >= VadManager.chunkSize else { return nil }
+
+        let chunk = Array(pendingSamples.prefix(VadManager.chunkSize))
+        pendingSamples.removeFirst(VadManager.chunkSize)
+
         do {
             let manager = try await manager()
-            var state = try await streamState ?? manager.makeStreamState()
-            let result = try await manager.processStreamingChunk(
-                pcm.float32Samples,
-                state: state,
-                config: .default,
-                returnSeconds: true,
-                timeResolution: 2
-            )
-            state = result.state
-            streamState = state
-
-            let event: VoiceActivityEvent?
-            switch result.event?.kind {
-            case .speechStart:
-                event = .speechStart
-            case .speechEnd:
-                event = .speechEnd
-            case nil:
-                event = nil
-            @unknown default:
-                event = nil
+            guard let result = try await manager.process(chunk).last else {
+                return nil
             }
 
+            let event: VoiceActivityEvent?
+            if result.isVoiceActive && !isSpeechActive {
+                event = .speechStart
+            } else if !result.isVoiceActive && isSpeechActive {
+                event = .speechEnd
+            } else {
+                event = nil
+            }
+            isSpeechActive = result.isVoiceActive
+
             return VoiceActivityPayload(
-                probability: result.probability,
-                isSpeechActive: result.probability >= 0.5,
+                probability: Double(result.probability),
+                isSpeechActive: result.isVoiceActive,
                 event: event
             )
         } catch {
