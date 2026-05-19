@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject var viewModel: RecitationViewModel
+    var shouldAutostartLiveKit = false
+    @State private var didAutostartLiveKit = false
 
     var body: some View {
         ZStack {
@@ -81,6 +83,11 @@ struct ContentView: View {
                 .accessibilityLabel(viewModel.isRecording ? "Stop recitation" : "Start recitation")
                 .padding(.bottom, 28)
             }
+        }
+        .task {
+            guard shouldAutostartLiveKit, !didAutostartLiveKit else { return }
+            didAutostartLiveKit = true
+            viewModel.toggleRecording()
         }
     }
 }

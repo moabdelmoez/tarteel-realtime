@@ -39,6 +39,17 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
         self.assertIn("https://github.com/FluidInference/FluidAudio.git", project)
         self.assertIn("LiveKit in Frameworks", project)
         self.assertIn("FluidAudio in Frameworks", project)
+        self.assertIn("@executable_path/Frameworks", project)
+        self.assertIn("@loader_path/Frameworks", project)
+
+    def test_app_has_livekit_autostart_launch_argument_for_simulator_smoke(self) -> None:
+        app = (APP_ROOT / "TarteelPrototypeApp.swift").read_text(encoding="utf-8")
+        content_view = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("--tarteel-autostart-livekit", app)
+        self.assertIn("selectBackendPreset(.liveKitLocal)", app)
+        self.assertIn("shouldAutostartLiveKit", content_view)
+        self.assertIn("viewModel.toggleRecording()", content_view)
 
 
 if __name__ == "__main__":
