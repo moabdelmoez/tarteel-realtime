@@ -14,10 +14,13 @@
 - [ ] R2 helper tests still run when touched: `uv run python -B -m unittest tests.test_r2_artifacts`.
 - [ ] RunPod bootstrap tests still run when touched: `uv run python -B -m unittest tests.test_runpod_bootstrap`.
 - [ ] RunPod bootstrap syntax still validates when touched: `bash -n scripts/runpod_bootstrap.sh`.
+- [ ] LiveKit token/API/worker tests still run when touched: `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api`.
+- [ ] LiveKit transport smoke still has a documented fake-transcript path: `uv run --env-file .env --with livekit --with livekit-api python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"`.
+- [ ] Real LiveKit ASR worker docs include `torchaudio` for 48 kHz microphone resampling.
 - [ ] When `data/tanzil/quran-simple-clean.txt` exists, its manifest still validates: `uv run python -m tarteel_realtime.quran_data --check-manifest`.
 - [ ] Current progress is recorded in `codex-progress.md`.
 - [ ] Feature state in `feature_list.json` reflects what is actually passing versus unverified.
-- [ ] Only one feature in `feature_list.json` has status `in_progress`.
+- [ ] At most one feature in `feature_list.json` has status `in_progress`.
 - [ ] No half-finished step is left undocumented in `session-handoff.md`.
 - [ ] All Python commands use `uv run`; dependencies are managed with `uv`, not direct `pip`.
 - [ ] The next session can continue without manual repair.

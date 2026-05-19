@@ -12,8 +12,8 @@
   - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
-- Current highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend
-- Current blocker: public RunPod real-ASR backend is live and proxy-verified; the iPhone simulator still needs manual mic verification against the Custom WSS URL
+- Current highest-priority unfinished feature: none selected; `mobile-002` is passing through the LiveKit Cloud + RunPod simulator path
+- Current blocker: none for the LiveKit MVP merge; remaining work is latency tuning, longer-surah evaluation, physical-device verification, and polished ordered-progression guidance
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
@@ -1358,3 +1358,50 @@
   - This is locally verified with deterministic transcripts only; it has not yet been deployed to RunPod or replayed against the real `tarteel-ai/whisper-base-ar-quran` model.
   - The current iOS UI does not yet present the expected next ayah text from the new `expected_ordered_progression` uncertain event as a polished guidance message.
 - Next best step: deploy this slice to RunPod, replay clean Surah 102 through the public WSS endpoint, then decide whether the next slice is UI guidance text for expected-next-ayah or ASR chunking/finalization tuning.
+
+### Session 036
+
+- Date: 2026-05-19
+- Goal: Land the LiveKit Cloud + VAD WebRTC transport after simulator/manual RunPod verification.
+- Completed:
+  - Created and used the isolated worktree branch `codex/livekit-vad-webrtc`.
+  - Added optional VAD metadata to the audio chunk payload while preserving `WS /ws/recitation` as the fallback transport.
+  - Added LiveKit token minting, Cloud configuration, Python LiveKit worker, and deterministic LiveKit smoke tooling.
+  - Added guarded iOS LiveKit transport support, linked LiveKit and FluidAudio through SwiftPM, and kept the app buildable through compile guards.
+  - Documented LiveKit Cloud env placeholders in `.env.example`, the local token backend flow, and the RunPod worker flow.
+  - Started the RunPod GPU worker against LiveKit Cloud with `torchaudio` included for 48 kHz microphone resampling.
+  - User manually verified the iOS Simulator LiveKit preset returns recitation info instead of remaining stuck on `waiting_for_audio_buffer`.
+  - Marked `mobile-002` passing and updated the harness docs for merge.
+- Verification run:
+  - `uv run python -B -m json.tool feature_list.json`.
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"`.
+  - `uv run python -B -m unittest discover`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- Evidence captured:
+  - `feature_list.json` parsed successfully.
+  - Active feature sanity returned `[]`.
+  - Full Python deterministic suite passed with 135 tests.
+  - Compile check passed.
+  - Swift client core passed with 15 tests.
+  - iOS simulator app target build succeeded after rerunning `xcodebuild` with access to Xcode/SwiftPM cache directories.
+- Files or artifacts updated:
+  - `.env.example`
+  - `README.md`
+  - `ios/README.md`
+  - `tarteel_realtime/api.py`
+  - `tarteel_realtime/livekit_tokens.py`
+  - `tarteel_realtime/livekit_worker.py`
+  - `tarteel_realtime/livekit_smoke.py`
+  - `ios/TarteelClientCore/`
+  - `ios/TarteelPrototype/`
+  - `tests/`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `clean-state-checklist.md`
+  - `session-handoff.md`
+- Known risk or unresolved issue:
+  - The passing manual signal is from the iOS Simulator; physical-device LiveKit testing is still outstanding.
+  - Longer live-recitation sessions still need latency/chunking and ordered-progression UX tuning.
+- Next best step: merge `codex/livekit-vad-webrtc` to `main`, push `main`, then choose the next product slice.

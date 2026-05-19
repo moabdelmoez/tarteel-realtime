@@ -1,6 +1,6 @@
 {
   "project": "tarteel-realtime",
-  "last_updated": "2026-05-18",
+  "last_updated": "2026-05-19",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -284,14 +284,14 @@
       "area": "ios-real-asr",
       "title": "Point iPhone prototype at real ASR backend",
       "user_visible_behavior": "A developer can run the iPhone prototype against the opt-in real ASR backend and observe buffering plus locked events from live microphone audio instead of the fake recognizer.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Keep the fake dev backend as the default simulator smoke path.",
         "Do not make Whisper/Torch dependencies part of the iOS or default backend install.",
         "Document the RunPod/backend URL flow needed for the iPhone app to reach the real ASR backend.",
         "Run Swift client core tests after any iOS event-state change.",
         "Run uv run python -B -m unittest discover locally after backend/client contract changes.",
-        "Manually verify the simulator or physical iPhone can connect to the real ASR backend and surface waiting_for_audio_buffer plus locked events."
+        "Manually verify the simulator can connect to the LiveKit Cloud real ASR path and surface waiting_for_audio_buffer plus locked events."
       ],
       "evidence": [
         "Phase 1 completed without GPU: added BackendEndpointPreset for Simulator vs Custom backend selection.",
@@ -368,9 +368,17 @@
         "Added locator allowed-ayah scoping so post-lock recovery can search only the current ayah continuation and the next ordered ayah.",
         "Added tolerant post-lock progression recovery so plausible ASR fragments inside the expected ayah advance instead of becoming immediate wrong events.",
         "Added a two-step ordered miss path: the first out-of-order chunk after an ayah boundary returns uncertain guidance for the expected next ayah, and a repeated miss returns wrong with reason out_of_order.",
-        "After ordered post-lock recovery, focused locator/session tests passed, full Python deterministic suite passed with 110 tests, compile check passed, and feature_list.json parsed successfully."
+        "After ordered post-lock recovery, focused locator/session tests passed, full Python deterministic suite passed with 110 tests, compile check passed, and feature_list.json parsed successfully.",
+        "Created isolated branch codex/livekit-vad-webrtc in .worktrees/livekit-vad-webrtc for the LiveKit + VAD transport spike.",
+        "Added optional voice_activity metadata to audio chunk payloads while keeping WS /ws/recitation as the fallback path.",
+        "Added a LiveKit token endpoint and Python LiveKit worker that publishes recitation events over the reliable tarteel.recitation.event data topic.",
+        "Added guarded iOS LiveKit transport support, linked LiveKit/FluidAudio through SwiftPM, and kept graceful SDK-unavailable behavior for builds without those packages.",
+        "Added LiveKit Cloud configuration through LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, TARTEEL_LIVEKIT_ROOM, and documented placeholders in .env.example.",
+        "RunPod GPU worker was started against LiveKit Cloud with the full Tanzil file, Quran Whisper model, and torchaudio included for 48 kHz LiveKit audio resampling.",
+        "User manually verified the iOS Simulator LiveKit preset now returns recitation info instead of staying on waiting_for_audio_buffer.",
+        "Before merge, full Python deterministic suite passed with 135 tests, compile check passed, Swift client core passed with 15 tests, iOS simulator app target build succeeded, and feature_list.json parsed successfully with no in-progress feature."
       ],
-      "notes": "Phase 1 is complete, the public real-ASR WebSocket is proven with short WAV streaming, the simulator mic-tap crash is fixed, visible pass/fail signals are installed, and backend diagnostics are live. Current evidence says live simulator audio reaches backend buffering. The UI now treats located ayah text as the user-facing truth and hides raw transcript from the normal status panel. Tolerant plus progression-aware location improves clean full-Surah 102 substantially, including the repeated 102:4 phrase and clipped 102:7 phrase. The tarteel-ai model looks better at raw transcription on some windows, and the session now has ordered post-lock tolerant recovery so plausible local chunks are retried against the current or next expected ayah before hard wrong. Quiet/no-speech buffers are gated before Whisper to avoid the reproduced CUDA socket close. Next verification should deploy this ordered recovery to RunPod and replay Surah 102 through the public WSS endpoint."
+      "notes": "Passing for the current MVP real-ASR mobile path. The original public WebSocket fallback remains available, and the LiveKit Cloud path is the preferred simulator-to-RunPod WebRTC transport for manual testing. Heavy ASR dependencies remain opt-in on the worker side. Remaining product work is latency/chunking tuning, longer-surah evaluation, physical-device verification, and polished ordered-progression guidance."
     },
     {
       "id": "infra-001",
@@ -384,7 +392,7 @@
         "Use uv run --with boto3 for the optional R2 helper dependency.",
         "Add deterministic tests for helper behavior that does not require network access.",
         "Validate the RunPod bootstrap script syntax.",
-        "Keep exactly one in-progress feature in this file."
+        "Keep at most one in-progress feature in this file."
       ],
       "evidence": [
         "Added scripts/r2_artifacts.py with upload, download, and list commands using R2 S3-compatible credentials from environment variables.",

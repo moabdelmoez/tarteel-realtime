@@ -164,6 +164,13 @@
   - Latest full Python deterministic suite after ordered post-lock recovery: 110 tests passing.
   - Latest local compile check after ordered post-lock recovery passed.
   - `feature_list.json` parsed successfully after ordered post-lock recovery.
+  - LiveKit Cloud + VAD transport branch exists at `codex/livekit-vad-webrtc` in `.worktrees/livekit-vad-webrtc`.
+  - WebSocket `/ws/recitation` remains the fallback path while the iOS app now also exposes the `LiveKit` preset.
+  - LiveKit token minting supports Cloud config through `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM`.
+  - Python LiveKit worker connects to the same Cloud room, consumes microphone audio, runs the existing recitation session engine, and publishes reliable data events on `tarteel.recitation.event`.
+  - RunPod GPU worker was started against LiveKit Cloud with `torchaudio` included so 48 kHz iOS/LiveKit microphone audio can be resampled before Whisper inference.
+  - User manually verified the iOS Simulator LiveKit path now returns recitation info instead of staying on `waiting_for_audio_buffer`.
+  - Pre-merge verification on the LiveKit branch passed: full Python suite with 135 tests, compile check, Swift client core with 15 tests, iOS app target build, and `feature_list.json` parse/active-feature sanity.
 
 ## Changed This Session
 
@@ -207,6 +214,8 @@
   - Added `allowed_ayah_refs` scoping to `QuranLocator.locate(...)` and `locate_tolerant(...)`.
   - Updated `RecitationSession` to distinguish "not locked yet" from "finished this ayah but still in an ordered recitation".
   - Added post-lock ordered progression recovery and deterministic tests for unrelated global matches, expected-next-ayah guidance, repeated out-of-order misses, and tolerant local continuation recovery.
+  - Added LiveKit Cloud configuration, token endpoint support, iOS LiveKit transport, VAD metadata plumbing, Python LiveKit worker, deterministic LiveKit smoke tooling, and RunPod worker documentation.
+  - Patched the real LiveKit worker command docs to include `torchaudio` after real iOS audio exposed the 48 kHz resampling dependency.
 - Infrastructure or harness changes:
   - Updated `README.md`, `codex-progress.md`, `feature_list.json`, `clean-state-checklist.md`, and `session-handoff.md`.
   - Added `.env.example`, `docs/runpod-r2.md`, `scripts/r2_artifacts.py`, `scripts/runpod_bootstrap.sh`, `scripts/__init__.py`, `tests/test_r2_artifacts.py`, and `tests/test_runpod_bootstrap.py`.
@@ -216,13 +225,10 @@
 - Known defect:
   - None known in deterministic test path.
 - Unverified path:
-  - Real ASR model inference and real ASR WebSocket behavior are verified only for two short Surah 114 samples against `fixtures/quran/sample-tanzil.txt`.
+  - Real ASR model inference and real ASR WebSocket behavior are verified mostly on short Surah 114 and targeted Surah 102 replay paths.
   - Real Quran audio datasets and QUL Al-Husary playback are not integrated.
-  - The phone app has a working public real-ASR WSS URL available and visible success criteria installed, but manual mic verification against that URL is still pending.
-  - Real phone microphone audio has not yet been routed through the RunPod ASR backend.
-  - Simulator/phone has not yet been manually verified against the current `Custom` real-ASR URL.
-  - GPU RunPod bootstrap for real ASR dependencies has not been rerun after the CPU-only dry run.
-  - The latest audio-level diagnostics, flashing fix, tolerant locator fallback, progression-aware locator preference, clipped-fragment recovery, tarteel-ai adapter compatibility, model lifecycle fix, canonical ayah UI, and quiet/no-speech gate are deployed. Ordered post-lock recovery is locally implemented but not yet deployed to RunPod or replayed against the real model.
+  - Physical iPhone LiveKit testing is still unverified; the passing manual signal is from the iOS Simulator.
+  - Longer live-recitation sessions still need latency/chunking and ordered-progression UX tuning.
   - The current iOS UI does not yet present `expected_ordered_progression` as a polished "please recite the next ayah" guidance message.
 - Risk for the next session:
   - Installing ASR/model dependencies may be heavy and should stay optional.
@@ -232,8 +238,8 @@
 
 ## Next Best Step
 
-- Highest-priority unfinished feature: `mobile-002` point iPhone prototype at real ASR backend.
-- Why it is next: the public real-ASR WSS endpoint is live, tolerant plus progression-aware location improved clean Surah 102, repeated WebSocket sessions no longer rebuild the GPU model, the UI now displays canonical ayah text from the locator, quiet/no-speech buffers no longer hit Whisper, and ordered post-lock recovery is locally implemented. The next product behavior step is RunPod replay and simulator verification of this ordered recovery.
+- Highest-priority unfinished feature: none selected after `mobile-002` passed through the LiveKit Cloud simulator path.
+- Why it is next: the merge can now land the working LiveKit + VAD transport while preserving the WebSocket fallback. The next product behavior slice should be chosen between latency/chunking tuning, longer-surah evaluation, physical-device verification, and polished ordered-progression guidance.
 - What counts as passing:
   - Fake backend remains the default path.
   - Heavy Whisper/Torch dependencies remain opt-in.
@@ -269,8 +275,10 @@
 - Verification:
   - `uv run python -B -m unittest discover`
   - `uv run python -m compileall -q tarteel_realtime tests`
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
   - `uv run python -B -m json.tool feature_list.json`
-  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert active == ['mobile-002']"`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"`
 - Focused debug command:
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
@@ -291,6 +299,9 @@
   - `TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt TARTEEL_MINIMUM_LOCK_WORDS=2 TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran TARTEEL_WHISPER_DEVICE=cuda:0 TARTEEL_ASR_MIN_AUDIO_MS=4200 TARTEEL_ASR_FLUSH_MS=4200 TARTEEL_ASR_TAIL_MS=0 UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000`
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav`
   - `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000`
+  - LiveKit Cloud token backend: `uv run --env-file .env --with livekit-api python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000`
+  - LiveKit fake-transcript worker smoke: `TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt uv run --env-file .env --with livekit --with livekit-api python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"`
+  - LiveKit real ASR worker: `TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt UV_NO_PROGRESS=1 uv run --env-file .env --with livekit --with livekit-api --with transformers --with 'torch==2.7.1' --with 'torchaudio==2.7.1' python -m tarteel_realtime.livekit_worker`
   - Current RunPod health URL while the pod is alive: `https://l9eyt59lbjfq3e-8000.proxy.runpod.net/health`
   - Current iOS Custom backend URL while the pod is alive: `wss://l9eyt59lbjfq3e-8000.proxy.runpod.net/ws/recitation`
   - Current RunPod live log command: `tail -f /tmp/tarteel-asr.log | tr -d '\000'`
