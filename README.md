@@ -174,6 +174,46 @@ uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --ur
 
 Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
 
+## Local LiveKit + VAD Transport Spike
+
+The WebSocket transport remains the default and fallback path. The LiveKit path is a local-dev WebRTC spike that reuses the same recitation session engine and publishes backend events over a reliable LiveKit data topic:
+
+```text
+tarteel.recitation.event
+```
+
+Start a local LiveKit server in dev mode:
+
+```bash
+livekit-server --dev
+```
+
+Start the FastAPI backend for token minting and the existing WebSocket fallback:
+
+```bash
+uv run uvicorn tarteel_realtime.dev_app:app --reload
+```
+
+The token endpoint uses LiveKit dev defaults unless overridden:
+
+```text
+GET http://127.0.0.1:8000/livekit/recitation-token?identity=ios-simulator&role=client
+LIVEKIT_URL=ws://127.0.0.1:7880
+LIVEKIT_API_KEY=devkey
+LIVEKIT_API_SECRET=secret
+TARTEEL_LIVEKIT_ROOM=tarteel-local-recitation
+```
+
+Run the Python LiveKit worker with optional LiveKit dependencies. Real ASR dependencies remain opt-in just like the WebSocket ASR app:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+uv run --with livekit --with livekit-api --with transformers --with torch \
+  python -m tarteel_realtime.livekit_worker
+```
+
+The iOS prototype now includes a `LiveKit` preset that fetches the token endpoint above. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, microphone chunks can carry `voice_activity` metadata to the backend, and backend buffering flushes early on `speech_end` after minimum audio is present.
+
 ## GitHub And R2 Artifact Workflow
 
 Use GitHub for source code and Cloudflare R2 for ignored local artifacts such as the full Tanzil text and recitation WAVs. The R2 helper expects S3-compatible R2 credentials in environment variables, not a general Cloudflare API token.
