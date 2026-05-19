@@ -73,4 +73,45 @@ struct RecitationEventTests {
         #expect(json["pcm_base64"] as? String == "AAH/")
         #expect(json["sample_rate_hz"] as? Int == 16_000)
     }
+
+    @Test func encodesVoiceActivityMetadataForBackendTransport() throws {
+        let payload = AudioChunkPayload(
+            sequenceNumber: 8,
+            pcm: Data([0x00, 0x01]),
+            sampleRateHz: 16_000,
+            voiceActivity: VoiceActivityPayload(
+                probability: 0.82,
+                isSpeechActive: true,
+                event: .speechStart
+            )
+        )
+
+        let data = try JSONEncoder().encode(payload)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let voiceActivity = try #require(json["voice_activity"] as? [String: Any])
+
+        #expect(voiceActivity["probability"] as? Double == 0.82)
+        #expect(voiceActivity["is_speech_active"] as? Bool == true)
+        #expect(voiceActivity["event"] as? String == "speech_start")
+    }
+
+    @Test func decodesLiveKitRecitationTokenResponse() throws {
+        let data = Data("""
+        {
+          "url": "ws://127.0.0.1:7880",
+          "room": "tarteel-local-recitation",
+          "identity": "ios-simulator",
+          "role": "client",
+          "token": "signed-token"
+        }
+        """.utf8)
+
+        let token = try JSONDecoder().decode(LiveKitRecitationToken.self, from: data)
+
+        #expect(token.url == "ws://127.0.0.1:7880")
+        #expect(token.room == "tarteel-local-recitation")
+        #expect(token.identity == "ios-simulator")
+        #expect(token.role == "client")
+        #expect(token.token == "signed-token")
+    }
 }

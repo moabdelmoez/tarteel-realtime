@@ -12,15 +12,21 @@ final class RecitationViewModel: ObservableObject {
 
     private let socketClient: BackendWebSocketClient
     private let audioStreamer: MicrophoneAudioStreamer
+    private let liveKitClient: LiveKitRecitationClient
+    private let voiceActivityDetector: VoiceActivityDetector
     private var sequenceNumber = 0
     private var customBackendURLText = ""
 
     init(
         socketClient: BackendWebSocketClient = BackendWebSocketClient(),
-        audioStreamer: MicrophoneAudioStreamer = MicrophoneAudioStreamer()
+        audioStreamer: MicrophoneAudioStreamer = MicrophoneAudioStreamer(),
+        liveKitClient: LiveKitRecitationClient = LiveKitRecitationClient(),
+        voiceActivityDetector: VoiceActivityDetector = VoiceActivityDetector()
     ) {
         self.socketClient = socketClient
         self.audioStreamer = audioStreamer
+        self.liveKitClient = liveKitClient
+        self.voiceActivityDetector = voiceActivityDetector
     }
 
     func selectBackendPreset(_ preset: BackendEndpointPreset) {
@@ -56,6 +62,11 @@ final class RecitationViewModel: ObservableObject {
             let urlText = backendPreset.urlText(currentCustomURLText: backendURLText)
             guard let backendURL = URL(string: urlText) else {
                 throw RecitationViewModelError.invalidBackendURL
+            }
+
+            if backendPreset == .liveKitLocal {
+                try await startLiveKitRecording(tokenURL: backendURL)
+                return
             }
 
             try await socketClient.connect(url: backendURL) { [weak self] event in
@@ -94,10 +105,15 @@ final class RecitationViewModel: ObservableObject {
     }
 
     private func sendAudioChunk(pcm: Data, sampleRate: Int) async {
+        let voiceActivity = await voiceActivityDetector.process(
+            pcm: pcm,
+            sampleRate: sampleRate
+        )
         let payload = AudioChunkPayload(
             sequenceNumber: sequenceNumber,
             pcm: pcm,
-            sampleRateHz: sampleRate
+            sampleRateHz: sampleRate,
+            voiceActivity: voiceActivity
         )
         sequenceNumber += 1
 
@@ -113,6 +129,7 @@ final class RecitationViewModel: ObservableObject {
     private func stopRecording() {
         audioStreamer.stop()
         socketClient.disconnect()
+        liveKitClient.disconnect()
         isRecording = false
         connectionStatus = "Stopped"
         state = RecitationSessionState(
@@ -121,12 +138,55 @@ final class RecitationViewModel: ObservableObject {
             detail: "Tap the mic to begin again"
         )
     }
+
+    private func startLiveKitRecording(tokenURL: URL) async throws {
+        connectionStatus = "Fetching LiveKit token"
+        let token = try await fetchLiveKitToken(from: tokenURL)
+
+        try await liveKitClient.connect(token: token) { [weak self] event in
+            Task { @MainActor in
+                guard let self else { return }
+                let currentState = self.state
+                let nextState = currentState.applying(event)
+                if nextState != currentState {
+                    self.state = nextState
+                }
+                if self.connectionStatus != "Receiving events" {
+                    self.connectionStatus = "Receiving events"
+                }
+            }
+        }
+
+        isRecording = true
+        connectionStatus = "LiveKit streaming"
+        state = RecitationSessionState(
+            phase: .listening,
+            headline: "Listening",
+            detail: "Start reciting"
+        )
+    }
+
+    private func fetchLiveKitToken(from url: URL) async throws -> LiveKitRecitationToken {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode)
+        else {
+            throw RecitationViewModelError.liveKitTokenRequestFailed
+        }
+        return try JSONDecoder().decode(LiveKitRecitationToken.self, from: data)
+    }
 }
 
 enum RecitationViewModelError: LocalizedError {
     case invalidBackendURL
+    case liveKitTokenRequestFailed
 
     var errorDescription: String? {
-        "Enter a valid WebSocket URL."
+        switch self {
+        case .invalidBackendURL:
+            return "Enter a valid backend URL."
+        case .liveKitTokenRequestFailed:
+            return "Could not fetch a LiveKit recitation token."
+        }
     }
 }
