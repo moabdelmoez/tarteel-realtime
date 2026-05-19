@@ -11,9 +11,18 @@ DEFAULT_LIVEKIT_URL = "ws://127.0.0.1:7880"
 DEFAULT_LIVEKIT_API_KEY = "devkey"
 DEFAULT_LIVEKIT_API_SECRET = "secret"
 DEFAULT_LIVEKIT_ROOM = "tarteel-local-recitation"
+LIVEKIT_CREDENTIAL_ENV_NAMES = (
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET",
+)
 
 
 class LiveKitDependencyMissing(ImportError):
+    pass
+
+
+class LiveKitConfigurationError(ValueError):
     pass
 
 
@@ -43,12 +52,28 @@ class LiveKitTokenBuilder(Protocol):
 
 def livekit_settings_from_env(env: Mapping[str, str] | None = None) -> LiveKitSettings:
     values = os.environ if env is None else env
+    cloud_values = {
+        name: _non_empty_env_value(values, name)
+        for name in LIVEKIT_CREDENTIAL_ENV_NAMES
+    }
+    provided_cloud_names = {name for name, value in cloud_values.items() if value is not None}
+    if provided_cloud_names and provided_cloud_names != set(LIVEKIT_CREDENTIAL_ENV_NAMES):
+        missing = ", ".join(
+            name for name in LIVEKIT_CREDENTIAL_ENV_NAMES if name not in provided_cloud_names
+        )
+        raise LiveKitConfigurationError(
+            "LiveKit Cloud configuration requires LIVEKIT_URL, "
+            f"LIVEKIT_API_KEY, and LIVEKIT_API_SECRET together. Missing: {missing}"
+        )
+
     return LiveKitSettings(
-        url=values.get("LIVEKIT_URL", DEFAULT_LIVEKIT_URL),
-        api_key=values.get("LIVEKIT_API_KEY", DEFAULT_LIVEKIT_API_KEY),
-        api_secret=values.get("LIVEKIT_API_SECRET", DEFAULT_LIVEKIT_API_SECRET),
-        room_name=values.get("TARTEEL_LIVEKIT_ROOM", DEFAULT_LIVEKIT_ROOM),
-        token_ttl_minutes=int(values.get("TARTEEL_LIVEKIT_TOKEN_TTL_MINUTES", "60")),
+        url=cloud_values["LIVEKIT_URL"] or DEFAULT_LIVEKIT_URL,
+        api_key=cloud_values["LIVEKIT_API_KEY"] or DEFAULT_LIVEKIT_API_KEY,
+        api_secret=cloud_values["LIVEKIT_API_SECRET"] or DEFAULT_LIVEKIT_API_SECRET,
+        room_name=_non_empty_env_value(values, "TARTEEL_LIVEKIT_ROOM") or DEFAULT_LIVEKIT_ROOM,
+        token_ttl_minutes=int(
+            _non_empty_env_value(values, "TARTEEL_LIVEKIT_TOKEN_TTL_MINUTES") or "60"
+        ),
     )
 
 
@@ -131,3 +156,11 @@ def _token_request_for_role(
         can_subscribe=can_subscribe,
         can_publish_data=True,
     )
+
+
+def _non_empty_env_value(values: Mapping[str, str], name: str) -> str | None:
+    value = values.get(name)
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None

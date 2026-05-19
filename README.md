@@ -174,7 +174,7 @@ uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --ur
 
 Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
 
-## Local LiveKit + VAD Transport Spike
+## LiveKit Cloud + VAD Transport Spike
 
 The WebSocket transport remains the default and fallback path. The LiveKit path is a local-dev WebRTC spike that reuses the same recitation session engine and publishes backend events over a reliable LiveKit data topic:
 
@@ -182,33 +182,48 @@ The WebSocket transport remains the default and fallback path. The LiveKit path 
 tarteel.recitation.event
 ```
 
+For the GPU ASR smoke, prefer LiveKit Cloud instead of tunneling the media server. Copy `.env.example` to `.env` and fill the Cloud values from the LiveKit project dashboard:
+
+```text
+LIVEKIT_URL=wss://<project>.livekit.cloud
+LIVEKIT_API_KEY=<livekit-api-key>
+LIVEKIT_API_SECRET=<livekit-api-secret>
+TARTEEL_LIVEKIT_ROOM=tarteel-recitation
+```
+
+`LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` must be provided together. If none are set, the code falls back to local `livekit-server --dev` defaults.
+
 Start a local LiveKit server in dev mode:
 
 ```bash
 livekit-server --dev
 ```
 
-Start the FastAPI backend for token minting and the existing WebSocket fallback:
+For LiveKit Cloud, do not start `livekit-server --dev`; only start the token backend locally so the iOS Simulator can fetch a Cloud join token:
 
 ```bash
-uv run uvicorn tarteel_realtime.dev_app:app --reload
+uv run --env-file .env --with livekit-api \
+  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
 ```
 
-The token endpoint uses LiveKit dev defaults unless overridden:
+For local dev server testing, the same backend command works without `.env`:
+
+```bash
+uv run --with livekit-api \
+  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
+```
+
+The token endpoint returns the configured LiveKit URL and grants:
 
 ```text
 GET http://127.0.0.1:8000/livekit/recitation-token?identity=ios-simulator&role=client
-LIVEKIT_URL=ws://127.0.0.1:7880
-LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=secret
-TARTEEL_LIVEKIT_ROOM=tarteel-local-recitation
 ```
 
-Run the Python LiveKit worker with optional LiveKit dependencies. Real ASR dependencies remain opt-in just like the WebSocket ASR app:
+Run the Python LiveKit worker on the machine that has ASR access. For RunPod, set the same LiveKit Cloud env values as RunPod secrets or source them in the pod before launching the worker. Real ASR dependencies remain opt-in just like the WebSocket ASR app:
 
 ```bash
 TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-uv run --with livekit --with livekit-api --with transformers --with torch \
+uv run --env-file .env --with livekit --with livekit-api --with transformers --with torch \
   python -m tarteel_realtime.livekit_worker
 ```
 
@@ -216,18 +231,18 @@ For a transport-only smoke without pulling Whisper/Torch, pass a deterministic t
 
 ```bash
 TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt \
-uv run --with livekit --with livekit-api \
+uv run --env-file .env --with livekit --with livekit-api \
   python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"
 ```
 
 With the worker running, publish synthetic audio and wait for a recitation event:
 
 ```bash
-uv run --with livekit --with livekit-api \
+uv run --env-file .env --with livekit --with livekit-api \
   python -m tarteel_realtime.livekit_smoke
 ```
 
-The iOS prototype now includes a `LiveKit` preset that fetches the token endpoint above. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks can carry `voice_activity` metadata through the existing WebSocket fallback path, and backend buffering flushes early on `speech_end` after minimum audio is present.
+The iOS prototype includes a `LiveKit` preset that fetches the token endpoint above. In the Simulator, `http://127.0.0.1:8000/livekit/recitation-token` reaches the Mac token backend; the returned `wss://...livekit.cloud` URL is what both iOS and the RunPod worker join. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks can carry `voice_activity` metadata through the existing WebSocket fallback path, and backend buffering flushes early on `speech_end` after minimum audio is present.
 
 ## GitHub And R2 Artifact Workflow
 

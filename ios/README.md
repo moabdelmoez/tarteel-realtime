@@ -7,7 +7,7 @@ This folder contains the first native iPhone prototype for the realtime recitati
 From the repository root:
 
 ```bash
-uv run uvicorn tarteel_realtime.dev_app:app --reload
+uv run --with livekit-api python -m uvicorn tarteel_realtime.dev_app:app --reload
 ```
 
 The app connects to:
@@ -28,7 +28,16 @@ Example phone URL:
 ws://192.168.1.20:8000/ws/recitation
 ```
 
-For a later RunPod real-ASR smoke, keep the app on `Custom` and enter the WebSocket URL exposed by your tunnel or network bridge. The app now treats real-ASR buffering events as normal listening flow: it can show `Gathering audio` before lock, then stay in `Listening` while the backend buffers more audio.
+For the older WebSocket RunPod path, keep the app on `Custom` and enter the WebSocket URL exposed by your tunnel or network bridge. The app treats real-ASR buffering events as normal listening flow: it can show `Gathering audio` before lock, then stay in `Listening` while the backend buffers more audio.
+
+For the LiveKit Cloud + RunPod path, keep the app on the `LiveKit` preset. Start the token backend with the Cloud values loaded from `.env`:
+
+```bash
+uv run --env-file .env --with livekit-api \
+  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
+```
+
+The Simulator reaches that token backend at `http://127.0.0.1:8000/livekit/recitation-token`, then connects directly to the `LIVEKIT_URL` returned by the backend. The RunPod worker must use the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM` values.
 
 ## Build The App
 

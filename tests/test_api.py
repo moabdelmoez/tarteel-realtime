@@ -1,6 +1,8 @@
 import base64
+import os
 import struct
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -201,6 +203,56 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(token_requests[0].identity, "ios-simulator")
         self.assertEqual(token_requests[0].role, "client")
         self.assertTrue(token_requests[0].can_publish)
+
+    def test_livekit_recitation_token_endpoint_uses_cloud_env(self):
+        token_requests = []
+
+        class RecordingTokenBuilder:
+            def build(self, request: LiveKitTokenRequest) -> str:
+                token_requests.append(request)
+                return "signed-cloud-token"
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer([]),
+            livekit_token_builder=RecordingTokenBuilder(),
+        )
+
+        with patch.dict(os.environ, {
+            "LIVEKIT_URL": "wss://tarteel-example.livekit.cloud",
+            "LIVEKIT_API_KEY": "cloud-key",
+            "LIVEKIT_API_SECRET": "cloud-secret",
+            "TARTEEL_LIVEKIT_ROOM": "tarteel-cloud-recitation",
+        }, clear=True):
+            response = TestClient(app).get(
+                "/livekit/recitation-token",
+                params={"identity": "ios-reciter", "role": "client"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "url": "wss://tarteel-example.livekit.cloud",
+            "room": "tarteel-cloud-recitation",
+            "identity": "ios-reciter",
+            "role": "client",
+            "token": "signed-cloud-token",
+        })
+        self.assertEqual(token_requests[0].settings.api_key, "cloud-key")
+        self.assertEqual(token_requests[0].settings.api_secret, "cloud-secret")
+
+    def test_livekit_recitation_token_endpoint_reports_incomplete_cloud_env(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer([]),
+        )
+
+        with patch.dict(os.environ, {
+            "LIVEKIT_URL": "wss://tarteel-example.livekit.cloud",
+        }, clear=True):
+            response = TestClient(app).get("/livekit/recitation-token")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("LIVEKIT_API_KEY", response.json()["detail"])
 
 
 if __name__ == "__main__":

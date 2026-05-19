@@ -26,6 +26,38 @@ class LiveKitTokenTests(unittest.TestCase):
         self.assertEqual(settings.api_secret, "secret")
         self.assertEqual(settings.room_name, "tarteel-local-recitation")
 
+    def test_blank_cloud_settings_keep_livekit_dev_defaults(self):
+        settings = livekit_settings_from_env({
+            "LIVEKIT_URL": "",
+            "LIVEKIT_API_KEY": "",
+            "LIVEKIT_API_SECRET": "",
+        })
+
+        self.assertEqual(settings.url, "ws://127.0.0.1:7880")
+        self.assertEqual(settings.api_key, "devkey")
+        self.assertEqual(settings.api_secret, "secret")
+
+    def test_cloud_settings_use_livekit_cloud_credentials_from_env(self):
+        settings = livekit_settings_from_env({
+            "LIVEKIT_URL": "wss://tarteel-example.livekit.cloud",
+            "LIVEKIT_API_KEY": "cloud-key",
+            "LIVEKIT_API_SECRET": "cloud-secret",
+            "TARTEEL_LIVEKIT_ROOM": "tarteel-cloud-recitation",
+            "TARTEEL_LIVEKIT_TOKEN_TTL_MINUTES": "15",
+        })
+
+        self.assertEqual(settings.url, "wss://tarteel-example.livekit.cloud")
+        self.assertEqual(settings.api_key, "cloud-key")
+        self.assertEqual(settings.api_secret, "cloud-secret")
+        self.assertEqual(settings.room_name, "tarteel-cloud-recitation")
+        self.assertEqual(settings.token_ttl_minutes, 15)
+
+    def test_cloud_settings_require_url_key_and_secret_together(self):
+        with self.assertRaisesRegex(ValueError, "LIVEKIT_API_KEY, LIVEKIT_API_SECRET"):
+            livekit_settings_from_env({
+                "LIVEKIT_URL": "wss://tarteel-example.livekit.cloud",
+            })
+
     def test_token_response_builds_client_grants(self):
         builder = RecordingTokenBuilder()
 

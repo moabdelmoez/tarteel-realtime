@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from tarteel_realtime.livekit_tokens import (
+    LiveKitConfigurationError,
     LiveKitDependencyMissing,
     LiveKitSettings,
     LiveKitTokenBuilder,
@@ -51,6 +52,8 @@ def create_app(
                 role=role,
                 token_builder=livekit_token_builder,
             )
+        except LiveKitConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except LiveKitDependencyMissing as exc:
