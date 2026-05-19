@@ -20,12 +20,12 @@ final class RecitationViewModel: ObservableObject {
     init(
         socketClient: BackendWebSocketClient = BackendWebSocketClient(),
         audioStreamer: MicrophoneAudioStreamer = MicrophoneAudioStreamer(),
-        liveKitClient: LiveKitRecitationClient = LiveKitRecitationClient(),
+        liveKitClient: LiveKitRecitationClient? = nil,
         voiceActivityDetector: VoiceActivityDetector = VoiceActivityDetector()
     ) {
         self.socketClient = socketClient
         self.audioStreamer = audioStreamer
-        self.liveKitClient = liveKitClient
+        self.liveKitClient = liveKitClient ?? LiveKitRecitationClient()
         self.voiceActivityDetector = voiceActivityDetector
     }
 

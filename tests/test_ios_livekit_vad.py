@@ -17,6 +17,13 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
         self.assertIn("encryptionType: EncryptionType", source)
         self.assertIn("tarteel.recitation.event", source)
 
+    def test_livekit_client_mutable_callback_is_main_actor_isolated(self) -> None:
+        source = (APP_ROOT / "LiveKitRecitationClient.swift").read_text(encoding="utf-8")
+
+        self.assertIn("@MainActor\nfinal class LiveKitRecitationClient: NSObject", source)
+        self.assertIn("nonisolated func room(", source)
+        self.assertIn("Task { @MainActor [weak self] in", source)
+
     def test_voice_activity_detector_is_guarded_until_fluidaudio_is_linked(self) -> None:
         source = (APP_ROOT / "VoiceActivityDetector.swift").read_text(encoding="utf-8")
 

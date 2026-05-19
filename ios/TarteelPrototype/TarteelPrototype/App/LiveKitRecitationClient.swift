@@ -6,6 +6,7 @@ import LiveKit
 
 private let liveKitRecitationEventTopic = "tarteel.recitation.event"
 
+@MainActor
 final class LiveKitRecitationClient: NSObject {
     private let decoder = JSONDecoder()
     private var onEvent: (@Sendable (RecitationEvent) -> Void)?
@@ -61,14 +62,16 @@ enum LiveKitRecitationClientError: LocalizedError {
 
 #if canImport(LiveKit)
 extension LiveKitRecitationClient: RoomDelegate {
-    func room(
+    nonisolated func room(
         _ room: Room,
         participant: RemoteParticipant?,
         didReceiveData data: Data,
         forTopic topic: String,
         encryptionType: EncryptionType
     ) {
-        receive(data: data, topic: topic)
+        Task { @MainActor [weak self] in
+            self?.receive(data: data, topic: topic)
+        }
     }
 }
 #endif
