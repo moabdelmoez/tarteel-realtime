@@ -34,10 +34,10 @@ For the LiveKit Cloud + RunPod path, keep the app on the `LiveKit` preset. Start
 
 ```bash
 uv run --env-file .env --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
+  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
 ```
 
-The Simulator reaches that token backend at `http://127.0.0.1:8000/livekit/recitation-token`, then connects directly to the `LIVEKIT_URL` returned by the backend. The RunPod worker must use the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM` values.
+The Simulator reaches that token backend at `http://127.0.0.1:8000/livekit/recitation-token`, then connects directly to the `LIVEKIT_URL` returned by the backend. Binding to `0.0.0.0` also works for LAN or RunPod-proxied HTTP access. The RunPod worker must use the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM` values.
 
 ## Build The App
 

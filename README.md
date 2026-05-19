@@ -203,14 +203,14 @@ For LiveKit Cloud, do not start `livekit-server --dev`; only start the token bac
 
 ```bash
 uv run --env-file .env --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
+  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
 ```
 
 For local dev server testing, the same backend command works without `.env`:
 
 ```bash
 uv run --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 127.0.0.1 --port 8000
+  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
 ```
 
 The token endpoint returns the configured LiveKit URL and grants:
