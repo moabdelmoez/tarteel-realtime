@@ -14,6 +14,7 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
         self.assertIn("#if canImport(LiveKit)", source)
         self.assertIn("setMicrophone(enabled: true)", source)
         self.assertIn("didReceiveData data", source)
+        self.assertIn("encryptionType: EncryptionType", source)
         self.assertIn("tarteel.recitation.event", source)
 
     def test_voice_activity_detector_is_guarded_until_fluidaudio_is_linked(self) -> None:
@@ -30,6 +31,14 @@ class IOSLiveKitVADSourceTests(unittest.TestCase):
 
         self.assertIn("LiveKitRecitationClient.swift", project)
         self.assertIn("VoiceActivityDetector.swift", project)
+
+    def test_livekit_and_fluidaudio_packages_are_linked_to_app_target(self) -> None:
+        project = PROJECT_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("https://github.com/livekit/client-sdk-swift.git", project)
+        self.assertIn("https://github.com/FluidInference/FluidAudio.git", project)
+        self.assertIn("LiveKit in Frameworks", project)
+        self.assertIn("FluidAudio in Frameworks", project)
 
 
 if __name__ == "__main__":

@@ -65,7 +65,8 @@ extension LiveKitRecitationClient: RoomDelegate {
         _ room: Room,
         participant: RemoteParticipant?,
         didReceiveData data: Data,
-        forTopic topic: String
+        forTopic topic: String,
+        encryptionType: EncryptionType
     ) {
         receive(data: data, topic: topic)
     }

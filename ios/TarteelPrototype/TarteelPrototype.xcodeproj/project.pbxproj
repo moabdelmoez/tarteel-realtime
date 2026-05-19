@@ -20,6 +20,8 @@
 		100000000000000000000011 /* LiveKitRecitationToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000112 /* LiveKitRecitationToken.swift */; };
 		100000000000000000000012 /* LiveKitRecitationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000113 /* LiveKitRecitationClient.swift */; };
 		100000000000000000000013 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
+		100000000000000000000014 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000202 /* LiveKit */; };
+		100000000000000000000015 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +47,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				100000000000000000000014 /* LiveKit in Frameworks */,
+				100000000000000000000015 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +116,10 @@
 			dependencies = (
 			);
 			name = TarteelPrototype;
+			packageProductDependencies = (
+				100000000000000000000202 /* LiveKit */,
+				100000000000000000000203 /* FluidAudio */,
+			);
 			productName = TarteelPrototype;
 			productReference = 100000000000000000000020 /* TarteelPrototype.app */;
 			productType = "com.apple.product-type.application";
@@ -140,6 +148,10 @@
 				Base,
 			);
 			mainGroup = 100000000000000000000040;
+			packageReferences = (
+				100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
+				100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+			);
 			productRefGroup = 100000000000000000000043 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -362,6 +374,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.13.0;
+			};
+		};
+		100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.12.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		100000000000000000000202 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
+		};
+		100000000000000000000203 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 100000000000000000000090 /* Project object */;
 }
