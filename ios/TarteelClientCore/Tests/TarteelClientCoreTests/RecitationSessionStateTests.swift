@@ -146,6 +146,46 @@ struct RecitationSessionStateTests {
         #expect(state.detail == "مَلِكِ النَّاسِ")
     }
 
+    @Test func postLockBufferingEventDoesNotHideLastMeaningfulEvent() {
+        let lockedEvent = RecitationEvent(
+            type: .locked,
+            transcript: "رَسُولٌ مِنَ اللَّهِ",
+            confidence: 0.8,
+            chunkSequence: 10,
+            reason: "tolerant_progression",
+            candidateRefs: [],
+            ayahText: "رسول من الله يتلو صحفا مطهرة",
+            ayahRef: "98:2",
+            startRef: "98:2:1",
+            nextExpectedRef: "98:2:4",
+            consumedWords: 3,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+        let bufferingEvent = RecitationEvent(
+            type: .uncertain,
+            transcript: "",
+            confidence: 0.0,
+            chunkSequence: 11,
+            reason: "waiting_for_audio_buffer",
+            candidateRefs: [],
+            ayahText: nil,
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: "98:2:4",
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let lockedState = RecitationSessionState().applying(lockedEvent)
+        let nextState = lockedState.applying(bufferingEvent)
+
+        #expect(nextState == lockedState)
+    }
+
     @Test func postLockLocatingEventShowsCanonicalAyahInsteadOfRawTranscript() {
         let event = RecitationEvent(
             type: .locating,

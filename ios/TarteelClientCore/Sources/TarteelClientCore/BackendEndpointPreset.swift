@@ -29,10 +29,21 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
         }
     }
 
+    public var allowsURLTextEditing: Bool {
+        switch self {
+        case .simulator:
+            return false
+        case .liveKitLocal, .custom:
+            return true
+        }
+    }
+
     public func urlText(currentCustomURLText: String) -> String {
         switch self {
-        case .simulator, .liveKitLocal:
+        case .simulator:
             return defaultURLText
+        case .liveKitLocal:
+            return currentCustomURLText.isEmpty ? defaultURLText : currentCustomURLText
         case .custom:
             return currentCustomURLText
         }

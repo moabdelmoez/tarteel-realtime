@@ -16,6 +16,13 @@ final class BackendWebSocketClient {
         self.task = task
         task.resume()
 
+        do {
+            try await waitUntilConnected(task)
+        } catch {
+            disconnect()
+            throw error
+        }
+
         receiveTask = Task { [weak self] in
             await self?.receiveLoop(onEvent: onEvent)
         }
@@ -46,6 +53,18 @@ final class BackendWebSocketClient {
                 }
             } catch {
                 return
+            }
+        }
+    }
+
+    private func waitUntilConnected(_ task: URLSessionWebSocketTask) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            task.sendPing { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume()
             }
         }
     }

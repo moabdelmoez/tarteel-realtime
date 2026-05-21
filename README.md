@@ -117,12 +117,15 @@ The default backend remains `tarteel_realtime.dev_app:app` with `FakeRecognizer`
 The real ASR backend buffers short mic chunks in memory before calling Whisper. Default buffering is:
 
 ```text
-TARTEEL_ASR_MIN_AUDIO_MS=2000
-TARTEEL_ASR_FLUSH_MS=1500
-TARTEEL_ASR_TAIL_MS=500
+TARTEEL_ASR_MIN_AUDIO_MS=4200
+TARTEEL_ASR_FLUSH_MS=4200
+TARTEEL_ASR_TAIL_MS=0
+TARTEEL_ASR_MIN_SPEECH_RMS=400
+TARTEEL_ASR_MIN_FRAME_RMS=150
+TARTEEL_WHISPER_BACKEND=transformers
 ```
 
-Before each model call it waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of PCM16 audio, then keeps `TARTEEL_ASR_TAIL_MS` as overlap so words near a boundary are not cut off.
+Each incoming WebSocket or LiveKit audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. The default is the stable larger-window profile; smaller experimental windows can still be supplied through environment variables.
 
 Local or CPU smoke command:
 
@@ -139,6 +142,17 @@ TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
 TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
 TARTEEL_WHISPER_DEVICE=cuda:0 \
 UV_NO_PROGRESS=1 uv run --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
+```
+
+For CTranslate2/faster-whisper model IDs such as `OdyAsh/faster-whisper-base-ar-quran`, select the optional faster-whisper backend instead of the default Transformers backend:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+TARTEEL_WHISPER_BACKEND=faster-whisper \
+TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran \
+TARTEEL_WHISPER_DEVICE=cuda:0 \
+TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
+UV_NO_PROGRESS=1 uv run --with faster-whisper uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
 ```
 
 Send one mono PCM16 WAV or raw PCM16LE file through the WebSocket:
@@ -163,6 +177,8 @@ TARTEEL_WHISPER_DEVICE=cuda:0 \
 TARTEEL_ASR_MIN_AUDIO_MS=4200 \
 TARTEEL_ASR_FLUSH_MS=4200 \
 TARTEEL_ASR_TAIL_MS=0 \
+TARTEEL_ASR_MIN_SPEECH_RMS=400 \
+TARTEEL_ASR_MIN_FRAME_RMS=150 \
 UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000
 ```
 
@@ -181,6 +197,14 @@ The WebSocket transport remains the default and fallback path. The LiveKit path 
 ```text
 tarteel.recitation.event
 ```
+
+The iOS LiveKit preset now uses the same app-owned microphone pipeline as the WebSocket fallback: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD, and the LiveKit adapter feeds speech chunks into the SDK with manual rendering mode through `AudioManager.shared.mixer.capture(appAudio:)`. The client also publishes VAD metadata on:
+
+```text
+tarteel.voice_activity
+```
+
+The LiveKit worker stores the latest VAD packet by participant identity and attaches it to decoded audio frames before the rolling ASR buffer sees them. If VAD is unavailable, LiveKit audio still publishes normally; when VAD is available, inactive non-event chunks are suppressed client-side while `speech_start` and `speech_end` chunks are still sent.
 
 For the GPU ASR smoke, prefer LiveKit Cloud instead of tunneling the media server. Copy `.env.example` to `.env` and fill the Cloud values from the LiveKit project dashboard:
 
@@ -227,7 +251,19 @@ uv run --env-file .env --with livekit --with livekit-api --with transformers --w
   python -m tarteel_realtime.livekit_worker
 ```
 
-LiveKit publishes microphone audio at 48 kHz. Include `torchaudio` for the real-ASR worker so the Transformers pipeline can resample that stream before Whisper inference. The fixture WAV smoke path uses mono 16 kHz audio, so it can pass even when this dependency is missing.
+LiveKit/WebRTC may deliver worker frames at a transport-selected sample rate. Include `torchaudio` for the Transformers real-ASR worker so the pipeline can resample that stream before Whisper inference. The faster-whisper backend resamples PCM to 16 kHz before calling CTranslate2, so it uses `--with faster-whisper` instead:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+TARTEEL_WHISPER_BACKEND=faster-whisper \
+TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran \
+TARTEEL_WHISPER_DEVICE=cuda:0 \
+TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
+uv run --env-file .env --with livekit --with livekit-api --with faster-whisper \
+  python -m tarteel_realtime.livekit_worker
+```
+
+The fixture WAV smoke path uses mono 16 kHz audio, so it can pass even when transport resampling dependencies are missing. The same speech-energy gate runs after the LiveKit/WebSocket transport frame is decoded and before the rolling ASR buffer is built.
 
 For a transport-only smoke without pulling Whisper/Torch, pass a deterministic transcript script:
 
@@ -244,7 +280,9 @@ uv run --env-file .env --with livekit --with livekit-api \
   python -m tarteel_realtime.livekit_smoke
 ```
 
-The iOS prototype includes a `LiveKit` preset that fetches the token endpoint above. In the Simulator, `http://127.0.0.1:8000/livekit/recitation-token` reaches the Mac token backend; the returned `wss://...livekit.cloud` URL is what both iOS and the RunPod worker join. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks can carry `voice_activity` metadata through the existing WebSocket fallback path, and backend buffering flushes early on `speech_end` after minimum audio is present.
+The iOS prototype includes a `LiveKit` preset that fetches the token endpoint above. In the Simulator, `http://127.0.0.1:8000/livekit/recitation-token` reaches the Mac token backend; the returned `wss://...livekit.cloud` URL is what both iOS and the RunPod worker join. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks carry `voice_activity` metadata through the WebSocket fallback path and the LiveKit `tarteel.voice_activity` topic. Backend buffering can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present.
+
+The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.
 
 ## GitHub And R2 Artifact Workflow
 

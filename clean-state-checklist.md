@@ -8,6 +8,7 @@
 - [ ] Tanzil data workflow tests still run when touched: `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest`.
 - [ ] iOS client core tests still run when touched: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
 - [ ] iOS app still builds when touched: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- [ ] iOS WebSocket client changes still wait for the socket handshake before streaming and keep Simulator backend connection errors actionable: `uv run python -B -m unittest tests.test_ios_websocket_client -v`.
 - [ ] The compile check still runs: `uv run python -m compileall -q tarteel_realtime tests`.
 - [ ] The sample evaluator still runs: `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`.
 - [ ] The sample Tanzil manifest smoke still runs: `uv run python -m tarteel_realtime.quran_data --tanzil-path fixtures/quran/sample-tanzil.txt --source-name sample-fixture`.
@@ -16,8 +17,20 @@
 - [ ] RunPod bootstrap syntax still validates when touched: `bash -n scripts/runpod_bootstrap.sh`.
 - [ ] LiveKit token/API/worker tests still run when touched: `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api`.
 - [ ] LiveKit transport smoke still has a documented fake-transcript path: `uv run --env-file .env --with livekit --with livekit-api python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"`.
+- [ ] iOS client-side VAD source checks still run when touched: `uv run python -B -m unittest tests.test_ios_livekit_vad -v`.
+- [ ] The iOS app bundle still includes `silero-vad-unified-256ms-v6.0.0.mlmodelc` after app build.
+- [ ] LiveKit custom-capture changes still keep the app-owned flow: `MicrophoneAudioStreamer` -> `VoiceActivityDetector` -> `LiveKitRecitationClient.publishAudio(...)` -> `AudioManager.shared.mixer.capture(appAudio:)`, with VAD metadata on `tarteel.voice_activity`.
+- [ ] LiveKit worker changes preserve one fresh recitation session and rolling ASR buffer per subscribed audio track while keeping the heavy Whisper model lazily shared.
+- [ ] LiveKit worker VAD metadata changes still decode `data_received` `DataPacket` objects and attach latest metadata by participant identity before buffering audio.
+- [ ] LiveKit token/event changes preserve `session_id` end-to-end, unique default client identities, iOS filtering to the active session, and per-track task cancellation.
 - [ ] Real LiveKit ASR worker docs include `torchaudio` for 48 kHz microphone resampling.
+- [ ] Faster-whisper backend changes keep `faster-whisper` optional, use `TARTEEL_WHISPER_BACKEND=faster-whisper`, and include a RunPod smoke before iOS claims.
+- [ ] Real LiveKit ASR worker docs include `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`, and the speech gate still runs after transport frame decode but before rolling ASR chunking.
+- [ ] iOS state reducer changes still keep the last meaningful post-lock event visible when `waiting_for_audio_buffer` packets arrive.
 - [ ] When `data/tanzil/quran-simple-clean.txt` exists, its manifest still validates: `uv run python -m tarteel_realtime.quran_data --check-manifest`.
+- [ ] Root harness docs exist and reflect the current workflow: `AGENTS.md`, `evaluator-rubric.md`, and `quality-document.md`.
+- [ ] `quality-document.md` is updated when quality posture, known risks, or release confidence changes.
+- [ ] `evaluator-rubric.md` still requires concrete verification evidence for local, RunPod, LiveKit, and iOS claims.
 - [ ] Current progress is recorded in `codex-progress.md`.
 - [ ] Feature state in `feature_list.json` reflects what is actually passing versus unverified.
 - [ ] At most one feature in `feature_list.json` has status `in_progress`.

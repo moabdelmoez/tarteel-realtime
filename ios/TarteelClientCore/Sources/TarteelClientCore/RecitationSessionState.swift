@@ -64,6 +64,9 @@ public struct RecitationSessionState: Equatable, Sendable {
 
     public func applying(_ event: RecitationEvent) -> RecitationSessionState {
         if event.isWaitingForAudioBuffer {
+            if currentAyahRef != nil, lastEventType != nil {
+                return self
+            }
             if lastEventReason == "waiting_for_audio_buffer" {
                 return self
             }

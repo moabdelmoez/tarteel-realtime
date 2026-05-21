@@ -52,6 +52,8 @@ final class RecitationViewModel: ObservableObject {
     private func startRecording() async {
         errorMessage = nil
         connectionStatus = "Connecting"
+        sequenceNumber = 0
+        await voiceActivityDetector.reset()
         state = RecitationSessionState(
             phase: .connecting,
             headline: "Connecting",
@@ -99,7 +101,7 @@ final class RecitationViewModel: ObservableObject {
             )
         } catch {
             stopRecording()
-            errorMessage = error.localizedDescription
+            errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"
         }
     }
@@ -121,7 +123,29 @@ final class RecitationViewModel: ObservableObject {
             try await socketClient.send(payload)
         } catch {
             stopRecording()
-            errorMessage = error.localizedDescription
+            errorMessage = errorMessage(for: error, backendPreset: backendPreset)
+            connectionStatus = "Error"
+        }
+    }
+
+    private func publishLiveKitAudioChunk(pcm: Data, sampleRate: Int) async {
+        let voiceActivity = await voiceActivityDetector.process(
+            pcm: pcm,
+            sampleRate: sampleRate
+        )
+        let currentSequenceNumber = sequenceNumber
+        sequenceNumber += 1
+
+        do {
+            try await liveKitClient.publishAudio(
+                pcm: pcm,
+                sampleRate: sampleRate,
+                sequenceNumber: currentSequenceNumber,
+                voiceActivity: voiceActivity
+            )
+        } catch {
+            stopRecording()
+            errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"
         }
     }
@@ -130,6 +154,7 @@ final class RecitationViewModel: ObservableObject {
         audioStreamer.stop()
         socketClient.disconnect()
         liveKitClient.disconnect()
+        Task { await voiceActivityDetector.reset() }
         isRecording = false
         connectionStatus = "Stopped"
         state = RecitationSessionState(
@@ -157,6 +182,12 @@ final class RecitationViewModel: ObservableObject {
             }
         }
 
+        try await audioStreamer.start { [weak self] pcm, sampleRate in
+            Task { @MainActor in
+                await self?.publishLiveKitAudioChunk(pcm: pcm, sampleRate: sampleRate)
+            }
+        }
+
         isRecording = true
         connectionStatus = "LiveKit streaming"
         state = RecitationSessionState(
@@ -174,6 +205,21 @@ final class RecitationViewModel: ObservableObject {
             throw RecitationViewModelError.liveKitTokenRequestFailed
         }
         return try JSONDecoder().decode(LiveKitRecitationToken.self, from: data)
+    }
+
+    private func errorMessage(for error: Error, backendPreset: BackendEndpointPreset) -> String {
+        let message = error.localizedDescription
+        guard backendPreset == .simulator else {
+            return message
+        }
+
+        if message.contains("Socket is not connected")
+            || message.localizedCaseInsensitiveContains("connection refused")
+            || message.localizedCaseInsensitiveContains("could not connect") {
+            return "Start the local Simulator backend on 127.0.0.1:8000, then try again."
+        }
+
+        return message
     }
 }
 

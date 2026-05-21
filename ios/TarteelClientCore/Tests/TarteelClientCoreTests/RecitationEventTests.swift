@@ -101,6 +101,7 @@ struct RecitationEventTests {
           "url": "ws://127.0.0.1:7880",
           "room": "tarteel-local-recitation",
           "identity": "ios-simulator",
+          "session_id": "ios-simulator",
           "role": "client",
           "token": "signed-token"
         }
@@ -111,7 +112,34 @@ struct RecitationEventTests {
         #expect(token.url == "ws://127.0.0.1:7880")
         #expect(token.room == "tarteel-local-recitation")
         #expect(token.identity == "ios-simulator")
+        #expect(token.sessionId == "ios-simulator")
         #expect(token.role == "client")
         #expect(token.token == "signed-token")
+    }
+
+    @Test func decodesLiveKitSessionIdOnRecitationEvent() throws {
+        let data = Data("""
+        {
+          "type": "locked",
+          "transcript": "مَلِكِ",
+          "confidence": 0.9,
+          "chunk_sequence": 0,
+          "reason": "unique_match",
+          "session_id": "ios-reciter-123",
+          "candidate_refs": [],
+          "ayah_text": "مَلِكِ النَّاسِ",
+          "ayah_ref": "114:2",
+          "start_ref": "114:2:1",
+          "next_expected_ref": "114:2:2",
+          "consumed_words": 1,
+          "expected_ref": null,
+          "expected_word": null,
+          "recognized_word": null
+        }
+        """.utf8)
+
+        let event = try JSONDecoder().decode(RecitationEvent.self, from: data)
+
+        #expect(event.sessionId == "ios-reciter-123")
     }
 }

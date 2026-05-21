@@ -39,6 +39,8 @@ uv run --env-file .env --with livekit-api \
 
 The Simulator reaches that token backend at `http://127.0.0.1:8000/livekit/recitation-token`, then connects directly to the `LIVEKIT_URL` returned by the backend. Binding to `0.0.0.0` also works for LAN or RunPod-proxied HTTP access. The RunPod worker must use the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM` values.
 
+The LiveKit preset uses the app-owned microphone pipeline, not LiveKit's direct microphone capture path. Audio flows through `MicrophoneAudioStreamer` as mono PCM16, then through the bundled Silero VAD, then into LiveKit manual rendering with `AudioManager.shared.mixer.capture(appAudio:)`. The app publishes VAD metadata on `tarteel.voice_activity`; inactive non-event chunks are suppressed client-side, while `speech_start` and `speech_end` chunks are still sent.
+
 ## Build The App
 
 ```bash
@@ -62,4 +64,4 @@ The core package covers backend endpoint presets, backend event decoding, audio 
 
 ## Current Scope
 
-The prototype streams microphone PCM chunks to a selected backend and renders session events. It does not run Whisper on-device and does not store raw audio.
+The prototype streams microphone PCM chunks to a selected backend and renders session events. Client-side Silero VAD runs on-device for transport metadata/gating, but Whisper still runs only on the backend. The app does not store raw audio.

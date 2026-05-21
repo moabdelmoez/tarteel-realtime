@@ -1,44 +1,52 @@
 import Foundation
 
 #if canImport(FluidAudio)
+import CoreML
 import FluidAudio
 #endif
 
 actor VoiceActivityDetector {
     #if canImport(FluidAudio)
     private var manager: VadManager?
-    private var pendingSamples: [Float] = []
-    private var isSpeechActive = false
+    private var streamState: VadStreamState?
     #endif
 
     func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload? {
         #if canImport(FluidAudio)
         guard sampleRate == VadManager.sampleRate else { return nil }
-        pendingSamples.append(contentsOf: pcm.float32Samples)
-        guard pendingSamples.count >= VadManager.chunkSize else { return nil }
-
-        let chunk = Array(pendingSamples.prefix(VadManager.chunkSize))
-        pendingSamples.removeFirst(VadManager.chunkSize)
+        let chunk = pcm.float32Samples
+        guard !chunk.isEmpty else { return nil }
 
         do {
             let manager = try await manager()
-            guard let result = try await manager.process(chunk).last else {
-                return nil
+            let state: VadStreamState
+            if let existingState = streamState {
+                state = existingState
+            } else {
+                state = await manager.makeStreamState()
             }
+            let result = try await manager.processStreamingChunk(
+                chunk,
+                state: state,
+                config: .default,
+                returnSeconds: true,
+                timeResolution: 2
+            )
+            streamState = result.state
 
             let event: VoiceActivityEvent?
-            if result.isVoiceActive && !isSpeechActive {
+            switch result.event?.kind {
+            case .speechStart:
                 event = .speechStart
-            } else if !result.isVoiceActive && isSpeechActive {
+            case .speechEnd:
                 event = .speechEnd
-            } else {
+            case nil:
                 event = nil
             }
-            isSpeechActive = result.isVoiceActive
 
             return VoiceActivityPayload(
                 probability: Double(result.probability),
-                isSpeechActive: result.isVoiceActive,
+                isSpeechActive: result.state.triggered,
                 event: event
             )
         } catch {
@@ -49,13 +57,36 @@ actor VoiceActivityDetector {
         #endif
     }
 
+    func reset() async {
+        #if canImport(FluidAudio)
+        if let manager {
+            streamState = await manager.makeStreamState()
+        } else {
+            streamState = nil
+        }
+        #endif
+    }
+
     #if canImport(FluidAudio)
     private func manager() async throws -> VadManager {
         if let manager {
             return manager
         }
-        let manager = try await VadManager()
+
+        let manager: VadManager
+        if let modelURL = Bundle.main.url(
+            forResource: "silero-vad-unified-256ms-v6.0.0",
+            withExtension: "mlmodelc"
+        ) {
+            let configuration = MLModelConfiguration()
+            configuration.computeUnits = .cpuOnly
+            let vadModel = try MLModel(contentsOf: modelURL, configuration: configuration)
+            manager = VadManager(config: .default, vadModel: vadModel)
+        } else {
+            manager = try await VadManager()
+        }
         self.manager = manager
+        self.streamState = await manager.makeStreamState()
         return manager
     }
     #endif

@@ -35,7 +35,7 @@ struct ContentView: View {
                         .padding(12)
                         .background(.white.opacity(0.10))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .disabled(viewModel.isRecording || viewModel.backendPreset != .custom)
+                        .disabled(viewModel.isRecording || !viewModel.backendPreset.allowsURLTextEditing)
                         .padding(.bottom, 12)
 
                     DebugStatusPanel(

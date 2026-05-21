@@ -22,6 +22,7 @@
 		100000000000000000000013 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
 		100000000000000000000014 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000202 /* LiveKit */; };
 		100000000000000000000015 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
+		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		100000000000000000000105 /* MicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
 		100000000000000000000113 /* LiveKitRecitationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/LiveKitRecitationClient.swift; sourceTree = "<group>"; };
 		100000000000000000000114 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/VoiceActivityDetector.swift; sourceTree = "<group>"; };
+		100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mlmodelc; path = Models/silero-vad-unified-256ms-v6.0.0.mlmodelc; sourceTree = "<group>"; };
 		100000000000000000000109 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		100000000000000000000106 /* AudioChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/AudioChunkPayload.swift; sourceTree = "<group>"; };
 		100000000000000000000107 /* RecitationEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationEvent.swift; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 				100000000000000000000105 /* MicrophoneAudioStreamer.swift */,
 				100000000000000000000113 /* LiveKitRecitationClient.swift */,
 				100000000000000000000114 /* VoiceActivityDetector.swift */,
+				100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */,
 				100000000000000000000109 /* Info.plist */,
 			);
 			path = TarteelPrototype;
@@ -166,6 +169,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
