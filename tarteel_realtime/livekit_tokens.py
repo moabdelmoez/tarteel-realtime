@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
@@ -80,23 +81,23 @@ def livekit_settings_from_env(env: Mapping[str, str] | None = None) -> LiveKitSe
 def livekit_token_response(
     *,
     settings: LiveKitSettings,
-    identity: str,
+    identity: str | None,
     role: str,
     token_builder: LiveKitTokenBuilder | None = None,
 ) -> dict[str, str]:
-    if not identity.strip():
-        raise ValueError("identity must not be empty")
+    token_identity = _token_identity(identity)
 
     request = _token_request_for_role(
         settings=settings,
-        identity=identity,
+        identity=token_identity,
         role=role,
     )
     builder = token_builder or LiveKitApiTokenBuilder()
     return {
         "url": settings.url,
         "room": settings.room_name,
-        "identity": identity,
+        "identity": token_identity,
+        "session_id": token_identity,
         "role": role,
         "token": builder.build(request),
     }
@@ -164,3 +165,9 @@ def _non_empty_env_value(values: Mapping[str, str], name: str) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _token_identity(identity: str | None) -> str:
+    if identity is None or not identity.strip():
+        return f"ios-reciter-{uuid.uuid4().hex}"
+    return identity.strip()

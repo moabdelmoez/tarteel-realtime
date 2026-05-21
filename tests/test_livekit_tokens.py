@@ -71,11 +71,36 @@ class LiveKitTokenTests(unittest.TestCase):
         self.assertEqual(response["url"], "ws://127.0.0.1:7880")
         self.assertEqual(response["room"], "tarteel-local-recitation")
         self.assertEqual(response["identity"], "ios-simulator")
+        self.assertEqual(response["session_id"], "ios-simulator")
         self.assertEqual(response["role"], "client")
         self.assertEqual(response["token"], "token:ios-simulator:client")
         self.assertTrue(builder.requests[0].can_publish)
         self.assertTrue(builder.requests[0].can_subscribe)
         self.assertTrue(builder.requests[0].can_publish_data)
+
+    def test_token_response_generates_unique_ios_identity_when_not_provided(self):
+        builder = RecordingTokenBuilder()
+
+        first = livekit_token_response(
+            settings=LiveKitSettings(),
+            identity=None,
+            role="client",
+            token_builder=builder,
+        )
+        second = livekit_token_response(
+            settings=LiveKitSettings(),
+            identity=None,
+            role="client",
+            token_builder=builder,
+        )
+
+        self.assertRegex(first["identity"], r"^ios-reciter-[0-9a-f-]+$")
+        self.assertRegex(second["identity"], r"^ios-reciter-[0-9a-f-]+$")
+        self.assertNotEqual(first["identity"], second["identity"])
+        self.assertEqual(first["session_id"], first["identity"])
+        self.assertEqual(second["session_id"], second["identity"])
+        self.assertEqual(builder.requests[0].identity, first["identity"])
+        self.assertEqual(builder.requests[1].identity, second["identity"])
 
     def test_token_response_builds_worker_grants_without_media_publish(self):
         builder = RecordingTokenBuilder()

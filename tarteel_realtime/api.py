@@ -42,7 +42,7 @@ def create_app(
 
     @app.get("/livekit/recitation-token")
     def livekit_recitation_token(
-        identity: str = "ios-reciter",
+        identity: str | None = None,
         role: str = "client",
     ) -> dict[str, str]:
         try:
@@ -126,13 +126,19 @@ def _voice_activity_from_payload(payload: Any) -> VoiceActivity | None:
     )
 
 
-def session_event_to_payload(event: SessionEvent, *, corpus: QuranCorpus) -> dict[str, Any]:
+def session_event_to_payload(
+    event: SessionEvent,
+    *,
+    corpus: QuranCorpus,
+    session_id: str | None = None,
+) -> dict[str, Any]:
     return {
         "type": event.type.value,
         "transcript": event.transcript,
         "confidence": event.confidence,
         "chunk_sequence": event.chunk_sequence,
         "reason": event.reason,
+        "session_id": session_id,
         "candidate_refs": [_ref_to_string(ref) for ref in event.candidate_refs],
         "ayah_text": _ayah_text_for_event(event, corpus=corpus),
         "ayah_ref": _ref_to_string(event.ayah_ref),

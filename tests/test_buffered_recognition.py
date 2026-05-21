@@ -28,6 +28,15 @@ class RecordingRecognizer:
 
 
 class BufferedRecognizerTests(unittest.TestCase):
+    def test_default_config_uses_stable_asr_window(self):
+        config = BufferedRecognitionConfig()
+
+        self.assertEqual(config.minimum_audio_ms, 4_200)
+        self.assertEqual(config.flush_interval_ms, 4_200)
+        self.assertEqual(config.tail_audio_ms, 0)
+        self.assertEqual(config.minimum_speech_rms, 400)
+        self.assertEqual(config.minimum_frame_rms, 150)
+
     def test_waits_until_minimum_audio_before_calling_inner_recognizer(self):
         inner = RecordingRecognizer()
         recognizer = BufferedRecognizer(
@@ -112,12 +121,77 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(loud.transcript, "flush-1")
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [loud_pcm])
 
-    def test_flushes_on_vad_speech_end_after_minimum_audio_before_interval(self):
+    def test_gates_low_rms_transport_frames_before_buffering(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_speech_rms=400,
+            ),
+        )
+
+        low_pcm = struct.pack("<h", 124)
+        loud_pcm = struct.pack("<hh", 1000, -1000)
+        quiet = recognizer.recognize(chunk(0, low_pcm))
+        loud = recognizer.recognize(chunk(1, loud_pcm))
+
+        self.assertEqual(quiet.transcript, "")
+        self.assertEqual(loud.transcript, "flush-1")
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [loud_pcm])
+
+    def test_keeps_soft_speech_frames_but_drops_low_noise_before_buffering(self):
         inner = RecordingRecognizer()
         recognizer = BufferedRecognizer(
             inner,
             config=BufferedRecognitionConfig(
                 minimum_audio_ms=4,
+                flush_interval_ms=4,
+                tail_audio_ms=0,
+                minimum_speech_rms=400,
+                minimum_frame_rms=150,
+            ),
+        )
+
+        low_noise_pcm = struct.pack("<h", 124)
+        loud_pcm = struct.pack("<hh", 1000, -1000)
+        soft_pcm = struct.pack("<hh", 220, -220)
+
+        recognizer.recognize(chunk(0, low_noise_pcm))
+        recognizer.recognize(chunk(1, loud_pcm))
+        result = recognizer.recognize(chunk(2, soft_pcm))
+
+        self.assertEqual(result.transcript, "flush-1")
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [loud_pcm + soft_pcm])
+
+    def test_logs_pre_buffer_vad_gate_without_building_quiet_window(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_speech_rms=400,
+            ),
+        )
+
+        with self.assertLogs("tarteel_realtime.buffered_recognition", level="INFO") as logs:
+            recognizer.recognize(chunk(0, struct.pack("<h", 124)))
+
+        joined_logs = "\n".join(logs.output)
+        self.assertIn("incoming_rms=124", joined_logs)
+        self.assertIn("buffered_ms=0", joined_logs)
+        self.assertIn("action=wait_vad", joined_logs)
+
+    def test_flushes_on_vad_speech_end_after_minimum_audio_before_interval(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=3,
                 flush_interval_ms=10,
                 tail_audio_ms=0,
             ),
@@ -140,7 +214,7 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(result.transcript, "flush-1")
         self.assertEqual(result.chunk_sequence, 2)
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
-            struct.pack("<hhhh", 1000, -1000, 0, 1000),
+            struct.pack("<hhh", 1000, -1000, 1000),
         ])
 
     def test_logs_buffer_diagnostics_without_audio_content(self):

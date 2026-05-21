@@ -62,6 +62,27 @@ class ApiTests(unittest.TestCase):
         self.assertIsNone(progress["next_expected_ref"])
         self.assertEqual(progress["chunk_sequence"], 1)
 
+    def test_websocket_returns_tanzil_ayah_text_for_noisy_span_lock(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines([
+                "102|3|كلا سوف تعلمون",
+                "102|4|ثم كلا سوف تعلمون",
+                "102|5|كلا لو تعلمون علم اليقين",
+            ]),
+            recognizer_factory=lambda: FakeRecognizer(["فكلا سوف تعلمون كلا لو"]),
+            minimum_lock_words=2,
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws/recitation") as websocket:
+            websocket.send_json(chunk_payload(0))
+            locked = websocket.receive_json()
+
+        self.assertEqual(locked["type"], "locked")
+        self.assertEqual(locked["reason"], "tolerant_span_match")
+        self.assertEqual(locked["ayah_ref"], "102:3")
+        self.assertEqual(locked["ayah_text"], "كلا سوف تعلمون")
+
     def test_websocket_returns_wrong_event(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
@@ -197,6 +218,7 @@ class ApiTests(unittest.TestCase):
             "url": "ws://127.0.0.1:7880",
             "room": "tarteel-local-recitation",
             "identity": "ios-simulator",
+            "session_id": "ios-simulator",
             "role": "client",
             "token": "signed-dev-token",
         })
@@ -234,11 +256,40 @@ class ApiTests(unittest.TestCase):
             "url": "wss://tarteel-example.livekit.cloud",
             "room": "tarteel-cloud-recitation",
             "identity": "ios-reciter",
+            "session_id": "ios-reciter",
             "role": "client",
             "token": "signed-cloud-token",
         })
         self.assertEqual(token_requests[0].settings.api_key, "cloud-key")
         self.assertEqual(token_requests[0].settings.api_secret, "cloud-secret")
+
+    def test_livekit_recitation_token_endpoint_generates_session_identity_by_default(self):
+        token_requests = []
+
+        class RecordingTokenBuilder:
+            def build(self, request: LiveKitTokenRequest) -> str:
+                token_requests.append(request)
+                return "signed-token"
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer([]),
+            livekit_token_builder=RecordingTokenBuilder(),
+        )
+
+        first = TestClient(app).get("/livekit/recitation-token")
+        second = TestClient(app).get("/livekit/recitation-token")
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_payload = first.json()
+        second_payload = second.json()
+        self.assertRegex(first_payload["identity"], r"^ios-reciter-[0-9a-f-]+$")
+        self.assertNotEqual(first_payload["identity"], second_payload["identity"])
+        self.assertEqual(first_payload["session_id"], first_payload["identity"])
+        self.assertEqual(second_payload["session_id"], second_payload["identity"])
+        self.assertEqual(token_requests[0].identity, first_payload["identity"])
+        self.assertEqual(token_requests[1].identity, second_payload["identity"])
 
     def test_livekit_recitation_token_endpoint_reports_incomplete_cloud_env(self):
         app = create_app(

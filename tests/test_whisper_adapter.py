@@ -3,10 +3,12 @@ from unittest.mock import patch
 
 from tarteel_realtime.recognition import AudioChunk
 from tarteel_realtime.whisper_adapter import (
+    FasterWhisperBackend,
     TransformersWhisperBackend,
     WhisperBackendMissing,
     WhisperConfig,
     WhisperRecognizer,
+    _resample_to_whisper_rate,
 )
 
 
@@ -152,6 +154,98 @@ class WhisperRecognizerTests(unittest.TestCase):
         self.assertEqual(pipeline.calls[0][1], {"language": "ar"})
         self.assertEqual(pipeline.calls[1][1], {})
         self.assertIn("raw", pipeline.calls[1][0])
+
+    def test_faster_whisper_backend_loads_ctranslate_model_and_transcribes_array(self):
+        class FakeNumpy:
+            float32 = "float32"
+
+            def array(self, values, *, dtype):
+                return {
+                    "kind": "ndarray",
+                    "values": values,
+                    "dtype": dtype,
+                }
+
+        class Segment:
+            def __init__(self, text):
+                self.text = text
+
+        class Info:
+            language_probability = 0.97
+
+        class FakeModel:
+            def __init__(self):
+                self.calls = []
+
+            def transcribe(self, audio, **kwargs):
+                self.calls.append((audio, kwargs))
+                return [Segment(" مَلِكِ "), Segment("النَّاسِ")], Info()
+
+        model = FakeModel()
+        factory_calls = []
+
+        def model_factory(model_id, **kwargs):
+            factory_calls.append((model_id, kwargs))
+            return model
+
+        with patch.dict("sys.modules", {"numpy": FakeNumpy()}):
+            backend = FasterWhisperBackend(
+                model_factory=model_factory,
+                config=WhisperConfig(
+                    model_id="OdyAsh/faster-whisper-base-ar-quran",
+                    device="cuda:0",
+                    compute_type="float16",
+                ),
+            )
+            payload = backend.transcribe(
+                samples=[0.0, 0.5],
+                sample_rate_hz=16_000,
+                language="ar",
+            )
+
+        self.assertEqual(factory_calls, [(
+            "OdyAsh/faster-whisper-base-ar-quran",
+            {
+                "device": "cuda",
+                "device_index": 0,
+                "compute_type": "float16",
+            },
+        )])
+        audio, kwargs = model.calls[0]
+        self.assertEqual(audio, {
+            "kind": "ndarray",
+            "values": [0.0, 0.5],
+            "dtype": "float32",
+        })
+        self.assertEqual(kwargs["language"], "ar")
+        self.assertEqual(kwargs["beam_size"], 5)
+        self.assertFalse(kwargs["vad_filter"])
+        self.assertFalse(kwargs["condition_on_previous_text"])
+        self.assertEqual(payload, {
+            "text": "مَلِكِ النَّاسِ",
+            "confidence": 0.97,
+            "is_final": True,
+        })
+
+    def test_resamples_livekit_rate_audio_to_whisper_rate(self):
+        samples = [0.0, 1.0, 0.0, -1.0, 0.0, 1.0]
+
+        resampled = _resample_to_whisper_rate(samples, sample_rate_hz=48_000)
+
+        self.assertEqual(len(resampled), 2)
+        self.assertEqual(resampled[0], 0.0)
+        self.assertEqual(resampled[1], -1.0)
+
+    def test_from_config_selects_faster_whisper_backend(self):
+        config = WhisperConfig(
+            model_id="OdyAsh/faster-whisper-base-ar-quran",
+            backend="faster-whisper",
+        )
+
+        with patch.object(WhisperRecognizer, "from_faster_whisper") as faster_builder:
+            WhisperRecognizer.from_config(config)
+
+        faster_builder.assert_called_once_with(config)
 
 
 if __name__ == "__main__":

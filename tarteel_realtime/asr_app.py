@@ -23,11 +23,15 @@ class AsrAppSettings:
     tanzil_path: Path = DEFAULT_TANZIL_PATH
     minimum_lock_words: int = 3
     model_id: str = DEFAULT_QURAN_WHISPER_MODEL_ID
+    whisper_backend: str = "transformers"
     language: str = "ar"
     device: str | int | None = None
-    minimum_audio_ms: int = 2_000
-    flush_interval_ms: int = 1_500
-    tail_audio_ms: int = 500
+    faster_whisper_compute_type: str | None = None
+    minimum_audio_ms: int = 4_200
+    flush_interval_ms: int = 4_200
+    tail_audio_ms: int = 0
+    minimum_speech_rms: int = 400
+    minimum_frame_rms: int = 150
     log_transcripts: bool = False
 
 
@@ -51,11 +55,15 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrAppSettings:
         tanzil_path=Path(values.get("TARTEEL_TANZIL_PATH", str(DEFAULT_TANZIL_PATH))),
         minimum_lock_words=int(values.get("TARTEEL_MINIMUM_LOCK_WORDS", "3")),
         model_id=values.get("TARTEEL_WHISPER_MODEL_ID", DEFAULT_QURAN_WHISPER_MODEL_ID),
+        whisper_backend=_whisper_backend(values.get("TARTEEL_WHISPER_BACKEND", "transformers")),
         language=values.get("TARTEEL_WHISPER_LANGUAGE", "ar"),
         device=_optional_env(values, "TARTEEL_WHISPER_DEVICE"),
-        minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", "2000")),
-        flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", "1500")),
-        tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", "500")),
+        faster_whisper_compute_type=_optional_env(values, "TARTEEL_FASTER_WHISPER_COMPUTE_TYPE"),
+        minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", "4200")),
+        flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", "4200")),
+        tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", "0")),
+        minimum_speech_rms=int(values.get("TARTEEL_ASR_MIN_SPEECH_RMS", "400")),
+        minimum_frame_rms=int(values.get("TARTEEL_ASR_MIN_FRAME_RMS", "150")),
         log_transcripts=_env_bool(values, "TARTEEL_LOG_TRANSCRIPTS"),
     )
 
@@ -65,11 +73,13 @@ def create_lazy_whisper_recognizer_factory(
     *,
     recognizer_builder: Callable[[WhisperConfig], SpeechRecognizer] | None = None,
 ) -> Callable[[], SpeechRecognizer]:
-    builder = recognizer_builder or WhisperRecognizer.from_transformers
+    builder = recognizer_builder or WhisperRecognizer.from_config
     config = WhisperConfig(
         model_id=settings.model_id,
         language=settings.language,
         device=settings.device,
+        backend=settings.whisper_backend,
+        compute_type=settings.faster_whisper_compute_type,
     )
 
     shared_recognizer = LazyRecognizer(lambda: builder(config))
@@ -93,6 +103,8 @@ def create_buffered_whisper_recognizer_factory(
         minimum_audio_ms=settings.minimum_audio_ms,
         flush_interval_ms=settings.flush_interval_ms,
         tail_audio_ms=settings.tail_audio_ms,
+        minimum_speech_rms=settings.minimum_speech_rms,
+        minimum_frame_rms=settings.minimum_frame_rms,
     )
 
     def create_recognizer() -> SpeechRecognizer:
@@ -125,6 +137,10 @@ def _optional_env(values: Mapping[str, str], key: str) -> str | None:
     if not value:
         return None
     return value
+
+
+def _whisper_backend(value: str) -> str:
+    return value.strip().lower().replace("_", "-")
 
 
 def _env_bool(values: Mapping[str, str], key: str) -> bool:

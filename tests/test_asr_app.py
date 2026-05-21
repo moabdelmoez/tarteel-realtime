@@ -37,11 +37,15 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.tanzil_path, Path("data/tanzil/quran-simple-clean.txt"))
         self.assertEqual(settings.minimum_lock_words, 3)
         self.assertEqual(settings.model_id, DEFAULT_QURAN_WHISPER_MODEL_ID)
+        self.assertEqual(settings.whisper_backend, "transformers")
         self.assertEqual(settings.language, "ar")
         self.assertIsNone(settings.device)
-        self.assertEqual(settings.minimum_audio_ms, 2_000)
-        self.assertEqual(settings.flush_interval_ms, 1_500)
-        self.assertEqual(settings.tail_audio_ms, 500)
+        self.assertIsNone(settings.faster_whisper_compute_type)
+        self.assertEqual(settings.minimum_audio_ms, 4_200)
+        self.assertEqual(settings.flush_interval_ms, 4_200)
+        self.assertEqual(settings.tail_audio_ms, 0)
+        self.assertEqual(settings.minimum_speech_rms, 400)
+        self.assertEqual(settings.minimum_frame_rms, 150)
         self.assertFalse(settings.log_transcripts)
 
     def test_settings_from_env_accepts_backend_overrides(self):
@@ -49,22 +53,30 @@ class AsrAppTests(unittest.TestCase):
             "TARTEEL_TANZIL_PATH": "/tmp/quran.txt",
             "TARTEEL_MINIMUM_LOCK_WORDS": "2",
             "TARTEEL_WHISPER_MODEL_ID": "local/quran-whisper",
+            "TARTEEL_WHISPER_BACKEND": "faster-whisper",
             "TARTEEL_WHISPER_LANGUAGE": "fa",
             "TARTEEL_WHISPER_DEVICE": "cuda:0",
+            "TARTEEL_FASTER_WHISPER_COMPUTE_TYPE": "float16",
             "TARTEEL_ASR_MIN_AUDIO_MS": "1000",
             "TARTEEL_ASR_FLUSH_MS": "750",
             "TARTEEL_ASR_TAIL_MS": "250",
+            "TARTEEL_ASR_MIN_SPEECH_RMS": "550",
+            "TARTEEL_ASR_MIN_FRAME_RMS": "125",
             "TARTEEL_LOG_TRANSCRIPTS": "1",
         })
 
         self.assertEqual(settings.tanzil_path, Path("/tmp/quran.txt"))
         self.assertEqual(settings.minimum_lock_words, 2)
         self.assertEqual(settings.model_id, "local/quran-whisper")
+        self.assertEqual(settings.whisper_backend, "faster-whisper")
         self.assertEqual(settings.language, "fa")
         self.assertEqual(settings.device, "cuda:0")
+        self.assertEqual(settings.faster_whisper_compute_type, "float16")
         self.assertEqual(settings.minimum_audio_ms, 1_000)
         self.assertEqual(settings.flush_interval_ms, 750)
         self.assertEqual(settings.tail_audio_ms, 250)
+        self.assertEqual(settings.minimum_speech_rms, 550)
+        self.assertEqual(settings.minimum_frame_rms, 125)
         self.assertTrue(settings.log_transcripts)
 
     def test_lazy_whisper_factory_defers_model_creation_until_first_audio_chunk(self):
@@ -129,6 +141,7 @@ class AsrAppTests(unittest.TestCase):
                 minimum_audio_ms=2,
                 flush_interval_ms=2,
                 tail_audio_ms=0,
+                minimum_speech_rms=0,
             ),
             recognizer_builder=StubRecognizer,
         )
@@ -167,6 +180,7 @@ class AsrAppTests(unittest.TestCase):
                 minimum_audio_ms=2,
                 flush_interval_ms=2,
                 tail_audio_ms=0,
+                minimum_speech_rms=0,
             ),
             recognizer_builder=StubRecognizer,
         )

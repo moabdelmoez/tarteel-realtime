@@ -17,6 +17,14 @@ SAMPLE_TANZIL_LINES = [
     "102|6|لترون الجحيم",
     "102|7|ثم لترونها عين اليقين",
     "102|8|ثم لتسألن يومئذ عن النعيم",
+    "98|1|بسم الله الرحمن الرحيم لم يكن الذين كفروا من أهل الكتاب والمشركين منفكين حتى تأتيهم البينة",
+    "98|2|رسول من الله يتلو صحفا مطهرة",
+    "98|3|فيها كتب قيمة",
+    "98|4|وما تفرق الذين أوتوا الكتاب إلا من بعد ما جاءتهم البينة",
+    "98|5|وما أمروا إلا ليعبدوا الله مخلصين له الدين حنفاء ويقيموا الصلاة ويؤتوا الزكاة وذلك دين القيمة",
+    "98|6|إن الذين كفروا من أهل الكتاب والمشركين في نار جهنم خالدين فيها أولئك هم شر البرية",
+    "98|7|إن الذين آمنوا وعملوا الصالحات أولئك هم خير البرية",
+    "98|8|جزاؤهم عند ربهم جنات عدن تجري من تحتها الأنهار خالدين فيها أبدا رضي الله عنهم ورضوا عنه ذلك لمن خشي ربه",
 ]
 
 
@@ -175,6 +183,36 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=2))
         self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
 
+    def test_noisy_live_asr_window_locks_on_valid_surah_102_span(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer(["فكلا سوف تعلمون كلا لو"]),
+            minimum_lock_words=2,
+        )
+
+        event = session.handle_chunk(chunk())
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "tolerant_span_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=3))
+        self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=3, word_index=1))
+
+    def test_tolerant_initial_lock_does_not_forgive_clear_substitution(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer(["مَلِكِ النَّارِ"]),
+            minimum_lock_words=2,
+        )
+
+        event = session.handle_chunk(chunk())
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "tolerant_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
+        self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=2, word_index=1))
+        self.assertEqual(event.next_expected_ref, QuranRef(surah=114, ayah=2, word_index=2))
+        self.assertEqual(event.consumed_words, 1)
+
     def test_progression_prefers_next_ayah_for_repeated_asr_phrase(self):
         session = RecitationSession(
             corpus=self.corpus,
@@ -260,6 +298,26 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(recovered_event.reason, "tolerant_progression")
         self.assertEqual(recovered_event.next_expected_ref, None)
         self.assertEqual(recovered_event.consumed_words, 3)
+
+    def test_surah_98_progression_recovers_clipped_expected_next_ayah(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer([
+                "رَسُولٌ مِنَ اللَّهِ يَتْلُو صُحُفًا مُطَهَّرَةً",
+                "فِيهَا كِتَابٌ قَيِّمَةٌ",
+            ]),
+            minimum_lock_words=2,
+        )
+
+        first_event = session.handle_chunk(chunk(0))
+        second_event = session.handle_chunk(chunk(1))
+
+        self.assertEqual(first_event.type, SessionEventType.LOCKED)
+        self.assertEqual(first_event.ayah_ref, QuranRef(surah=98, ayah=2))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "tolerant_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=98, ayah=3))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=98, ayah=3, word_index=1))
 
 
 if __name__ == "__main__":

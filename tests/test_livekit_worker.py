@@ -1,8 +1,10 @@
+import asyncio
 import json
 import struct
 import unittest
 from types import SimpleNamespace
 
+import tarteel_realtime.livekit_worker as livekit_worker_module
 from tarteel_realtime.livekit_smoke import (
     recitation_payload_from_data_packet,
     sine_pcm16_frame,
@@ -10,14 +12,19 @@ from tarteel_realtime.livekit_smoke import (
 from tarteel_realtime.livekit_worker import (
     FAKE_TRANSCRIPTS_ENV,
     RECITATION_EVENT_TOPIC,
+    VOICE_ACTIVITY_TOPIC,
     LiveKitRecitationWorker,
+    LiveKitTrackTaskRegistry,
     RepeatingFakeRecognizer,
     audio_frame_to_chunk,
+    create_livekit_recitation_worker,
     fake_transcripts_from_env,
+    voice_activity_from_livekit_data,
     _recognizer_factory_for_livekit_worker,
 )
 from tarteel_realtime.quran import QuranCorpus
 from tarteel_realtime.recognition import FakeRecognizer
+from tarteel_realtime.recognition import AudioChunk
 
 
 SAMPLE_TANZIL_LINES = [
@@ -46,6 +53,20 @@ class RecordingPublisher:
         })
 
 
+class FailingRecognizer:
+    def recognize(self, chunk: AudioChunk):
+        raise RuntimeError("CUDA error: device-side assert triggered")
+
+
+class RecordingRecognizer:
+    def __init__(self):
+        self.chunks = []
+
+    def recognize(self, chunk: AudioChunk):
+        self.chunks.append(chunk)
+        return FakeRecognizer(["مَلِكِ"]).recognize(chunk)
+
+
 class LiveKitWorkerTests(unittest.IsolatedAsyncioTestCase):
     def test_audio_frame_to_chunk_preserves_mono_pcm16(self):
         frame = FakeAudioFrame([100, -100], sample_rate=16_000)
@@ -63,6 +84,68 @@ class LiveKitWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(chunk.pcm, struct.pack("<hh", 200, -200))
 
+    def test_audio_frame_to_chunk_accepts_client_vad_metadata(self):
+        voice_activity = voice_activity_from_livekit_data(json.dumps({
+            "sequence_number": 7,
+            "voice_activity": {
+                "probability": 0.82,
+                "is_speech_active": True,
+                "event": "speech_start",
+            },
+        }).encode("utf-8"))
+
+        chunk = audio_frame_to_chunk(
+            FakeAudioFrame([1000, -1000], sample_rate=16_000),
+            sequence_number=7,
+            voice_activity=voice_activity,
+        )
+
+        self.assertIsNotNone(chunk.voice_activity)
+        self.assertEqual(chunk.voice_activity.probability, 0.82)
+        self.assertTrue(chunk.voice_activity.is_speech_active)
+        self.assertEqual(chunk.voice_activity.event, "speech_start")
+
+    def test_ignores_non_vad_livekit_data_topics(self):
+        self.assertIsNone(voice_activity_from_livekit_data(
+            json.dumps({"voice_activity": {"is_speech_active": True}}).encode("utf-8"),
+            topic="other.topic",
+        ))
+
+    def test_decodes_livekit_vad_data_topic(self):
+        voice_activity = voice_activity_from_livekit_data(
+            json.dumps({
+                "voice_activity": {
+                    "probability": 0.34,
+                    "is_speech_active": False,
+                    "event": "speech_end",
+                },
+            }).encode("utf-8"),
+            topic=VOICE_ACTIVITY_TOPIC,
+        )
+
+        self.assertIsNotNone(voice_activity)
+        self.assertEqual(voice_activity.probability, 0.34)
+        self.assertFalse(voice_activity.is_speech_active)
+        self.assertEqual(voice_activity.event, "speech_end")
+
+    def test_decodes_livekit_vad_data_packet_object(self):
+        packet = SimpleNamespace(
+            topic=VOICE_ACTIVITY_TOPIC,
+            data=json.dumps({
+                "voice_activity": {
+                    "probability": 0.77,
+                    "is_speech_active": True,
+                },
+            }).encode("utf-8"),
+            participant=SimpleNamespace(identity="ios-reciter-123"),
+        )
+
+        voice_activity = voice_activity_from_livekit_data(packet)
+
+        self.assertIsNotNone(voice_activity)
+        self.assertEqual(voice_activity.probability, 0.77)
+        self.assertTrue(voice_activity.is_speech_active)
+
     async def test_worker_publishes_recitation_event_for_audio_frame(self):
         publisher = RecordingPublisher()
         worker = LiveKitRecitationWorker(
@@ -70,6 +153,7 @@ class LiveKitWorkerTests(unittest.IsolatedAsyncioTestCase):
             recognizer=FakeRecognizer(["مَلِكِ"]),
             publisher=publisher,
             minimum_lock_words=1,
+            session_id="ios-reciter-123",
         )
 
         await worker.handle_audio_frame(FakeAudioFrame([1000, -1000], sample_rate=16_000))
@@ -82,6 +166,105 @@ class LiveKitWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event["type"], "locked")
         self.assertEqual(event["ayah_ref"], "114:2")
         self.assertEqual(event["chunk_sequence"], 0)
+        self.assertEqual(event["session_id"], "ios-reciter-123")
+
+    async def test_worker_attaches_latest_client_vad_to_audio_frame(self):
+        publisher = RecordingPublisher()
+        recognizer = RecordingRecognizer()
+        voice_activity = voice_activity_from_livekit_data(json.dumps({
+            "voice_activity": {
+                "probability": 0.91,
+                "is_speech_active": True,
+                "event": "speech_start",
+            },
+        }).encode("utf-8"))
+        worker = LiveKitRecitationWorker(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer=recognizer,
+            publisher=publisher,
+            minimum_lock_words=1,
+            voice_activity_provider=lambda: voice_activity,
+        )
+
+        await worker.handle_audio_frame(FakeAudioFrame([1000, -1000], sample_rate=16_000))
+
+        self.assertEqual(len(recognizer.chunks), 1)
+        self.assertIsNotNone(recognizer.chunks[0].voice_activity)
+        self.assertEqual(recognizer.chunks[0].voice_activity.probability, 0.91)
+        self.assertTrue(recognizer.chunks[0].voice_activity.is_speech_active)
+
+    async def test_worker_publishes_uncertain_event_when_asr_raises(self):
+        publisher = RecordingPublisher()
+        worker = LiveKitRecitationWorker(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer=FailingRecognizer(),
+            publisher=publisher,
+            minimum_lock_words=1,
+        )
+
+        await worker.handle_audio_frame(FakeAudioFrame([1000, -1000], sample_rate=16_000))
+
+        self.assertEqual(len(publisher.published), 1)
+        event = json.loads(publisher.published[0]["payload"].decode("utf-8"))
+        self.assertEqual(event["type"], "uncertain")
+        self.assertEqual(event["reason"], "asr_error")
+        self.assertEqual(event["chunk_sequence"], 0)
+
+    async def test_worker_factory_creates_fresh_session_for_each_audio_track(self):
+        recognizer_calls = 0
+
+        def recognizer_factory():
+            nonlocal recognizer_calls
+            recognizer_calls += 1
+            return FakeRecognizer(["مَلِكِ"])
+
+        publisher = RecordingPublisher()
+        corpus = QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES)
+        first_worker = create_livekit_recitation_worker(
+            corpus=corpus,
+            recognizer_factory=recognizer_factory,
+            publisher=publisher,
+            minimum_lock_words=1,
+            session_id="first-client",
+        )
+        second_worker = create_livekit_recitation_worker(
+            corpus=corpus,
+            recognizer_factory=recognizer_factory,
+            publisher=publisher,
+            minimum_lock_words=1,
+            session_id="second-client",
+        )
+
+        await first_worker.handle_audio_frame(FakeAudioFrame([1000], sample_rate=16_000))
+        await second_worker.handle_audio_frame(FakeAudioFrame([1000], sample_rate=16_000))
+
+        events = [
+            json.loads(published["payload"].decode("utf-8"))
+            for published in publisher.published
+        ]
+        self.assertEqual(recognizer_calls, 2)
+        self.assertEqual([event["type"] for event in events], ["locked", "locked"])
+        self.assertEqual([event["chunk_sequence"] for event in events], [0, 0])
+        self.assertEqual([event["session_id"] for event in events], ["first-client", "second-client"])
+
+    async def test_track_task_registry_cancels_task_when_track_unsubscribes(self):
+        registry = LiveKitTrackTaskRegistry()
+        started = asyncio.Event()
+
+        async def long_running_task():
+            started.set()
+            await asyncio.Event().wait()
+
+        task = asyncio.create_task(long_running_task())
+        registry.add("track-1", task)
+        await started.wait()
+
+        self.assertEqual(registry.active_count, 1)
+        registry.cancel("track-1")
+        await asyncio.sleep(0)
+
+        self.assertTrue(task.cancelled())
+        self.assertEqual(registry.active_count, 0)
 
     def test_fake_transcripts_from_env_uses_pipe_delimited_script(self):
         transcripts = fake_transcripts_from_env({

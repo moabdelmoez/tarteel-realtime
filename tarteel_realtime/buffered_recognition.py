@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class BufferedRecognitionConfig:
-    minimum_audio_ms: int = 2_000
-    flush_interval_ms: int = 1_500
-    tail_audio_ms: int = 500
-    minimum_speech_rms: int = 100
+    minimum_audio_ms: int = 4_200
+    flush_interval_ms: int = 4_200
+    tail_audio_ms: int = 0
+    minimum_speech_rms: int = 400
+    minimum_frame_rms: int = 150
 
     def __post_init__(self) -> None:
         if self.minimum_audio_ms <= 0:
@@ -27,6 +28,8 @@ class BufferedRecognitionConfig:
             raise ValueError("tail_audio_ms must be non-negative")
         if self.minimum_speech_rms < 0:
             raise ValueError("minimum_speech_rms must be non-negative")
+        if self.minimum_frame_rms < 0:
+            raise ValueError("minimum_frame_rms must be non-negative")
 
 
 class BufferedRecognizer:
@@ -43,17 +46,31 @@ class BufferedRecognizer:
         self._bytes_since_flush = 0
 
     def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+        incoming_rms = _pcm_rms(chunk.pcm) if chunk.pcm else 0
         if chunk.pcm:
-            self._append(chunk)
+            if self._should_buffer_chunk(chunk, incoming_rms=incoming_rms):
+                self._append(chunk)
+            else:
+                logger.warning(
+                    "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
+                    "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait_vad",
+                    chunk.sequence_number,
+                    len(chunk.pcm),
+                    chunk.sample_rate_hz,
+                    self._buffered_ms,
+                    self._unflushed_ms,
+                    incoming_rms,
+                )
         if not self._ready_to_flush(chunk):
             logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
-                "buffered_ms=%s unflushed_ms=%s action=wait",
+                "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait",
                 chunk.sequence_number,
                 len(chunk.pcm),
                 chunk.sample_rate_hz,
                 self._buffered_ms,
                 self._unflushed_ms,
+                incoming_rms,
             )
             return _waiting_result(chunk.sequence_number)
 
@@ -92,6 +109,16 @@ class BufferedRecognizer:
         self._keep_tail()
         self._bytes_since_flush = 0
         return result
+
+    def _should_buffer_chunk(self, chunk: AudioChunk, *, incoming_rms: int) -> bool:
+        if self._config.minimum_frame_rms == 0:
+            return True
+        if chunk.voice_activity is not None:
+            if chunk.voice_activity.is_speech_active is True:
+                return True
+            if chunk.voice_activity.event == "speech_start":
+                return True
+        return incoming_rms >= self._config.minimum_frame_rms
 
     def _append(self, chunk: AudioChunk) -> None:
         if self._sample_rate_hz is None:

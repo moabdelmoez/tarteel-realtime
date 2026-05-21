@@ -131,7 +131,9 @@ class RecitationSession:
             )
             self._has_locked = True
             self._ordered_miss_count = 0
-            self._next_expected_ref = alignment_decision.next_expected_ref
+            self._next_expected_ref = self._next_ref_after_initial_lock(
+                alignment_decision
+            )
             self._progress_anchor_ref = self._progress_ref_after(
                 locked_candidate.ayah_ref,
                 self._next_expected_ref,
@@ -205,9 +207,14 @@ class RecitationSession:
             ordered_decision.status == LocatorStatus.LOCKED
             and ordered_decision.best is not None
         ):
+            event_type = (
+                SessionEventType.LOCKED
+                if _ayah_ref(ordered_decision.best.ayah_ref) != _ayah_ref(current_expected_ref)
+                else SessionEventType.PROGRESS
+            )
             return self._event_from_ordered_candidate(
                 candidate=ordered_decision.best,
-                event_type=SessionEventType.PROGRESS,
+                event_type=event_type,
                 transcript=recognition.transcript,
                 confidence=recognition.confidence,
                 chunk_sequence=recognition.chunk_sequence,
@@ -236,6 +243,16 @@ class RecitationSession:
         ayah_ref = QuranRef(surah=current_ref.surah, ayah=current_ref.ayah)
         return self._next_ayah_refs.get(ayah_ref)
 
+    def _next_ref_after_initial_lock(self, alignment_decision) -> QuranRef | None:
+        if alignment_decision.next_expected_ref is not None:
+            return alignment_decision.next_expected_ref
+        if (
+            alignment_decision.status == AlignmentStatus.WRONG
+            and alignment_decision.expected_ref is not None
+        ):
+            return alignment_decision.expected_ref
+        return None
+
     def _locate_ordered_progression(self, transcript: str) -> LocatorDecision:
         allowed_ayah_refs = self._ordered_allowed_ayah_refs()
         if not allowed_ayah_refs:
@@ -248,6 +265,7 @@ class RecitationSession:
             transcript,
             preferred_ref=self._progress_anchor_ref,
             allowed_ayah_refs=allowed_ayah_refs,
+            minimum_start_ref=self._next_expected_ref,
         )
         if locator_decision.status != LocatorStatus.NOT_FOUND:
             return locator_decision
@@ -256,6 +274,7 @@ class RecitationSession:
             transcript,
             preferred_ref=self._progress_anchor_ref,
             allowed_ayah_refs=allowed_ayah_refs,
+            minimum_start_ref=self._next_expected_ref,
         )
 
     def _ordered_allowed_ayah_refs(self) -> tuple[QuranRef, ...]:
