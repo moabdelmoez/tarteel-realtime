@@ -171,6 +171,10 @@ class RecitationTransitionPolicy:
                     current_decision,
                     contextual_decision.best,
                 )
+                and (
+                    not _is_tolerant_decision(contextual_decision)
+                    or self._initial_context_supports_candidate(contextual_decision.best)
+                )
             ):
                 return _InitialLocationResult(
                     recognition=contextual_recognition,
