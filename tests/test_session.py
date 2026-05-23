@@ -190,7 +190,7 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=2))
         self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
 
-    def test_noisy_live_asr_window_requires_confirmation_then_locks_valid_span(self):
+    def test_noisy_live_asr_window_stays_candidate_for_unscoped_global_span(self):
         session = RecitationSession(
             corpus=self.corpus,
             recognizer=FakeRecognizer([
@@ -206,10 +206,9 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
         self.assertEqual(first_event.reason, "needs_confirmation")
         self.assertEqual(first_event.candidate_refs, (QuranRef(surah=102, ayah=3),))
-        self.assertEqual(second_event.type, SessionEventType.LOCKED)
-        self.assertEqual(second_event.reason, "tolerant_span_match")
-        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=3))
-        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=3, word_index=1))
+        self.assertEqual(second_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(second_event.reason, "needs_confirmation")
+        self.assertEqual(second_event.candidate_refs, (QuranRef(surah=102, ayah=3),))
 
     def test_low_evidence_tolerant_initial_match_waits_for_confirmation(self):
         session = RecitationSession(

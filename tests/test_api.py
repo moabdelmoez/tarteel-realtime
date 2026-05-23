@@ -80,7 +80,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(first_locked["start_ref"], "114:2:1")
         self.assertEqual(second_locked["start_ref"], "114:2:1")
 
-    def test_websocket_returns_tanzil_ayah_text_after_noisy_span_confirmation(self):
+    def test_websocket_keeps_unscoped_noisy_span_as_candidate(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines([
                 "102|3|كلا سوف تعلمون",
@@ -97,17 +97,16 @@ class ApiTests(unittest.TestCase):
 
         with client.websocket_connect("/ws/recitation") as websocket:
             websocket.send_json(chunk_payload(0))
-            candidate = websocket.receive_json()
+            first_candidate = websocket.receive_json()
 
             websocket.send_json(chunk_payload(1))
-            locked = websocket.receive_json()
+            second_candidate = websocket.receive_json()
 
-        self.assertEqual(candidate["type"], "lock_candidate")
-        self.assertEqual(candidate["reason"], "needs_confirmation")
-        self.assertEqual(locked["type"], "locked")
-        self.assertEqual(locked["reason"], "tolerant_span_match")
-        self.assertEqual(locked["ayah_ref"], "102:3")
-        self.assertEqual(locked["ayah_text"], "كلا سوف تعلمون")
+        self.assertEqual(first_candidate["type"], "lock_candidate")
+        self.assertEqual(first_candidate["reason"], "needs_confirmation")
+        self.assertEqual(second_candidate["type"], "lock_candidate")
+        self.assertEqual(second_candidate["reason"], "needs_confirmation")
+        self.assertEqual(second_candidate["candidate_refs"], ["102:3"])
 
     def test_websocket_returns_wrong_event(self):
         app = create_app(

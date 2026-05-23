@@ -144,7 +144,10 @@ class RecitationTransitionPolicy:
                     recognition=recognition,
                     decision=current_decision,
                 )
-            if self._initial_context_supports_candidate(current_decision.best):
+            if (
+                not _is_tolerant_span_decision(current_decision)
+                and self._initial_context_supports_candidate(current_decision.best)
+            ):
                 return _InitialLocationResult(
                     recognition=recognition,
                     decision=current_decision,
@@ -173,7 +176,10 @@ class RecitationTransitionPolicy:
                 )
                 and (
                     not _is_tolerant_decision(contextual_decision)
-                    or self._initial_context_supports_candidate(contextual_decision.best)
+                    or (
+                        not _is_tolerant_span_decision(contextual_decision)
+                        and self._initial_context_supports_candidate(contextual_decision.best)
+                    )
                 )
             ):
                 return _InitialLocationResult(
@@ -493,6 +499,10 @@ class _InitialTranscriptContext:
 
 def _is_tolerant_decision(decision: LocatorDecision) -> bool:
     return decision.reason in {"tolerant_match", "tolerant_span_match"}
+
+
+def _is_tolerant_span_decision(decision: LocatorDecision) -> bool:
+    return decision.reason == "tolerant_span_match"
 
 
 def _confirmation_candidate_decision(decision: LocatorDecision) -> LocatorDecision:
