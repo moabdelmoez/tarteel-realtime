@@ -28,6 +28,9 @@ from tarteel_realtime.session_events import (
 )
 
 
+_INITIAL_TOLERANT_CONFIRMATION_WORDS = 3
+
+
 class RecitationTransitionPolicy:
     def __init__(
         self,
@@ -35,10 +38,12 @@ class RecitationTransitionPolicy:
         corpus: QuranCorpus,
         minimum_lock_words: int = 3,
     ) -> None:
+        self._minimum_lock_words = minimum_lock_words
         self._locator = QuranLocator(corpus, minimum_lock_words=minimum_lock_words)
         self._aligner = QuranAligner(corpus)
         self._progression = RecitationProgression(corpus)
         self._initial_transcript_context = _InitialTranscriptContext()
+        self._ordered_transcript_context = _InitialTranscriptContext()
         self._corpus = corpus
         self._has_locked = False
 
@@ -108,6 +113,7 @@ class RecitationTransitionPolicy:
             recognition_for_location.transcript,
         )
         self._initial_transcript_context.clear()
+        self._ordered_transcript_context.clear()
         self._has_locked = True
         next_expected_ref = self._progression.mark_initial_lock(
             ayah_ref=locked_candidate.ayah_ref,
@@ -128,10 +134,28 @@ class RecitationTransitionPolicy:
         recognition: RecognitionResult,
     ) -> _InitialLocationResult:
         current_decision = self._locate_initial_recognition(recognition)
-        if (
-            current_decision.status == LocatorStatus.LOCKED
-            or not self._initial_transcript_context.has_transcript
-        ):
+        if current_decision.status == LocatorStatus.LOCKED:
+            if not _is_tolerant_decision(current_decision):
+                return _InitialLocationResult(
+                    recognition=recognition,
+                    decision=current_decision,
+                )
+            if not self._tolerant_decision_needs_confirmation(current_decision):
+                return _InitialLocationResult(
+                    recognition=recognition,
+                    decision=current_decision,
+                )
+            if self._initial_context_supports_candidate(current_decision.best):
+                return _InitialLocationResult(
+                    recognition=recognition,
+                    decision=current_decision,
+                )
+            return _InitialLocationResult(
+                recognition=recognition,
+                decision=_confirmation_candidate_decision(current_decision),
+            )
+
+        if not self._initial_transcript_context.has_transcript:
             return _InitialLocationResult(
                 recognition=recognition,
                 decision=current_decision,
@@ -170,6 +194,33 @@ class RecitationTransitionPolicy:
             decision=current_decision,
         )
 
+    def _tolerant_decision_needs_confirmation(
+        self,
+        decision: LocatorDecision,
+    ) -> bool:
+        candidate = decision.best
+        if candidate is None:
+            return True
+        required_matched_words = max(
+            _INITIAL_TOLERANT_CONFIRMATION_WORDS,
+            self._minimum_lock_words,
+        )
+        return candidate.matched_words < required_matched_words
+
+    def _initial_context_supports_candidate(
+        self,
+        candidate: LocatorCandidate | None,
+    ) -> bool:
+        return any(
+            _current_decision_supports_candidate(
+                self._locate_initial_recognition(
+                    RecognitionResult(transcript=transcript, confidence=0.0)
+                ),
+                candidate,
+            )
+            for transcript in self._initial_transcript_context.transcripts
+        )
+
     def _locate_initial_recognition(
         self,
         recognition: RecognitionResult,
@@ -183,7 +234,9 @@ class RecitationTransitionPolicy:
         self,
         recognition: RecognitionResult,
     ) -> SessionEvent:
-        ordered_decision = self._locate_ordered_progression(recognition.transcript)
+        recognition_for_location, ordered_decision = (
+            self._recognition_and_decision_for_ordered_progression(recognition)
+        )
         if (
             ordered_decision.status == LocatorStatus.LOCKED
             and ordered_decision.best is not None
@@ -191,17 +244,51 @@ class RecitationTransitionPolicy:
             return self._event_from_ordered_candidate(
                 candidate=ordered_decision.best,
                 event_type=SessionEventType.LOCKED,
-                transcript=recognition.transcript,
-                confidence=recognition.confidence,
-                chunk_sequence=recognition.chunk_sequence,
+                transcript=recognition_for_location.transcript,
+                confidence=recognition_for_location.confidence,
+                chunk_sequence=recognition_for_location.chunk_sequence,
                 reason=ordered_decision.reason,
             )
+        if ordered_decision.status == LocatorStatus.AMBIGUOUS:
+            self._ordered_transcript_context.remember(recognition.transcript)
+            if recognition_for_location.transcript != recognition.transcript:
+                self._ordered_transcript_context.remember(
+                    recognition_for_location.transcript
+                )
         return self._ordered_guidance_event(
-            transcript=recognition.transcript,
-            confidence=recognition.confidence,
-            chunk_sequence=recognition.chunk_sequence,
+            transcript=recognition_for_location.transcript,
+            confidence=recognition_for_location.confidence,
+            chunk_sequence=recognition_for_location.chunk_sequence,
             reason=ordered_decision.reason,
         )
+
+    def _recognition_and_decision_for_ordered_progression(
+        self,
+        recognition: RecognitionResult,
+    ) -> tuple[RecognitionResult, LocatorDecision]:
+        current_decision = self._locate_ordered_progression(recognition.transcript)
+        if (
+            current_decision.status == LocatorStatus.LOCKED
+            or not self._ordered_transcript_context.has_transcript
+        ):
+            return recognition, current_decision
+
+        for contextual_recognition in self._ordered_transcript_context.combine_all(
+            recognition
+        ):
+            contextual_decision = self._locate_ordered_progression(
+                contextual_recognition.transcript
+            )
+            if (
+                contextual_decision.status == LocatorStatus.LOCKED
+                and _current_decision_supports_candidate(
+                    current_decision,
+                    contextual_decision.best,
+                )
+            ):
+                return contextual_recognition, contextual_decision
+
+        return recognition, current_decision
 
     def _handle_post_lock_alignment(
         self,
@@ -293,6 +380,7 @@ class RecitationTransitionPolicy:
         chunk_sequence: int | None,
         reason: str | None,
     ) -> SessionEvent:
+        self._ordered_transcript_context.clear()
         next_expected_ref = self._progression.mark_candidate_match(candidate)
         return ordered_candidate_event(
             event_type=event_type,
@@ -364,6 +452,10 @@ class _InitialTranscriptContext:
     def has_transcript(self) -> bool:
         return bool(self._transcripts)
 
+    @property
+    def transcripts(self) -> tuple[str, ...]:
+        return tuple(self._transcripts)
+
     def combine_all(self, recognition: RecognitionResult) -> tuple[RecognitionResult, ...]:
         transcript = recognition.transcript.strip()
         if not transcript:
@@ -390,6 +482,18 @@ class _InitialTranscriptContext:
 
     def clear(self) -> None:
         self._transcripts = []
+
+
+def _is_tolerant_decision(decision: LocatorDecision) -> bool:
+    return decision.reason in {"tolerant_match", "tolerant_span_match"}
+
+
+def _confirmation_candidate_decision(decision: LocatorDecision) -> LocatorDecision:
+    return LocatorDecision(
+        status=LocatorStatus.AMBIGUOUS,
+        candidates=decision.candidates,
+        reason="needs_confirmation",
+    )
 
 
 def _current_decision_supports_candidate(

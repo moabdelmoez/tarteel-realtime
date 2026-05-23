@@ -423,7 +423,7 @@
             "area": "asr-buffering",
             "title": "Reduced live ASR chunking gate",
             "user_visible_behavior": "The backend should use smaller rolling ASR windows for streaming-like ayah tracking while preserving quiet-audio safety and producing usable live ayah progression on real Quran audio.",
-            "status": "blocked",
+            "status": "in_progress",
             "verification": [
                 "uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app -v",
                 "uv run python -B -m unittest discover -s tests -v",
@@ -444,9 +444,13 @@
                 "Rollback verification passed locally: focused ASR buffering/session/app suite passed with 28 tests, full deterministic Python suite passed with 143 tests, and compile check passed.",
                 "Point 2 implemented a guarded opt-in low-latency profile and GPU-verified earlier ASR flushes, but replay quality remains mixed: short Surah 108 produced early lock_candidate/no_match events instead of clean locks, and long Surah 4 still emitted noisy wrong/uncertain events.",
                 "Point 3 local verification passed with 178 deterministic tests plus compile and whitespace checks after adding bounded pre-lock ASR transcript alternatives.",
-                "Point 3 RunPod replay improved short Surah 108 startup for 108001 and 108003, but 108002 still no-matched and long Surah 4 replay false-locked first at 39:6, 4:2, and 36:8 across the three long fixtures."
+                "Point 3 RunPod replay improved short Surah 108 startup for 108001 and 108003, but 108002 still no-matched and long Surah 4 replay false-locked first at 39:6, 4:2, and 36:8 across the three long fixtures.",
+                "Point 4 branch codex/asr-point-4-lock-stability adds a local candidate-stability gate so weak initial tolerant matches emit lock_candidate/needs_confirmation instead of locking globally.",
+                "Point 4 adds ordered ayah-boundary snippet accumulation scoped to the expected ordered ayah window, avoiding broad global relock after the first lock.",
+                "Point 4 focused local checks passed with 57 tests: uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_locator tests.test_api tests.test_recitation_stream -v.",
+                "Point 4 full local deterministic suite passed with 180 tests, and compile check passed: uv run python -m compileall -q tarteel_realtime tests."
             ],
-            "notes": "Still blocked as a default/product live-tracking gate. Low-latency plus pre-lock context improves two short Surah 108 fixtures, but recognition quality remains mixed and long-ayah false locks persist, so it stays opt-in/manual-test only."
+            "notes": "Active Point 4 slice. Local deterministic evidence now covers weak tolerant-lock confirmation and ordered ayah-boundary accumulation, but RunPod faster-whisper replay is still required before this can move from in_progress back to a passing or blocked quality decision."
         },
         {
             "id": "backend-005",

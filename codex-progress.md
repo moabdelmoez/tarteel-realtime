@@ -14,11 +14,42 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: live ayah progression quality after the WebSocket transport/session fixes.
-- Current blocker: Point 2 low-latency buffering is implemented and GPU-verified for earlier ASR flushes, but manual Custom-preset testing is the gate before Point 3; recognition quality remains mixed for isolated short ayahs.
+- Current highest-priority unfinished feature: Point 4 lock stability and ordered ayah-boundary progression for low-latency real ASR.
+- Current blocker: Point 4 is locally implemented and deterministic-tested, but RunPod faster-whisper replay has not yet verified whether it preserves Surah 108 gains while reducing long-ayah false locks.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 069
+
+- Date: 2026-05-24
+- Goal: Implement Point 4 of the ASR latency plan: preserve short-Surah-108 startup gains while preventing weak global false locks and allowing ordered ayah-boundary snippets to accumulate after the first lock.
+- Completed:
+  - Created worktree `.worktrees/asr-point-4-lock-stability` on branch `codex/asr-point-4-lock-stability` from `origin/codex/asr-point-3-short-ayah-stability` at `b9d9a10`.
+  - Added an initial tolerant-lock confirmation gate in `tarteel_realtime.session_transitions`: exact unique locks still lock immediately, strong tolerant matches still lock immediately, but low-evidence tolerant initial matches emit `LOCK_CANDIDATE` with `reason=needs_confirmation` until later ASR context supports the same ayah.
+  - Kept the low-evidence threshold conservative: tolerant initial locks need at least three matched Quran words, or the configured `minimum_lock_words` when that is higher.
+  - Added ordered ayah-boundary transcript context so short post-lock snippets can combine only inside the expected ordered ayah window instead of falling back to global relock.
+  - Updated session tests so weak two-word tolerant initial matches wait for confirmation, while existing stronger tolerant fallback and tolerant span locks remain immediate.
+- Verification run:
+  - Red TDD checks first failed for missing tolerant-lock confirmation and missing ordered ayah-boundary snippet accumulation.
+  - Focused local checks passed: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_locator tests.test_api tests.test_recitation_stream -v` with 57 tests.
+  - Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 180 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/session_transitions.py`
+  - `tests/test_session.py`
+  - `tests/test_session_transitions.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is local deterministic proof only so far. It still needs real faster-whisper GPU replay on the six `fixtures/local_audio` samples before merge confidence.
+  - Weak tolerant initial matches may now wait one more ASR chunk before locking. That is intentional for global false-lock safety, but manual testing should judge the perceived delay.
+  - This slice does not yet add explicit selected-recitation scope; that remains the next product-level fix after Point 4 is manually accepted.
+- Next best step: push the branch, run RunPod faster-whisper replay with the low-latency profile, and compare `108001`, `108002`, `108003`, `004001`, `004002`, and `004003` against the Point 3 evidence.
 
 
 ### Session 068

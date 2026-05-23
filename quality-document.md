@@ -46,6 +46,14 @@ Before treating a future slice as passing:
 
 ## Quality Log
 
+
+### 2026-05-24 - Point 4 Lock Stability Local Gate
+
+- Point 4 adds a candidate-stability gate for initial tolerant locks: weak global tolerant matches now produce `lock_candidate/needs_confirmation`, while exact unique locks and stronger tolerant matches remain immediate.
+- Ordered ayah-boundary recovery now accumulates short snippets only through the expected ordered ayah window, preserving the no-global-relock safety posture after the first lock.
+- Local proof is strong for the state-machine contract: focused session/locator/API/stream checks passed with 57 tests, full deterministic Python passed with 180 tests, and compile check passed.
+- Release posture: do not merge or call this a live quality improvement until RunPod faster-whisper replay confirms Surah 108 remains improved and long Surah 4 no longer false-locks globally.
+
 ### 2026-05-24 - Point 3 Pre-Lock ASR Context
 
 - Point 3 adds a bounded set of pre-lock transcript context alternatives so low-latency ASR snippets can combine before the first location lock.

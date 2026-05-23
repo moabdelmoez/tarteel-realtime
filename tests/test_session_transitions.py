@@ -66,6 +66,34 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertIn("إِنَّا", second_event.transcript)
         self.assertIn("الْكَوْثَرَ", second_event.transcript)
 
+    def test_initial_tolerant_global_match_requires_confirmation(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=2,
+        )
+
+        first_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="أَعْطَيْنَاكَ الْعُمُورُ",
+                confidence=0.9,
+                chunk_sequence=0,
+            )
+        )
+        second_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="إِنَّا عَطَّيْنَاكَ الْعُمُورُ",
+                confidence=0.9,
+                chunk_sequence=1,
+            )
+        )
+
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "needs_confirmation")
+        self.assertEqual(first_event.candidate_refs, (QuranRef(surah=108, ayah=1),))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "tolerant_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=108, ayah=1))
+
     def test_stale_pre_lock_context_does_not_block_current_unique_lock(self):
         policy = RecitationTransitionPolicy(
             corpus=self.corpus,
@@ -205,6 +233,38 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(event.type, SessionEventType.PROGRESS)
         self.assertEqual(event.consumed_words, 1)
         self.assertIsNone(event.next_expected_ref)
+
+    def test_ayah_boundary_short_snippets_accumulate_into_ordered_lock(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=3,
+        )
+
+        policy.handle_recognition(
+            RecognitionResult(
+                transcript="إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
+                confidence=0.9,
+                chunk_sequence=0,
+            )
+        )
+        first_event = policy.handle_recognition(
+            RecognitionResult(transcript="فَصَلِّ", confidence=0.9, chunk_sequence=1)
+        )
+        second_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="لِرَبِّكَ وَانْحَرْ",
+                confidence=0.9,
+                chunk_sequence=2,
+            )
+        )
+
+        self.assertEqual(first_event.type, SessionEventType.UNCERTAIN)
+        self.assertEqual(first_event.reason, "expected_ordered_progression")
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "unique_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=108, ayah=2))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=108, ayah=2, word_index=1))
+        self.assertEqual(second_event.transcript, "فَصَلِّ لِرَبِّكَ وَانْحَرْ")
 
     def test_waiting_events_use_policy_lock_state(self):
         policy = RecitationTransitionPolicy(

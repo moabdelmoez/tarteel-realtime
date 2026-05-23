@@ -197,7 +197,7 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=3))
         self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=3, word_index=1))
 
-    def test_tolerant_initial_lock_does_not_forgive_clear_substitution(self):
+    def test_low_evidence_tolerant_initial_match_waits_for_confirmation(self):
         session = RecitationSession(
             corpus=self.corpus,
             recognizer=FakeRecognizer(["مَلِكِ النَّارِ"]),
@@ -206,12 +206,9 @@ class RecitationSessionTests(unittest.TestCase):
 
         event = session.handle_chunk(chunk())
 
-        self.assertEqual(event.type, SessionEventType.LOCKED)
-        self.assertEqual(event.reason, "tolerant_match")
-        self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
-        self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=2, word_index=1))
-        self.assertEqual(event.next_expected_ref, QuranRef(surah=114, ayah=2, word_index=2))
-        self.assertEqual(event.consumed_words, 1)
+        self.assertEqual(event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(event.reason, "needs_confirmation")
+        self.assertEqual(event.candidate_refs, (QuranRef(surah=114, ayah=2),))
 
     def test_progression_prefers_next_ayah_for_repeated_asr_phrase(self):
         session = RecitationSession(
