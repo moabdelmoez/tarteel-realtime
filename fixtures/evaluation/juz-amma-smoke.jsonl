@@ -1,3 +1,0 @@
-{"case_id":"correct-nas-2","transcript":"مَلِكِ النَّاسِ","expected_locator_status":"locked","expected_locator_start_ref":"114:2:1","alignment_start_ref":"114:2:1","expected_alignment_status":"correct"}
-{"case_id":"seeded-wrong-final-word","transcript":"قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ","alignment_start_ref":"114:1:1","expected_alignment_status":"wrong"}
-{"case_id":"ambiguous-shared-start","transcript":"قُلْ أَعُوذُ بِرَبِّ","expected_locator_status":"ambiguous"}

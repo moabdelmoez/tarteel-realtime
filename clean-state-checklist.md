@@ -18,8 +18,8 @@
 - [ ] iOS WebSocket client changes still wait for the socket handshake before streaming and keep Simulator backend connection errors actionable: `uv run python -B -m unittest tests.test_ios_websocket_client -v`.
 - [ ] iOS endpoint preset changes keep Simulator fixed to local WebSocket and Custom able to use RunPod WSS URLs: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter BackendEndpointPresetTests`.
 - [ ] The compile check still runs: `uv run python -m compileall -q tarteel_realtime tests`.
-- [ ] The sample evaluator still runs: `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`.
-- [ ] The sample Tanzil manifest smoke still runs: `uv run python -m tarteel_realtime.quran_data --tanzil-path fixtures/quran/sample-tanzil.txt --source-name sample-fixture`.
+- [ ] Embedded evaluator smoke cases still run: `uv run python -B -m unittest tests.test_evaluate_cli`.
+- [ ] Full Tanzil manifest workflow still runs when the local file exists: `uv run python -m tarteel_realtime.quran_data --check-manifest`.
 - [ ] R2 helper tests still run when touched: `uv run python -B -m unittest tests.test_r2_artifacts`.
 - [ ] GPU bootstrap tests still run when touched: `uv run python -B -m unittest tests.test_runpod_bootstrap`.
 - [ ] GPU bootstrap syntax still validates when touched: `bash -n scripts/gpu_bootstrap.sh` and `bash -n scripts/runpod_bootstrap.sh`.

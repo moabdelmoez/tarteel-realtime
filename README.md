@@ -49,7 +49,7 @@ Recommended local placement once downloaded:
 data/tanzil/quran-simple-clean.txt
 ```
 
-The repo includes `fixtures/quran/sample-tanzil.txt` for deterministic smoke tests only. The full Quran file should stay local at the path above.
+The repo does not commit Quran text or evaluator JSONL smoke fixtures. Deterministic unit tests embed the tiny smoke data they need; the full Quran file should stay local at the path above.
 
 After placing the full file, record its source metadata and checksum:
 
@@ -67,16 +67,16 @@ Do not edit the canonical Tanzil file in place. If matching needs simplified tex
 
 ## Run Offline Evaluation
 
-Run the sample fake-transcript evaluation fixture:
+Run the deterministic evaluator tests:
 
 ```bash
-uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2
+uv run python -B -m unittest tests.test_evaluator tests.test_evaluate_cli
 ```
 
-When the full Tanzil file is downloaded to `data/tanzil/quran-simple-clean.txt`, the `--tanzil-path` flag can be omitted. Add `--mvp-scope` to evaluate only Al-Fatihah and Juz Amma from a larger Tanzil file.
+When the full Tanzil file is downloaded to `data/tanzil/quran-simple-clean.txt`, the `--tanzil-path` flag can be omitted. Add `--mvp-scope` to evaluate only Al-Fatihah and Juz Amma from a larger Tanzil file. Pass your own JSONL case file to the CLI:
 
 ```bash
-uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope
+uv run python -m tarteel_realtime.evaluate path/to/cases.jsonl --minimum-lock-words 2 --mvp-scope
 ```
 
 ## ASR Adapter
@@ -93,7 +93,7 @@ uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id bashara
 Add `--tanzil-path` when you want the smoke output to include a Quran locator decision for the transcript:
 
 ```bash
-uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2
+uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2
 ```
 
 For a real model run, keep dependencies opt-in with `uv`, for example:
@@ -105,7 +105,7 @@ uv run --with transformers --with torch python -m tarteel_realtime.asr_smoke pat
 On the RunPod L4 smoke environment verified on 2026-05-16, the reproducible GPU command used CUDA-12-compatible Torch pins and an explicit `torchvision` install so `transformers.pipeline` does not import the pod's system `torchvision`:
 
 ```bash
-UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0
+UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0
 ```
 
 This path prints one compact JSON transcription payload. It does not store raw audio.
@@ -170,7 +170,7 @@ uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitat
 For the first RunPod L40S chunked-WAV proof on 2026-05-17, Surah 114:2 locked reliably with a larger first buffer:
 
 ```bash
-TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt \
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
 TARTEEL_MINIMUM_LOCK_WORDS=2 \
 TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
 TARTEEL_WHISPER_DEVICE=cuda:0 \

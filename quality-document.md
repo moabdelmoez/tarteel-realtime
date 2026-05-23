@@ -54,6 +54,12 @@ Before treating a future slice as passing:
 - VAD remains transport-neutral through `AudioChunkPayload.voice_activity` and backend `AudioChunk.voice_activity`.
 - Verification passed with 27 focused Python backend/iOS-source tests, 164 full deterministic Python tests, compile check, JSON validation, 17 Swift client tests, the iOS simulator app build, and a local WebSocket smoke that returned the scripted `locked` then `wrong` events.
 
+### 2026-05-23 - Embedded Evaluator Smoke Cases
+
+- The committed Quran/evaluation smoke fixtures were removed; the same Juz Amma, Surah 102, and Surah 98 evaluator coverage now lives inside `tests/test_evaluate_cli.py`.
+- Live workflow docs now point to embedded tests or the local full Tanzil file instead of deleted fixture paths.
+- Verification passed with `uv run python -B -m unittest tests.test_evaluate_cli -v`, the full Python suite, compile check, JSON validation, and `git diff --check`.
+
 ### 2026-05-19 - Harness Quality Baseline
 
 - Added project-specific agent operating instructions, evaluator rubric, and quality record.
@@ -231,3 +237,11 @@ Before treating a future slice as passing:
 - Artifact-download intent now accepts `TARTEEL_DOWNLOAD_ARTIFACTS=1` while preserving `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` compatibility.
 - Verification passed with `tests.test_runpod_bootstrap` (6 tests) and `bash -n` syntax checks for both bootstrap scripts.
 - Quality risk: this improves portability at the scripting seam, but runtime behavior still depends on bootstrapping and validating the active GPU worker with the latest local architecture slices.
+
+### 2026-05-23 - WebSocket-Only RunPod And Simulator Verification
+
+- Fresh RunPod pod `tlk814bso1lnjs` was bootstrapped from commit `5e8b4b5` with no file copy path, using `/workspace/tarteel-r2.env` for R2 artifact hydration.
+- The real ASR WebSocket backend ran on NVIDIA L4 with `basharalrfooh/whisper-small-quran`, `torch==2.7.1`, `torchvision==0.22.1`, CUDA `cuda:0`, full Tanzil data, and stable 4200/4200/0 buffering defaults.
+- Public `/health` and public WSS `/ws/recitation` were verified through `tlk814bso1lnjs-8000.proxy.runpod.net`.
+- The iOS Simulator app built, installed, launched, and has microphone permission granted. The RunPod WSS URL is on the simulator pasteboard for the Custom preset.
+- Quality risk: transport health is now proven, but model quality remains uneven. Continuous Surah 108 locked only `108:3`; the first two short ayahs remained `lock_candidate`. Long Surah 4 locked `4:1` and progressed but still emitted false `wrong` events from noisy ASR windows.

@@ -1,4 +1,0 @@
-{"case_id":"surah-98-ayah-1-clipped-audio-fragment","transcript":"من أهل الكتاب والمشركين منفكين حتى تأتيهم البينة","expected_locator_status":"locked","expected_locator_start_ref":"98:1:9","alignment_start_ref":"98:1:9","expected_alignment_status":"correct"}
-{"case_id":"surah-98-ayah-2-clean-audio","transcript":"رسول من الله يتلو صحفا مطهرة","expected_locator_status":"locked","expected_locator_start_ref":"98:2:1","alignment_start_ref":"98:2:1","expected_alignment_status":"correct"}
-{"case_id":"surah-98-ayah-8-long-tail","transcript":"جنات عدن تجري من تحتها الأنهار خالدين فيها أبدا رضي الله عنهم ورضوا عنه ذلك لمن خشي ربه","expected_locator_status":"locked","expected_locator_start_ref":"98:8:4","alignment_start_ref":"98:8:4","expected_alignment_status":"correct"}
-{"case_id":"surah-98-seeded-wrong-word","transcript":"رسول من الله يتلو نارا مطهرة","alignment_start_ref":"98:2:1","expected_alignment_status":"wrong"}

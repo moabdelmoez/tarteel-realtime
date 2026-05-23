@@ -31,7 +31,7 @@
                 "QuranCorpus now skips standalone Tanzil tokens whose normalized form is empty, preserving ayah text while keeping compact word refs.",
                 "Latest full deterministic suite after Quran token cleanup: 172 tests passed."
             ],
-            "notes": "Full Tanzil file is intentionally not committed; fixtures/quran/sample-tanzil.txt is a smoke fixture."
+            "notes": "Full Tanzil file is intentionally not committed. Tiny deterministic Quran/evaluator smoke data lives inside tests instead of repository fixture files."
         },
         {
             "id": "core-002",
@@ -76,16 +76,15 @@
             "priority": 4,
             "area": "evaluation",
             "title": "Offline evaluator and CLI",
-            "user_visible_behavior": "A developer can run JSONL fake-transcript evaluation fixtures and see locator/alignment/wrong-detection metrics.",
+            "user_visible_behavior": "A developer can run JSONL fake-transcript evaluation cases and see locator/alignment/wrong-detection metrics.",
             "status": "passing",
             "verification": [
-                "uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope",
                 "uv run python -B -m unittest tests.test_evaluator tests.test_evaluate_cli"
             ],
             "evidence": [
-                "Sample evaluator returned total_cases: 3, locator_accuracy: 1.000, alignment_accuracy: 1.000, wrong_detection_rate: 1.000.",
+                "Embedded evaluator smoke cases cover Juz Amma ambiguity, Surah 102, and Surah 98 with locator_accuracy: 1.000, alignment_accuracy: 1.000, and wrong_detection_rate: 1.000.",
                 "Implemented in tarteel_realtime/evaluator.py and tarteel_realtime/evaluate.py.",
-                "Latest full suite after harness setup: 55 tests passed."
+                "Latest full suite after deleting repository JSONL/Tanzil smoke fixtures: 164 tests passed."
             ],
             "notes": "Uses fake transcripts only; no ASR/audio dataset integration yet."
         },
@@ -155,7 +154,7 @@
             "verification": [
                 "Use uv to add optional ASR dependencies; do not use pip directly.",
                 "Run uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter.",
-                "On RunPod L4, run UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0.",
+                "On RunPod L4, run UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0.",
                 "Run uv run python -B -m unittest discover after the spike."
             ],
             "evidence": [
@@ -179,7 +178,7 @@
                 "RunPod faster-whisper recognizer smoke from the repaired /tmp runtime copy returned transcript مَلِكِ النَّاسِ for 114002.wav.",
                 "RunPod former room transport worker is running from /tmp/tarteel-realtime-live with OdyAsh/faster-whisper-base-ar-quran and returned a waiting_for_audio_buffer smoke event with matching session_id."
             ],
-            "notes": "Passing for the narrow model spike: two local recitation WAVs transcribed through WhisperRecognizer on RunPod GPU and located against the sample Tanzil fixture. Keep optional/heavy model dependencies isolated so the default test suite remains fast."
+            "notes": "Passing for the narrow model spike: two local recitation WAVs transcribed through WhisperRecognizer on RunPod GPU and located against Tanzil data. Keep optional/heavy model dependencies isolated so the default test suite remains fast."
         },
         {
             "id": "data-001",
@@ -192,7 +191,6 @@
                 "Place the full pinned Tanzil file at data/tanzil/quran-simple-clean.txt.",
                 "Run uv run python -m tarteel_realtime.quran_data --tanzil-path data/tanzil/quran-simple-clean.txt --source-name Tanzil --source-url <source-url> --write-manifest.",
                 "Run uv run python -m tarteel_realtime.quran_data --check-manifest.",
-                "Run uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --minimum-lock-words 2 --mvp-scope.",
                 "Run uv run python -B -m unittest tests.test_quran_data_manifest tests.test_evaluate_cli.",
                 "Run uv run python -B -m unittest discover."
             ],
@@ -200,8 +198,8 @@
                 "Added tarteel_realtime/quran_data.py with default data paths, SHA-256 inspection, manifest write/load, manifest validation, and a CLI entrypoint.",
                 "Added tests/test_quran_data_manifest.py covering shared defaults, checksum/reference inspection, manifest round-trip validation, checksum mismatch detection, and CLI write/check mode.",
                 "Added data/tanzil/README.md and data/tanzil/.gitignore so the full Quran text stays local while the workflow remains documented.",
-                "Smoke manifest inspection over fixtures/quran/sample-tanzil.txt returned sha256 a9d046629634eebb96bc374f75882f0f89dd622e18940d94a2e925e9eee8c9f2, ayah_count 3, first_ref 113:1, last_ref 114:2.",
-                "Repository smoke evaluator fixture now has an automated regression test and returns locator_accuracy 1.000, alignment_accuracy 1.000, wrong_detection_rate 1.000.",
+                "Embedded evaluator smoke tests replaced the committed JSONL/sample-Tanzil fixtures while preserving Juz Amma, Surah 102, and Surah 98 coverage.",
+                "Evaluator smoke coverage now has automated embedded-case regression tests and returns locator_accuracy 1.000, alignment_accuracy 1.000, wrong_detection_rate 1.000.",
                 "Full Tanzil file at data/tanzil/quran-simple-clean.txt parsed to ayah_count 6236, first_ref 1:1, last_ref 114:6.",
                 "Recorded data/tanzil/quran-simple-clean.metadata.json with sha256 054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49 and bytes 794313.",
                 "Default-path MVP evaluation passed against the full Tanzil file with locator_accuracy 1.000, alignment_accuracy 1.000, wrong_detection_rate 1.000.",
@@ -343,7 +341,7 @@
                 "Deployed commit 2b72253 to RunPod, restarted Uvicorn on 0.0.0.0:8000, confirmed public /health returned HTTP 200, and verified 114002.wav still reached locked at 114:2 through the public WSS endpoint.",
                 "RunPod logs now show privacy-safe audio-level diagnostics for known-good WAV chunks, for example pcm_rms/pcm_peak plus transcript_chars with transcript_text=<redacted>.",
                 "Installed and launched the updated app in the iPhone 17 simulator with process id 21513; screenshot captured at /private/tmp/tarteel-flashing-fix-installed.png.",
-                "Added Surah 102 text coverage to fixtures/quran/sample-tanzil.txt and fixtures/evaluation/surah-102-smoke.jsonl; deterministic evaluator returned locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
+                "Added Surah 102 deterministic evaluator coverage; the smoke cases now live in tests/test_evaluate_cli.py and return locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
                 "Downloaded clean Husary Surah 102 ayah MP3s from the provided URLs into ignored local audio, built fixtures/local_audio/surah_102/102-full.wav as mono PCM16 16 kHz, duration about 63 seconds.",
                 "Public WSS clean-audio test with Surah 102 full WAV locked 102:1 and 102:6 but returned no_match for many other 4.2s/5s windows due truncated or hallucinated transcripts, showing the failure is not only simulator microphone audio.",
                 "Added a tolerant locator fallback after exact no_match for real ASR transcripts, while keeping the exact locator unchanged for deterministic paths.",
@@ -448,7 +446,7 @@
                 "uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app -v",
                 "uv run python -B -m unittest discover -s tests -v",
                 "uv run python -m compileall -q tarteel_realtime tests",
-                "uv run python -m tarteel_realtime.evaluate fixtures/evaluation/surah-98-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope",
+                "uv run python -B -m unittest tests.test_evaluate_cli -v",
                 "RunPod WebSocket replay for fixtures/local_audio/114002.wav",
                 "RunPod WebSocket replay for quiet/low-noise audio",
                 "RunPod WebSocket replay for clean Surah 102 full WAV",
@@ -460,7 +458,7 @@
                 "Added ordered minimum-start filtering so post-lock scoped recovery does not jump backward within the current ayah.",
                 "Added deterministic Surah 98 fixtures proving clipped fragments recover, scoped progression does not jump to unrelated ayahs, and clear wrong-recitation cases remain wrong or preserve the expected next word.",
                 "Focused local locator/session/evaluate suite passed with 37 tests; focused buffering/session/asr_app suite passed with 27 tests; full deterministic suite passed with 142 tests; compile check passed.",
-                "Surah 98 evaluator fixture returned locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
+                "Embedded Surah 98 evaluator cases returned locator_accuracy 1.000, alignment_accuracy 1.000, and wrong_detection_rate 1.000.",
                 "RunPod focused buffering/session/asr_app sanity passed with 25 tests and compile check passed using RapidFuzz available on the pod.",
                 "RunPod 114 warmed replay with tarteel-ai and 2500/1500/500 returned locked 114:2 from transcript مَلِكِ النَّارِ while preserving next_expected_ref 114:2:2, so fuzzy location did not forgive the wrong word as consumed.",
                 "RunPod quiet low-noise replay returned 50 locating events, no non-wait events, and backend logs with action=wait_quiet.",
@@ -493,9 +491,12 @@
                 "Added a regression proving each WebSocket connection receives a fresh RecitationStream, so session state does not leak between sockets.",
                 "iOS now offers Simulator and Custom WebSocket presets only; Custom accepts RunPod WSS endpoints and normalizes bare RunPod proxy hosts to /ws/recitation.",
                 "Focused backend/iOS source checks passed with 27 Python tests; the full deterministic Python suite passed with 164 tests; compile check and JSON validation passed.",
-                "Swift client core passed with 17 tests, the iOS simulator app target built successfully, and the local WebSocket smoke returned the scripted locked/wrong event flow."
+                "Swift client core passed with 17 tests, the iOS simulator app target built successfully, and the local WebSocket smoke returned the scripted locked/wrong event flow.",
+                "Fresh RunPod pod tlk814bso1lnjs bootstrapped from commit 5e8b4b5, hydrated full Tanzil plus updated 004/108 local_audio artifacts from R2, and ran the real ASR WebSocket backend on 0.0.0.0:8000 with basharalrfooh/whisper-small-quran, torch 2.7.1, torchvision 0.22.1, and CUDA on NVIDIA L4.",
+                "Public WSS replay through wss://tlk814bso1lnjs-8000.proxy.runpod.net/ws/recitation completed for concatenated Surah 108 and returned a locked event for 108:3; pod-local long Surah 4 replay locked 4:1 and produced progress events.",
+                "The rebuilt iOS simulator app was installed and launched in the iPhone 17 Pro simulator as process 4167 with microphone permission granted and the RunPod WSS URL copied to the simulator pasteboard."
             ],
-            "notes": "WebSocket is now the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and enter the /ws/recitation URL in the iOS Custom preset."
+            "notes": "WebSocket is now the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and enter the /ws/recitation URL in the iOS Custom preset. Latest RunPod transport evidence is healthy, but ASR quality still needs work for isolated short ayahs and false wrong events on long ayahs."
         },
         {
             "id": "infra-001",
