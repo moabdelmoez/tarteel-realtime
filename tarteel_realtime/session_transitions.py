@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tarteel_realtime.alignment import AlignmentStatus, QuranAligner
 from tarteel_realtime.locator import (
     LocatorCandidate,
@@ -62,9 +64,9 @@ class RecitationTransitionPolicy:
         self,
         recognition: RecognitionResult,
     ) -> SessionEvent:
-        recognition_for_location, locator_decision = (
-            self._recognition_and_decision_for_initial_location(recognition)
-        )
+        initial_location = self._recognition_and_decision_for_initial_location(recognition)
+        recognition_for_location = initial_location.recognition
+        locator_decision = initial_location.decision
 
         if locator_decision.status == LocatorStatus.NOT_FOUND:
             self._initial_transcript_context.clear()
@@ -76,7 +78,10 @@ class RecitationTransitionPolicy:
             )
 
         if locator_decision.status == LocatorStatus.AMBIGUOUS:
-            self._initial_transcript_context.remember(recognition_for_location.transcript)
+            if initial_location.remember_context:
+                self._initial_transcript_context.remember(
+                    recognition_for_location.transcript
+                )
             return lock_candidate_event(
                 transcript=recognition_for_location.transcript,
                 confidence=recognition_for_location.confidence,
@@ -120,24 +125,45 @@ class RecitationTransitionPolicy:
     def _recognition_and_decision_for_initial_location(
         self,
         recognition: RecognitionResult,
-    ) -> tuple[RecognitionResult, LocatorDecision]:
+    ) -> _InitialLocationResult:
         current_decision = self._locate_initial_recognition(recognition)
         if (
             current_decision.status == LocatorStatus.LOCKED
             or not self._initial_transcript_context.has_transcript
         ):
-            return recognition, current_decision
+            return _InitialLocationResult(
+                recognition=recognition,
+                decision=current_decision,
+            )
 
         contextual_recognition = self._initial_transcript_context.combine(recognition)
         contextual_decision = self._locate_initial_recognition(contextual_recognition)
         if contextual_decision.status == LocatorStatus.LOCKED:
-            return contextual_recognition, contextual_decision
+            return _InitialLocationResult(
+                recognition=contextual_recognition,
+                decision=contextual_decision,
+            )
         if (
             current_decision.status == LocatorStatus.AMBIGUOUS
             and contextual_decision.status == LocatorStatus.AMBIGUOUS
         ):
-            return contextual_recognition, contextual_decision
-        return recognition, current_decision
+            return _InitialLocationResult(
+                recognition=contextual_recognition,
+                decision=contextual_decision,
+            )
+        if (
+            current_decision.status == LocatorStatus.AMBIGUOUS
+            and contextual_decision.status == LocatorStatus.NOT_FOUND
+        ):
+            return _InitialLocationResult(
+                recognition=recognition,
+                decision=current_decision,
+                remember_context=False,
+            )
+        return _InitialLocationResult(
+            recognition=recognition,
+            decision=current_decision,
+        )
 
     def _locate_initial_recognition(
         self,
@@ -315,6 +341,13 @@ def _is_waiting_for_audio_buffer(recognition: RecognitionResult) -> bool:
         and recognition.confidence == 0.0
         and not recognition.is_final
     )
+
+
+@dataclass(frozen=True)
+class _InitialLocationResult:
+    recognition: RecognitionResult
+    decision: LocatorDecision
+    remember_context: bool = True
 
 
 class _InitialTranscriptContext:
