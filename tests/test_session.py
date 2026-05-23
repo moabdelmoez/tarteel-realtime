@@ -169,33 +169,47 @@ class RecitationSessionTests(unittest.TestCase):
         self.assertEqual(event.type, SessionEventType.LOCATING)
         self.assertEqual(event.reason, "no_match")
 
-    def test_tolerant_locator_fallback_locks_when_exact_match_fails(self):
+    def test_tolerant_locator_fallback_requires_confirmation_then_locks(self):
         session = RecitationSession(
             corpus=self.corpus,
-            recognizer=FakeRecognizer(["حَتَّى زُرْتُمُ الْمَقَى"]),
+            recognizer=FakeRecognizer([
+                "حَتَّى زُرْتُمُ الْمَقَى",
+                "حَتَّى زُرْتُمُ الْمَقَى",
+            ]),
             minimum_lock_words=2,
         )
 
-        event = session.handle_chunk(chunk())
+        first_event = session.handle_chunk(chunk(0))
+        second_event = session.handle_chunk(chunk(1))
 
-        self.assertEqual(event.type, SessionEventType.LOCKED)
-        self.assertEqual(event.reason, "tolerant_match")
-        self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=2))
-        self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "needs_confirmation")
+        self.assertEqual(first_event.candidate_refs, (QuranRef(surah=102, ayah=2),))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "tolerant_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=2))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=2, word_index=1))
 
-    def test_noisy_live_asr_window_locks_on_valid_surah_102_span(self):
+    def test_noisy_live_asr_window_requires_confirmation_then_locks_valid_span(self):
         session = RecitationSession(
             corpus=self.corpus,
-            recognizer=FakeRecognizer(["فكلا سوف تعلمون كلا لو"]),
+            recognizer=FakeRecognizer([
+                "فكلا سوف تعلمون كلا لو",
+                "فكلا سوف تعلمون كلا لو",
+            ]),
             minimum_lock_words=2,
         )
 
-        event = session.handle_chunk(chunk())
+        first_event = session.handle_chunk(chunk(0))
+        second_event = session.handle_chunk(chunk(1))
 
-        self.assertEqual(event.type, SessionEventType.LOCKED)
-        self.assertEqual(event.reason, "tolerant_span_match")
-        self.assertEqual(event.ayah_ref, QuranRef(surah=102, ayah=3))
-        self.assertEqual(event.start_ref, QuranRef(surah=102, ayah=3, word_index=1))
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "needs_confirmation")
+        self.assertEqual(first_event.candidate_refs, (QuranRef(surah=102, ayah=3),))
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "tolerant_span_match")
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=3))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=3, word_index=1))
 
     def test_low_evidence_tolerant_initial_match_waits_for_confirmation(self):
         session = RecitationSession(
@@ -215,6 +229,7 @@ class RecitationSessionTests(unittest.TestCase):
             corpus=self.corpus,
             recognizer=FakeRecognizer([
                 "كَلَّا سَوْفَ تَعْلَى",
+                "كَلَّا سَوْفَ تَعْلَى",
                 "إِلَّا سَوْفَ تَعْلَمُونَ",
             ]),
             minimum_lock_words=2,
@@ -222,12 +237,15 @@ class RecitationSessionTests(unittest.TestCase):
 
         first_event = session.handle_chunk(chunk(0))
         second_event = session.handle_chunk(chunk(1))
+        third_event = session.handle_chunk(chunk(2))
 
-        self.assertEqual(first_event.type, SessionEventType.LOCKED)
-        self.assertEqual(first_event.ayah_ref, QuranRef(surah=102, ayah=3))
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "needs_confirmation")
         self.assertEqual(second_event.type, SessionEventType.LOCKED)
-        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=4))
-        self.assertEqual(second_event.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=102, ayah=3))
+        self.assertEqual(third_event.type, SessionEventType.LOCKED)
+        self.assertEqual(third_event.ayah_ref, QuranRef(surah=102, ayah=4))
+        self.assertEqual(third_event.start_ref, QuranRef(surah=102, ayah=4, word_index=2))
 
     def test_progression_recovers_short_clipped_next_ayah_fragment(self):
         session = RecitationSession(

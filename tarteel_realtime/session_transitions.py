@@ -28,9 +28,6 @@ from tarteel_realtime.session_events import (
 )
 
 
-_INITIAL_TOLERANT_CONFIRMATION_WORDS = 3
-
-
 class RecitationTransitionPolicy:
     def __init__(
         self,
@@ -38,7 +35,6 @@ class RecitationTransitionPolicy:
         corpus: QuranCorpus,
         minimum_lock_words: int = 3,
     ) -> None:
-        self._minimum_lock_words = minimum_lock_words
         self._locator = QuranLocator(corpus, minimum_lock_words=minimum_lock_words)
         self._aligner = QuranAligner(corpus)
         self._progression = RecitationProgression(corpus)
@@ -140,11 +136,6 @@ class RecitationTransitionPolicy:
                     recognition=recognition,
                     decision=current_decision,
                 )
-            if not self._tolerant_decision_needs_confirmation(current_decision):
-                return _InitialLocationResult(
-                    recognition=recognition,
-                    decision=current_decision,
-                )
             if self._initial_context_supports_candidate(current_decision.best):
                 return _InitialLocationResult(
                     recognition=recognition,
@@ -193,19 +184,6 @@ class RecitationTransitionPolicy:
             recognition=recognition,
             decision=current_decision,
         )
-
-    def _tolerant_decision_needs_confirmation(
-        self,
-        decision: LocatorDecision,
-    ) -> bool:
-        candidate = decision.best
-        if candidate is None:
-            return True
-        required_matched_words = max(
-            _INITIAL_TOLERANT_CONFIRMATION_WORDS,
-            self._minimum_lock_words,
-        )
-        return candidate.matched_words < required_matched_words
 
     def _initial_context_supports_candidate(
         self,

@@ -80,22 +80,30 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(first_locked["start_ref"], "114:2:1")
         self.assertEqual(second_locked["start_ref"], "114:2:1")
 
-    def test_websocket_returns_tanzil_ayah_text_for_noisy_span_lock(self):
+    def test_websocket_returns_tanzil_ayah_text_after_noisy_span_confirmation(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines([
                 "102|3|كلا سوف تعلمون",
                 "102|4|ثم كلا سوف تعلمون",
                 "102|5|كلا لو تعلمون علم اليقين",
             ]),
-            recognizer_factory=lambda: FakeRecognizer(["فكلا سوف تعلمون كلا لو"]),
+            recognizer_factory=lambda: FakeRecognizer([
+                "فكلا سوف تعلمون كلا لو",
+                "فكلا سوف تعلمون كلا لو",
+            ]),
             minimum_lock_words=2,
         )
         client = TestClient(app)
 
         with client.websocket_connect("/ws/recitation") as websocket:
             websocket.send_json(chunk_payload(0))
+            candidate = websocket.receive_json()
+
+            websocket.send_json(chunk_payload(1))
             locked = websocket.receive_json()
 
+        self.assertEqual(candidate["type"], "lock_candidate")
+        self.assertEqual(candidate["reason"], "needs_confirmation")
         self.assertEqual(locked["type"], "locked")
         self.assertEqual(locked["reason"], "tolerant_span_match")
         self.assertEqual(locked["ayah_ref"], "102:3")
