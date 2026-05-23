@@ -8,7 +8,7 @@ from tarteel_realtime.locator import (
     QuranLocator,
 )
 from tarteel_realtime.progression import RecitationProgression, ayah_ref
-from tarteel_realtime.quran import QuranCorpus
+from tarteel_realtime.quran import QuranCorpus, normalize_arabic
 from tarteel_realtime.recognition import RecognitionResult
 from tarteel_realtime.session_events import (
     SessionEvent,
@@ -36,6 +36,7 @@ class RecitationTransitionPolicy:
         self._locator = QuranLocator(corpus, minimum_lock_words=minimum_lock_words)
         self._aligner = QuranAligner(corpus)
         self._progression = RecitationProgression(corpus)
+        self._initial_transcript_context = _InitialTranscriptContext()
         self._corpus = corpus
         self._has_locked = False
 
@@ -61,12 +62,12 @@ class RecitationTransitionPolicy:
         self,
         recognition: RecognitionResult,
     ) -> SessionEvent:
-        locator_decision = self._locator.locate_recitation(
-            recognition.transcript,
-            preferred_ref=self._progression.progress_anchor_ref,
+        recognition_for_location, locator_decision = (
+            self._recognition_and_decision_for_initial_location(recognition)
         )
 
         if locator_decision.status == LocatorStatus.NOT_FOUND:
+            self._initial_transcript_context.clear()
             return locating_event(
                 transcript=recognition.transcript,
                 confidence=recognition.confidence,
@@ -75,10 +76,11 @@ class RecitationTransitionPolicy:
             )
 
         if locator_decision.status == LocatorStatus.AMBIGUOUS:
+            self._initial_transcript_context.remember(recognition_for_location.transcript)
             return lock_candidate_event(
-                transcript=recognition.transcript,
-                confidence=recognition.confidence,
-                chunk_sequence=recognition.chunk_sequence,
+                transcript=recognition_for_location.transcript,
+                confidence=recognition_for_location.confidence,
+                chunk_sequence=recognition_for_location.chunk_sequence,
                 reason=locator_decision.reason,
                 candidate_refs=tuple(
                     candidate.ayah_ref
@@ -97,21 +99,53 @@ class RecitationTransitionPolicy:
 
         alignment_decision = self._aligner.evaluate_from(
             locked_candidate.start_ref,
-            recognition.transcript,
+            recognition_for_location.transcript,
         )
+        self._initial_transcript_context.clear()
         self._has_locked = True
         next_expected_ref = self._progression.mark_initial_lock(
             ayah_ref=locked_candidate.ayah_ref,
             alignment_decision=alignment_decision,
         )
         return locked_event(
-            transcript=recognition.transcript,
-            confidence=recognition.confidence,
-            chunk_sequence=recognition.chunk_sequence,
+            transcript=recognition_for_location.transcript,
+            confidence=recognition_for_location.confidence,
+            chunk_sequence=recognition_for_location.chunk_sequence,
             reason=locator_decision.reason,
             candidate=locked_candidate,
             next_expected_ref=next_expected_ref,
             consumed_words=alignment_decision.consumed_words,
+        )
+
+    def _recognition_and_decision_for_initial_location(
+        self,
+        recognition: RecognitionResult,
+    ) -> tuple[RecognitionResult, LocatorDecision]:
+        current_decision = self._locate_initial_recognition(recognition)
+        if (
+            current_decision.status == LocatorStatus.LOCKED
+            or not self._initial_transcript_context.has_transcript
+        ):
+            return recognition, current_decision
+
+        contextual_recognition = self._initial_transcript_context.combine(recognition)
+        contextual_decision = self._locate_initial_recognition(contextual_recognition)
+        if contextual_decision.status == LocatorStatus.LOCKED:
+            return contextual_recognition, contextual_decision
+        if (
+            current_decision.status == LocatorStatus.AMBIGUOUS
+            and contextual_decision.status == LocatorStatus.AMBIGUOUS
+        ):
+            return contextual_recognition, contextual_decision
+        return recognition, current_decision
+
+    def _locate_initial_recognition(
+        self,
+        recognition: RecognitionResult,
+    ) -> LocatorDecision:
+        return self._locator.locate_recitation(
+            recognition.transcript,
+            preferred_ref=self._progression.progress_anchor_ref,
         )
 
     def _handle_ayah_boundary(
@@ -281,3 +315,47 @@ def _is_waiting_for_audio_buffer(recognition: RecognitionResult) -> bool:
         and recognition.confidence == 0.0
         and not recognition.is_final
     )
+
+
+class _InitialTranscriptContext:
+    def __init__(self) -> None:
+        self._transcript = ""
+
+    @property
+    def has_transcript(self) -> bool:
+        return bool(self._transcript)
+
+    def combine(self, recognition: RecognitionResult) -> RecognitionResult:
+        transcript = recognition.transcript.strip()
+        if not transcript:
+            return recognition
+        return RecognitionResult(
+            transcript=_merge_transcripts(self._transcript, transcript),
+            confidence=recognition.confidence,
+            chunk_sequence=recognition.chunk_sequence,
+            is_final=recognition.is_final,
+        )
+
+    def remember(self, transcript: str) -> None:
+        self._transcript = transcript.strip()
+
+    def clear(self) -> None:
+        self._transcript = ""
+
+
+def _merge_transcripts(previous: str, current: str) -> str:
+    previous_words = previous.split()
+    current_words = current.split()
+    overlap = _overlap_word_count(
+        normalize_arabic(previous).split(),
+        normalize_arabic(current).split(),
+    )
+    return " ".join([*previous_words, *current_words[overlap:]]).strip()
+
+
+def _overlap_word_count(previous_words: list[str], current_words: list[str]) -> int:
+    max_overlap = min(len(previous_words), len(current_words))
+    for overlap in range(max_overlap, 0, -1):
+        if previous_words[-overlap:] == current_words[:overlap]:
+            return overlap
+    return 0

@@ -7,6 +7,9 @@ from tarteel_realtime.session_transitions import RecitationTransitionPolicy
 
 
 SAMPLE_TANZIL_LINES = [
+    "108|1|إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
+    "108|2|فَصَلِّ لِرَبِّكَ وَانْحَرْ",
+    "108|3|إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ",
     "114|1|قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
     "114|2|مَلِكِ النَّاسِ",
 ]
@@ -35,6 +38,78 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
         self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=2, word_index=1))
         self.assertEqual(event.next_expected_ref, QuranRef(surah=114, ayah=2, word_index=2))
+
+    def test_pre_lock_short_asr_snippets_accumulate_until_unique_ayah_lock(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=3,
+        )
+
+        first_event = policy.handle_recognition(
+            RecognitionResult(transcript="إِنَّا", confidence=0.9, chunk_sequence=0)
+        )
+        second_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="أَعْطَيْنَاكَ الْكَوْثَرَ",
+                confidence=0.9,
+                chunk_sequence=1,
+            )
+        )
+
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "insufficient_context")
+        self.assertEqual(second_event.type, SessionEventType.LOCKED)
+        self.assertEqual(second_event.reason, "unique_match")
+        self.assertEqual(second_event.chunk_sequence, 1)
+        self.assertEqual(second_event.ayah_ref, QuranRef(surah=108, ayah=1))
+        self.assertEqual(second_event.start_ref, QuranRef(surah=108, ayah=1, word_index=1))
+        self.assertIn("إِنَّا", second_event.transcript)
+        self.assertIn("الْكَوْثَرَ", second_event.transcript)
+
+    def test_stale_pre_lock_context_does_not_block_current_unique_lock(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=2,
+        )
+
+        policy.handle_recognition(
+            RecognitionResult(transcript="إِنَّا", confidence=0.9, chunk_sequence=0)
+        )
+        event = policy.handle_recognition(
+            RecognitionResult(transcript="مَلِكِ النَّاسِ", confidence=0.9, chunk_sequence=1)
+        )
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "unique_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
+        self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=2, word_index=1))
+        self.assertEqual(event.transcript, "مَلِكِ النَّاسِ")
+
+    def test_pre_lock_transcript_context_deduplicates_overlapping_asr_snippets(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=3,
+        )
+
+        policy.handle_recognition(
+            RecognitionResult(
+                transcript="إِنَّا أَعْطَيْنَاكَ",
+                confidence=0.9,
+                chunk_sequence=0,
+            )
+        )
+        event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="أَعْطَيْنَاكَ الْكَوْثَرَ",
+                confidence=0.9,
+                chunk_sequence=1,
+            )
+        )
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "unique_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=108, ayah=1))
+        self.assertEqual(event.transcript, "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ")
 
     def test_tracks_post_lock_progression_inside_transition_policy(self):
         policy = RecitationTransitionPolicy(
