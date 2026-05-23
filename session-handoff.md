@@ -2,30 +2,40 @@
 
 ## Verified Now
 
-- Active slice: Point 4 of the ASR latency plan, isolated in `.worktrees/asr-point-4-lock-stability` on branch `codex/asr-point-4-lock-stability`.
-- Base branch/commit: `origin/codex/asr-point-3-short-ayah-stability` at `b9d9a10`.
+- Active slice: Point 4 lock stability, isolated in `.worktrees/asr-point-4-lock-stability` on branch `codex/asr-point-4-lock-stability`.
+- Latest pushed implementation commit: `a188fd4` (`Keep unscoped tolerant spans as candidates`).
 - WebSocket `/ws/recitation` remains the only transport.
 - Heavy ASR dependencies remain optional; default tests do not require Whisper, Torch, faster-whisper, GPU, R2, or network access.
-- The default ASR buffering profile remains `stable`; Point 4 is intended to be tested with opt-in `TARTEEL_ASR_BUFFERING_PROFILE=low-latency` on the faster-whisper GPU backend.
-- Point 4 changes `tarteel_realtime/session_transitions.py` so low-evidence initial tolerant matches return `lock_candidate/needs_confirmation` instead of globally locking from two weak words.
-- Exact unique initial locks still lock immediately, and stronger tolerant initial matches still lock immediately when they have at least three matched Quran words, or the configured `minimum_lock_words` if higher.
-- After first lock, ayah-boundary snippets now accumulate only through the ordered progression scope so short next-ayah fragments can combine without global relock.
-- The previous RunPod public manual-test URL may still be `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`, but it has not yet been updated to this Point 4 branch.
+- The default ASR buffering profile remains `stable`; Point 4 was verified with opt-in `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`.
+- Point 4 behavior:
+  - Exact unique initial locks still lock immediately.
+  - Initial `tolerant_match` locks require prior candidate support from earlier `lock_candidate` events.
+  - Contextual tolerant locks are accepted only when the candidate was previously surfaced, not merely from re-locating merged noisy text.
+  - Unscoped global `tolerant_span_match` stays a `lock_candidate/needs_confirmation` instead of becoming an initial global lock.
+  - At ayah boundaries after first lock, short snippets accumulate only through ordered progression scope.
+- RunPod backend is running from `/workspace/tarteel-realtime` at commit `a188fd4` with faster-whisper on CUDA and low-latency buffering.
+- Public manual-test URL for the iOS Custom preset: `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`.
 
 ## Verification
 
-- Red TDD checks failed first for missing initial tolerant confirmation and missing ordered ayah-boundary snippet accumulation.
-- Focused local checks passed: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_locator tests.test_api tests.test_recitation_stream -v` with 57 tests.
-- Full local Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 180 tests.
-- Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- Focused local checks passed after final code change: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_api -v` with 37 tests.
+- Full local deterministic suite passed after final docs sanity: `uv run python -B -m unittest discover -s tests -v` with 180 tests.
+- Public health check returned HTTP 200 with `{"status":"ok"}` after the corrected faster-whisper launch.
+- Final RunPod replay from `a188fd4` with 1s chunks:
+  - `108001`: first lock `108:1` at sequence 5.
+  - `108002`: no lock; first candidate remained unrelated/multiple.
+  - `108003`: first lock `108:3` at sequence 3.
+  - `004001`: first lock `4:1` at sequence 19; previous false `39:6` lock is blocked.
+  - `004002`: first lock `4:2` at sequence 11.
+  - `004003`: first lock `4:3` at sequence 8.
 
 ## Current Risks
 
-- RunPod faster-whisper replay has not yet been run for Point 4, so merge confidence is local only.
-- The expected success criterion is preserving Point 3 Surah 108 gains while preventing the previous long Surah 4 false global locks from becoming `locked` events.
-- `108002` was still unresolved in Point 3 and may remain unresolved unless the ASR transcript itself becomes matchable.
-- Explicit selected-recitation scope is still not implemented. That should be the next slice after this lock-stability gate is accepted.
+- Point 4 is a meaningful safety improvement, but it is not enough to make low-latency the default.
+- `108002` still needs a product/model fix; the current ASR transcript is too distorted for clean matching.
+- Long Surah 4 still has mid-ayah locks and noisy wrong/progress events after lock.
+- Explicit selected-recitation scope should be the next slice; it is the cleanest way to avoid full-Quran ambiguity when the app already knows the user selected Surah 108 or Surah 4:1-3.
 
 ## Next Best Step
 
-Ask for GPU approval, push/check out `codex/asr-point-4-lock-stability` on RunPod, restart the faster-whisper low-latency WebSocket backend, and replay all six local audio fixtures with disabled WebSocket pings. Do not recommend merging to `main` until that real-ASR replay is captured.
+Manual-test the iOS Custom preset against `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`. If accepted, keep Point 4 as the lock-stability slice and start the next worktree for selected recitation scope.

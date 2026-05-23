@@ -14,11 +14,32 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: Point 4 lock stability and ordered ayah-boundary progression for low-latency real ASR.
-- Current blocker: Point 4 is locally implemented and deterministic-tested, but RunPod faster-whisper replay has not yet verified whether it preserves Surah 108 gains while reducing long-ayah false locks.
+- Current highest-priority unfinished feature: manual acceptance of Point 4 lock stability, followed by explicit selected-recitation scope.
+- Current blocker: Point 4 improves long-ayah false-lock behavior under RunPod faster-whisper replay, but low-latency remains not default-quality because `108002` still does not lock and long-ayah streams still emit noisy wrong/progress events.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 070
+
+- Date: 2026-05-24
+- Goal: GPU-verify and harden Point 4 after the first lock-stability replay still false-locked long Surah 4 fixtures.
+- Completed:
+  - Pushed Point 4 branch updates through commit `a188fd4` on `origin/codex/asr-point-4-lock-stability`.
+  - Updated the RunPod workspace to `a188fd4` and restarted the backend with `TARTEEL_WHISPER_BACKEND=faster-whisper`, `TARTEEL_WHISPER_DEVICE=cuda:0`, `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`, and `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`.
+  - Corrected an initial RunPod restart mistake where the project `.venv` lacked optional `faster-whisper`; relaunched with `uv run --python 3.13 --with faster-whisper ...` and verified public health at `https://ku0qwcps749c48-8000.proxy.runpod.net/health`.
+  - Tightened initial lock policy so all initial tolerant locks require prior candidate support, contextual tolerant locks use prior candidate history instead of re-locating merged noisy text, and unscoped global `tolerant_span_match` stays a candidate rather than locking.
+  - Preserved exact unique initial locks and confirmed non-span tolerant matches, plus ordered ayah-boundary accumulation after first lock.
+- Verification run:
+  - Focused local checks after the final code change passed: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_api -v` with 37 tests.
+  - RunPod final replay from `a188fd4` with 1s chunks: `108001` locked `108:1` at sequence 5; `108002` did not lock; `108003` locked `108:3` at sequence 3.
+  - RunPod final replay from `a188fd4` with 1s chunks: `004001` no longer false-locked `39:6` and first locked `4:1` at sequence 19; `004002` first locked `4:2` at sequence 11; `004003` first locked `4:3` at sequence 8.
+- Known risk or unresolved issue:
+  - `108002` remains unresolved because faster-whisper emits phrases such as `فَصَلِّ لِرَحْسٍ` and `فِي رَبِّكَ وَانْظُرْ`, which are not enough for a clean `108:2` lock.
+  - Long Surah 4 locks now target the expected surah/ayahs, but some locks start mid-ayah and noisy `wrong` events remain after lock.
+  - Low-latency is still opt-in and should not be made default from this evidence alone.
+- Next best step: manual-test the iOS Custom preset against the running Point 4 backend, then implement explicit selected-recitation scope so Surah 108 and Surah 4 tests can constrain global search to the known recitation range.
 
 
 ### Session 069

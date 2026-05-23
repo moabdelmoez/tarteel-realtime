@@ -423,7 +423,7 @@
             "area": "asr-buffering",
             "title": "Reduced live ASR chunking gate",
             "user_visible_behavior": "The backend should use smaller rolling ASR windows for streaming-like ayah tracking while preserving quiet-audio safety and producing usable live ayah progression on real Quran audio.",
-            "status": "in_progress",
+            "status": "blocked",
             "verification": [
                 "uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app -v",
                 "uv run python -B -m unittest discover -s tests -v",
@@ -448,9 +448,13 @@
                 "Point 4 branch codex/asr-point-4-lock-stability adds a local candidate-stability gate so weak initial tolerant matches emit lock_candidate/needs_confirmation instead of locking globally.",
                 "Point 4 adds ordered ayah-boundary snippet accumulation scoped to the expected ordered ayah window, avoiding broad global relock after the first lock.",
                 "Point 4 focused local checks passed with 57 tests: uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_locator tests.test_api tests.test_recitation_stream -v.",
-                "Point 4 full local deterministic suite passed with 180 tests, and compile check passed: uv run python -m compileall -q tarteel_realtime tests."
+                "Point 4 full local deterministic suite passed with 180 tests, and compile check passed: uv run python -m compileall -q tarteel_realtime tests.",
+                "Point 4 final branch commit a188fd4 blocks unscoped global tolerant_span_match from becoming an initial lock while preserving exact unique locks and confirmed tolerant_match locks.",
+                "Point 4 final RunPod faster-whisper replay preserved short gains: 108001 locked 108:1 at sequence 5, 108003 locked 108:3 at sequence 3, and 108002 still did not lock.",
+                "Point 4 final RunPod faster-whisper replay improved long Surah 4 targets: 004001 first locked 4:1 at sequence 19 instead of false 39:6, 004002 first locked 4:2 at sequence 11, and 004003 first locked 4:3 at sequence 8.",
+                "Point 4 remains not default-quality because 108002 still no-locks, long locks can start mid-ayah, and noisy wrong/progress events remain after lock."
             ],
-            "notes": "Active Point 4 slice. Local deterministic evidence now covers weak tolerant-lock confirmation and ordered ayah-boundary accumulation, but RunPod faster-whisper replay is still required before this can move from in_progress back to a passing or blocked quality decision."
+            "notes": "Blocked as a default/product live-tracking gate, but Point 4 is complete as a branch/manual-test safety improvement. Low-latency remains opt-in; next slice should add selected recitation scope."
         },
         {
             "id": "backend-005",

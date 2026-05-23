@@ -47,6 +47,14 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-24 - Point 4 Final Lock-Stability Replay
+
+- Point 4 now prevents unscoped global tolerant-span locks from becoming initial locks; this blocked the previous `004001 -> 39:6` false lock and let the replay reach `4:1` instead.
+- Final RunPod replay from `a188fd4` preserved short gains for `108001` and `108003`, while `108002` still did not lock.
+- Long Surah 4 final replay first locked `004001 -> 4:1`, `004002 -> 4:2`, and `004003 -> 4:3`, but some locks start mid-ayah and noisy wrong/progress events remain.
+- Release posture: Point 4 is a valid branch/manual-test candidate, but low-latency remains opt-in. The next quality slice should use selected recitation scope to reduce full-Quran ambiguity.
+
+
 ### 2026-05-24 - Point 4 Lock Stability Local Gate
 
 - Point 4 adds a candidate-stability gate for initial tolerant locks: weak global tolerant matches now produce `lock_candidate/needs_confirmation`, while exact unique locks and stronger tolerant matches remain immediate.
