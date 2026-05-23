@@ -31,6 +31,8 @@
 - [ ] iOS WebSocket capture changes keep the app-owned flow: `MicrophoneAudioStreamer` -> `VoiceActivityDetector` -> `AudioChunkPayload` -> `BackendWebSocketClient.send(...)`.
 - [ ] WebSocket transport changes preserve one fresh recitation session and rolling ASR buffer per socket connection while keeping the heavy Whisper model lazily shared by ASR runtime wiring.
 - [ ] Faster-whisper backend changes keep `faster-whisper` optional, use `TARTEEL_WHISPER_BACKEND=faster-whisper`, and include a RunPod smoke before iOS claims.
+- [ ] GPU bootstrap replay-fixture changes keep `TARTEEL_GIT_REF` and `TARTEEL_LOCAL_AUDIO_SAMPLES` documented and covered by `tests.test_runpod_bootstrap`.
+- [ ] Real ASR WebSocket replay commands that may cross model load or long inference windows use `--disable-ping` or equivalent disabled WebSocket keepalive settings.
 - [ ] Real ASR WebSocket docs include `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`, and the speech gate still runs after WebSocket frame decode but before rolling ASR chunking.
 - [ ] iOS state reducer changes still keep the last meaningful post-lock event visible when `waiting_for_audio_buffer` packets arrive.
 - [ ] When `data/tanzil/quran-simple-clean.txt` exists, its manifest still validates: `uv run python -m tarteel_realtime.quran_data --check-manifest`.

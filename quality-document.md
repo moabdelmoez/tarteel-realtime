@@ -46,6 +46,14 @@ Before treating a future slice as passing:
 
 ## Quality Log
 
+### 2026-05-23 - Faster-Whisper Point 1 RunPod Replay
+
+- Point 1 of the latency plan is verified as an infrastructure/runtime slice: faster-whisper can run behind the existing WebSocket ASR backend on RunPod using `OdyAsh/faster-whisper-base-ar-quran`, CUDA `cuda:0`, and `float16` on an NVIDIA L4.
+- The GPU bootstrap path now hydrates the long Surah 4 and short Surah 108 MP3 fixtures from R2, converts them to mono 16 kHz WAV, and can check out a feature branch via `TARTEEL_GIT_REF`.
+- WebSocket replay tooling now supports disabled client pings for long first model-load windows.
+- RunPod replay evidence is mixed but actionable: warmed long Surah 4 first produced an ASR-backed event in 0.390s and locked `4:1`, while isolated `108001.wav` still stopped at `lock_candidate` and long replay still emitted false `wrong` events.
+- Quality risk: this improves backend/runtime latency and reproducibility but does not yet reduce the stable ASR buffering window or solve short-ayah verification waits.
+
 ### 2026-05-23 - WebSocket-Only Transport
 
 - The app and backend now use WebSocket as the only transport: `/ws/recitation` locally, by LAN, or through RunPod WSS.

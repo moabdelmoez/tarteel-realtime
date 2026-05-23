@@ -251,7 +251,8 @@
                 "Do not add heavyweight Whisper/Torch dependencies to the default install.",
                 "Add deterministic tests for ASR backend factory/configuration using injected recognizers.",
                 "Run uv run python -B -m unittest discover locally.",
-                "On RunPod GPU, run the real ASR WebSocket backend with optional dependencies and verify at least one Surah 114 audio sample produces a locked event over WS."
+                "On RunPod GPU, run the real ASR WebSocket backend with optional dependencies and verify at least one Surah 114 audio sample produces a locked event over WS.",
+                "On RunPod GPU, run the real ASR WebSocket backend with TARTEEL_WHISPER_BACKEND=faster-whisper and replay short plus long local_audio WAV fixtures with disabled WebSocket pings."
             ],
             "evidence": [
                 "Added tarteel_realtime/asr_app.py with env-driven ASR backend settings, lazy Whisper recognizer construction, and injected-recognizer test seams.",
@@ -262,7 +263,10 @@
                 "RunPod L4 GPU verified NVIDIA L4 driver 570.195.03 with 23034 MiB VRAM.",
                 "RunPod real ASR WebSocket server started with UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000.",
                 "RunPod WebSocket client for /workspace/tarteel-realtime-run/114002.wav returned type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1.",
-                "RunPod WebSocket client for /workspace/tarteel-realtime-run/114001.wav returned type locked, transcript قُلْ أَعُوذُ بِرَبِّ النَّاسِ, ayah_ref 114:1, start_ref 114:1:1."
+                "RunPod WebSocket client for /workspace/tarteel-realtime-run/114001.wav returned type locked, transcript قُلْ أَعُوذُ بِرَبِّ النَّاسِ, ayah_ref 114:1, start_ref 114:1:1.",
+                "RunPod NVIDIA L4 faster-whisper backend from commit dbc100b ran OdyAsh/faster-whisper-base-ar-quran with compute_type=float16 on cuda:0 behind WS /ws/recitation and returned HTTP 200 health publicly.",
+                "RunPod faster-whisper replay for 108001.wav with 1s chunks returned 8 locating events and 1 lock_candidate; first non-wait event was sequence 4 at 5.776s wall time with cold model warm-up included.",
+                "RunPod faster-whisper replay for 004001.wav with 1s chunks returned 1 locked event at 4:1, 6 progress events, and first non-wait response at 0.390s wall time with 355.0ms roundtrip after warm-up; false wrong events remain."
             ],
             "notes": "Passing for opt-in real ASR WebSocket proof using whole-file WAV chunks. The next risk is true live microphone chunk buffering/cadence; current Whisper path is not yet optimized for tiny streaming chunks."
         },
@@ -494,7 +498,9 @@
                 "Swift client core passed with 17 tests, the iOS simulator app target built successfully, and the local WebSocket smoke returned the scripted locked/wrong event flow.",
                 "Fresh RunPod pod tlk814bso1lnjs bootstrapped from commit 5e8b4b5, hydrated full Tanzil plus updated 004/108 local_audio artifacts from R2, and ran the real ASR WebSocket backend on 0.0.0.0:8000 with basharalrfooh/whisper-small-quran, torch 2.7.1, torchvision 0.22.1, and CUDA on NVIDIA L4.",
                 "Public WSS replay through wss://tlk814bso1lnjs-8000.proxy.runpod.net/ws/recitation completed for concatenated Surah 108 and returned a locked event for 108:3; pod-local long Surah 4 replay locked 4:1 and produced progress events.",
-                "The rebuilt iOS simulator app was installed and launched in the iPhone 17 Pro simulator as process 4167 with microphone permission granted and the RunPod WSS URL copied to the simulator pasteboard."
+                "The rebuilt iOS simulator app was installed and launched in the iPhone 17 Pro simulator as process 4167 with microphone permission granted and the RunPod WSS URL copied to the simulator pasteboard.",
+                "Point 1 public WSS smoke against wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation returned a locating waiting_for_audio_buffer packet with --disable-ping, proving the WebSocket-only manual-test URL is reachable.",
+                "Point 1 RunPod faster-whisper replay kept the existing WS /ws/recitation payload contract while exercising the new Surah 108 and Surah 4 fixtures over chunked audio."
             ],
             "notes": "WebSocket is now the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and enter the /ws/recitation URL in the iOS Custom preset. Latest RunPod transport evidence is healthy, but ASR quality still needs work for isolated short ayahs and false wrong events on long ayahs."
         },
@@ -511,7 +517,8 @@
                 "Add deterministic tests for helper behavior that does not require network access.",
                 "Validate the GPU bootstrap script syntax.",
                 "Keep root harness docs current: AGENTS.md, evaluator-rubric.md, quality-document.md, codex-progress.md, feature_list.json, session-handoff.md, and clean-state-checklist.md.",
-                "Keep at most one in-progress feature in this file."
+                "Keep at most one in-progress feature in this file.",
+                "Run uv run python -B -m unittest tests.test_runpod_bootstrap tests.test_ws_client -v when changing GPU bootstrap branch/sample handling or WebSocket replay keepalive behavior."
             ],
             "evidence": [
                 "Added scripts/r2_artifacts.py with upload, download, and list commands using R2 S3-compatible credentials from environment variables.",
@@ -540,7 +547,10 @@
                 "Added scripts/gpu_bootstrap.sh as a provider-neutral bootstrap entrypoint with /workspace-to-$HOME defaults and TARTEEL_DOWNLOAD_ARTIFACTS support while keeping TARTEEL_DOWNLOAD_R2_ARTIFACTS compatibility.",
                 "scripts/runpod_bootstrap.sh now delegates to scripts/gpu_bootstrap.sh so existing RunPod commands keep working.",
                 "Updated README and docs/runpod-r2.md to prefer GPU-host wording and scripts/gpu_bootstrap.sh, with RunPod kept as an example.",
-                "Portability slice verification passed: uv run python -B -m unittest tests.test_runpod_bootstrap -v (6 tests), uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap -v (11 tests), bash -n scripts/gpu_bootstrap.sh, and bash -n scripts/runpod_bootstrap.sh."
+                "Portability slice verification passed: uv run python -B -m unittest tests.test_runpod_bootstrap -v (6 tests), uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap -v (11 tests), bash -n scripts/gpu_bootstrap.sh, and bash -n scripts/runpod_bootstrap.sh.",
+                "GPU bootstrap now supports TARTEEL_GIT_REF for branch/commit testing and TARTEEL_LOCAL_AUDIO_SAMPLES for replay fixture selection; default samples are 004001, 004002, 004003, 108001, 108002, and 108003.",
+                "RunPod bootstrap from commit dbc100b hydrated full Tanzil plus all six new MP3 fixtures from R2, converted them to mono 16 kHz WAV, and validated the Tanzil manifest with checksum 054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49.",
+                "Point 1 local verification passed with focused bootstrap/WebSocket/ASR tests at 29 tests, bash syntax checks for both bootstrap scripts, 166 full Python tests, compile check, JSON validation, and git diff --check."
             ],
             "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token. Fresh bootstrap is verified on a CPU-only RunPod pod and now has a provider-neutral script entrypoint; GPU is next needed only for real ASR inference. Harness docs now include agent operating instructions, evaluator scoring, and rolling quality posture."
         }

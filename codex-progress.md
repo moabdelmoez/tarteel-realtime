@@ -15,10 +15,46 @@
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
 - Current highest-priority unfinished feature: live ayah progression quality after the WebSocket transport/session fixes.
-- Current blocker: reduced-window live tracking remains blocked; stable defaults are restored to `4200/4200/0`, and WebSocket ASR quality needs separate longer-surah evidence with `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
+- Current blocker: Point 1 faster-whisper GPU path is implemented and verified through RunPod replay; pause before Point 2 until manual Custom-preset testing confirms the user-facing cadence.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 066
+
+- Date: 2026-05-23
+- Goal: Implement Point 1 of the ASR latency plan: make the faster-whisper GPU path reproducible and prove it through WebSocket replay before moving to the next optimization.
+- Completed:
+  - Created worktree `.worktrees/asr-point-1-faster-whisper-gpu` on branch `codex/asr-point-1-faster-whisper-gpu`.
+  - Added red/green coverage for GPU bootstrap branch selection and the WebSocket client's long-inference ping behavior.
+  - Updated `scripts/gpu_bootstrap.sh` so a GPU host can check out `TARTEEL_GIT_REF`, hydrate the new local audio sample set, and convert `004001`, `004002`, `004003`, `108001`, `108002`, and `108003` from MP3 to mono 16 kHz WAV.
+  - Kept `scripts/runpod_bootstrap.sh` as the compatibility wrapper over the provider-neutral GPU bootstrap script.
+  - Added `--disable-ping` to `tarteel_realtime.ws_client` so long first inference/model-load windows do not trip Python WebSocket keepalive while testing real ASR.
+  - Updated README and RunPod/R2 docs with the new fixture set, branch-testing bootstrap flow, faster-whisper backend command, and replay commands.
+  - Bootstrapped RunPod from pushed commit `dbc100b` using `/workspace/tarteel-r2.env` without printing secrets.
+  - Verified the pod GPU as NVIDIA L4, driver `570.195.03`, 23034 MiB VRAM.
+  - Hydrated full Tanzil plus all six new MP3 samples from R2; converted WAV durations were about `004001=66.38s`, `004002=37.92s`, `004003=51.82s`, `108001=8.93s`, `108002=5.79s`, and `108003=7.83s`.
+  - Started the real ASR WebSocket backend on `0.0.0.0:8000` with `TARTEEL_WHISPER_BACKEND=faster-whisper`, `TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran`, CUDA `cuda:0`, and `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`.
+  - Public health succeeded at `https://ku0qwcps749c48-8000.proxy.runpod.net/health` and public WSS accepted a smoke packet at `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`.
+  - Pod-local `108001.wav` replay with 1s chunks returned 9 events: 8 `locating`, 1 `lock_candidate`; the first non-wait event was sequence 4 at 5.776s wall time with 5388.1ms roundtrip, including cold model warm-up.
+  - Pod-local `004001.wav` replay with 1s chunks returned 67 events: 8 `locating`, 1 `lock_candidate`, 1 `locked`, 6 `progress`, 47 `uncertain`, and 4 `wrong`; first non-wait event was sequence 4 at 0.390s with 355.0ms roundtrip, and the replay locked `4:1` at sequence 9.
+- Verification run:
+  - Red TDD run before implementation failed as expected for missing bootstrap fixture support, missing git ref checkout, and missing `websocket_connect_kwargs`.
+  - Focused local run passed: `uv run python -B -m unittest tests.test_runpod_bootstrap tests.test_ws_client tests.test_asr_smoke tests.test_asr_runtime tests.test_asr_app -v` with 29 tests.
+  - Script syntax passed: `bash -n scripts/gpu_bootstrap.sh` and `bash -n scripts/runpod_bootstrap.sh`.
+  - Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 166 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests scripts`.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Whitespace check passed: `git diff --check`.
+  - RunPod focused tests passed: `uv run python -B -m unittest tests.test_runpod_bootstrap tests.test_ws_client -v` with 14 tests.
+  - RunPod full Tanzil manifest validated with 6236 ayahs and checksum `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`.
+- Known risk or unresolved issue:
+  - This point proves the faster-whisper GPU path and replay harness, but it does not reduce the current 5-second ASR buffering window by itself.
+  - Short isolated ayah replay still stopped at `lock_candidate` for `108001`; the user-facing short-ayah wait remains a later optimization point.
+  - Long Surah 4 replay locked and progressed quickly after warm-up, but ASR noise still emitted false `wrong` events.
+  - The first replay includes cold model load/warm-up, so steady-state latency should be judged from the later long replay and manual app testing.
+- Next best step: manually test the iOS Custom preset with `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`; if the user accepts Point 1 behavior, create the next worktree for Point 2.
 
 ### Session 064
 
