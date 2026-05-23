@@ -24,6 +24,12 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         self.assertIn("Start the local Simulator backend", source)
         self.assertIn("Socket is not connected", source)
 
+    def test_view_model_uses_websocket_transport_for_all_presets(self) -> None:
+        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+
+        self.assertIn("try await socketClient.connect", source)
+        self.assertIn("await self?.sendAudioChunk", source)
+
 
 if __name__ == "__main__":
     unittest.main()

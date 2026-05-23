@@ -15,7 +15,6 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
     public let confidence: Double
     public let chunkSequence: Int?
     public let reason: String?
-    public let sessionId: String?
     public let candidateRefs: [String]
     public let ayahText: String?
     public let ayahRef: String?
@@ -32,7 +31,6 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         confidence: Double,
         chunkSequence: Int?,
         reason: String?,
-        sessionId: String? = nil,
         candidateRefs: [String],
         ayahText: String? = nil,
         ayahRef: String?,
@@ -48,7 +46,6 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         self.confidence = confidence
         self.chunkSequence = chunkSequence
         self.reason = reason
-        self.sessionId = sessionId
         self.candidateRefs = candidateRefs
         self.ayahText = ayahText
         self.ayahRef = ayahRef
@@ -74,7 +71,6 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
         case confidence
         case chunkSequence = "chunk_sequence"
         case reason
-        case sessionId = "session_id"
         case candidateRefs = "candidate_refs"
         case ayahText = "ayah_text"
         case ayahRef = "ayah_ref"

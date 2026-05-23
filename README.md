@@ -125,7 +125,7 @@ TARTEEL_ASR_MIN_FRAME_RMS=150
 TARTEEL_WHISPER_BACKEND=transformers
 ```
 
-Each incoming WebSocket or LiveKit audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. The default is the stable larger-window profile; smaller experimental windows can still be supplied through environment variables.
+Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. The default is the stable larger-window profile; smaller experimental windows can still be supplied through environment variables.
 
 Local or CPU smoke command:
 
@@ -190,97 +190,31 @@ uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --ur
 
 Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
 
-## LiveKit Cloud + VAD Transport Spike
+## WebSocket + VAD Transport
 
-The WebSocket transport remains the default and fallback path. The LiveKit path is a local-dev WebRTC spike that reuses the same recitation session engine and publishes backend events over a reliable LiveKit data topic:
+WebSocket is the only transport for app audio. The iOS prototype uses one app-owned microphone pipeline: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends `AudioChunkPayload` messages to `WS /ws/recitation`.
+
+When VAD metadata is available, each WebSocket chunk may include:
+
+```json
+{
+  "voice_activity": {
+    "probability": 0.82,
+    "is_speech_active": true,
+    "event": "speech_start"
+  }
+}
+```
+
+The backend treats that metadata as transport-neutral input to the rolling ASR buffer. It can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present. If VAD is unavailable, the WebSocket path still works with PCM16 audio and backend RMS gating.
+
+For RunPod or another GPU host, expose the real ASR backend directly over WSS and enter that URL in the iOS `Custom` preset:
 
 ```text
-tarteel.recitation.event
+wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 ```
 
-The iOS LiveKit preset now uses the same app-owned microphone pipeline as the WebSocket fallback: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD, and the LiveKit adapter feeds speech chunks into the SDK with manual rendering mode through `AudioManager.shared.mixer.capture(appAudio:)`. The client also publishes VAD metadata on:
-
-```text
-tarteel.voice_activity
-```
-
-The LiveKit worker stores the latest VAD packet by participant identity and attaches it to decoded audio frames before the rolling ASR buffer sees them. If VAD is unavailable, LiveKit audio still publishes normally; when VAD is available, inactive non-event chunks are suppressed client-side while `speech_start` and `speech_end` chunks are still sent.
-
-For the GPU ASR smoke, prefer LiveKit Cloud instead of tunneling the media server. Copy `.env.example` to `.env` and fill the Cloud values from the LiveKit project dashboard:
-
-```text
-LIVEKIT_URL=wss://<project>.livekit.cloud
-LIVEKIT_API_KEY=<livekit-api-key>
-LIVEKIT_API_SECRET=<livekit-api-secret>
-TARTEEL_LIVEKIT_ROOM=tarteel-recitation
-```
-
-`LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` must be provided together. If none are set, the code falls back to local `livekit-server --dev` defaults.
-
-Start a local LiveKit server in dev mode:
-
-```bash
-livekit-server --dev
-```
-
-For LiveKit Cloud, do not start `livekit-server --dev`; only start the token backend locally so the iOS Simulator can fetch a Cloud join token:
-
-```bash
-uv run --env-file .env --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
-```
-
-For local dev server testing, the same backend command works without `.env`:
-
-```bash
-uv run --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
-```
-
-The token endpoint returns the configured LiveKit URL and grants:
-
-```text
-GET http://127.0.0.1:8000/livekit/recitation-token?identity=ios-simulator&role=client
-```
-
-Run the Python LiveKit worker on the machine that has ASR access. For RunPod, set the same LiveKit Cloud env values as RunPod secrets or source them in the pod before launching the worker. Real ASR dependencies remain opt-in just like the WebSocket ASR app:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-uv run --env-file .env --with livekit --with livekit-api --with transformers --with torch --with torchaudio \
-  python -m tarteel_realtime.livekit_worker
-```
-
-LiveKit/WebRTC may deliver worker frames at a transport-selected sample rate. Include `torchaudio` for the Transformers real-ASR worker so the pipeline can resample that stream before Whisper inference. The faster-whisper backend resamples PCM to 16 kHz before calling CTranslate2, so it uses `--with faster-whisper` instead:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_WHISPER_BACKEND=faster-whisper \
-TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran \
-TARTEEL_WHISPER_DEVICE=cuda:0 \
-TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
-uv run --env-file .env --with livekit --with livekit-api --with faster-whisper \
-  python -m tarteel_realtime.livekit_worker
-```
-
-The fixture WAV smoke path uses mono 16 kHz audio, so it can pass even when transport resampling dependencies are missing. The same speech-energy gate runs after the LiveKit/WebSocket transport frame is decoded and before the rolling ASR buffer is built.
-
-For a transport-only smoke without pulling Whisper/Torch, pass a deterministic transcript script:
-
-```bash
-TARTEEL_TANZIL_PATH=fixtures/quran/sample-tanzil.txt \
-uv run --env-file .env --with livekit --with livekit-api \
-  python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"
-```
-
-With the worker running, publish synthetic audio and wait for a recitation event:
-
-```bash
-uv run --env-file .env --with livekit --with livekit-api \
-  python -m tarteel_realtime.livekit_smoke
-```
-
-The iOS prototype includes a `LiveKit` preset that fetches the token endpoint above. In the Simulator, `http://127.0.0.1:8000/livekit/recitation-token` reaches the Mac token backend; the returned `wss://...livekit.cloud` URL is what both iOS and the RunPod worker join. LiveKit and FluidAudio are compile-guarded: the app still builds without those SDKs linked, and selecting the LiveKit preset reports that the SDK is unavailable until the app target is linked with LiveKit. FluidAudio/Silero VAD is also guarded; when linked, local microphone chunks carry `voice_activity` metadata through the WebSocket fallback path and the LiveKit `tarteel.voice_activity` topic. Backend buffering can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present.
+The `Custom` preset accepts full WebSocket URLs. For RunPod proxy hosts pasted without a scheme or path, the app normalizes to `wss://.../ws/recitation`.
 
 The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.
 
@@ -304,7 +238,7 @@ uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio
 
 If upload fails with `AccessDenied` during `PutObject`, the credentials are authenticating but do not have write access to the bucket. Use an R2 S3 token with Object Read & Write scope for `tarteel-realtime`.
 
-Download on RunPod:
+Download on a GPU host (RunPod example):
 
 ```bash
 source /workspace/tarteel-r2.env
@@ -315,9 +249,9 @@ ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fix
 ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
 ```
 
-The full RunPod/R2 workflow is documented in `docs/runpod-r2.md`.
+For full host bootstrap steps, see `docs/runpod-r2.md`. The preferred bootstrap entrypoint is `scripts/gpu_bootstrap.sh` (with `scripts/runpod_bootstrap.sh` kept as a compatibility wrapper).
 
-The current GitHub repo is public, so a fresh RunPod pod can clone it over HTTPS. If the repo becomes private again, configure a read-only deploy key or another GitHub auth method before running the bootstrap. Do not use `scp` for pod setup; add R2 credentials manually to `/workspace/tarteel-r2.env` or through RunPod secrets.
+The current GitHub repo is public, so a fresh GPU host can clone it over HTTPS. If the repo becomes private again, configure a read-only deploy key or another GitHub auth method before running the bootstrap. Do not use `scp` for host setup; add R2 credentials manually to your host env file (for RunPod, `/workspace/tarteel-r2.env`) or through provider secrets.
 
 ## iOS Prototype
 
@@ -341,7 +275,7 @@ The app defaults to the `Simulator` backend preset:
 ws://127.0.0.1:8000/ws/recitation
 ```
 
-Switch to `Custom` for a LAN, tunnel, or later RunPod real-ASR WebSocket URL. For a physical iPhone, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP in the app. More details are in `ios/README.md`.
+Switch to `Custom` for a LAN, tunnel, or any remote real-ASR WebSocket URL. For a physical iPhone, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP in the app. More details are in `ios/README.md`.
 
 ## Verify
 

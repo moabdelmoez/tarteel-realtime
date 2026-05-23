@@ -7,20 +7,26 @@ struct BackendEndpointPresetTests {
         #expect(BackendEndpointPreset.simulator.defaultURLText == "ws://127.0.0.1:8000/ws/recitation")
     }
 
-    @Test func liveKitPresetUsesLocalhostTokenURL() {
-        #expect(BackendEndpointPreset.liveKitLocal.defaultURLText == "http://127.0.0.1:8000/livekit/recitation-token")
-        #expect(BackendEndpointPreset.liveKitLocal.label == "LiveKit")
+    @Test func customPresetKeepsRunPodWebSocketURL() {
+        let runpodWebSocketURL = "wss://0qudx1ctbmw1xc-8000.proxy.runpod.net/ws/recitation"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(currentURLText: runpodWebSocketURL)
+                == runpodWebSocketURL
+        )
     }
 
-    @Test func liveKitPresetKeepsEditedTokenURLText() {
-        let runpodTokenURL = "https://example-8000.proxy.runpod.net/livekit/recitation-token"
+    @Test func customPresetAddsWSSSchemeAndRecitationPathToRunPodHost() {
+        let runpodHost = "0qudx1ctbmw1xc-8000.proxy.runpod.net"
 
-        #expect(BackendEndpointPreset.liveKitLocal.urlText(currentCustomURLText: runpodTokenURL) == runpodTokenURL)
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(currentURLText: runpodHost)
+                == "wss://0qudx1ctbmw1xc-8000.proxy.runpod.net/ws/recitation"
+        )
     }
 
-    @Test func liveKitAndCustomPresetsAllowURLTextEditing() {
+    @Test func onlyCustomPresetAllowsURLTextEditing() {
         #expect(!BackendEndpointPreset.simulator.allowsURLTextEditing)
-        #expect(BackendEndpointPreset.liveKitLocal.allowsURLTextEditing)
         #expect(BackendEndpointPreset.custom.allowsURLTextEditing)
     }
 

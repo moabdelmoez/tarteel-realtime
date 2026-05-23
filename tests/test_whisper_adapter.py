@@ -227,7 +227,7 @@ class WhisperRecognizerTests(unittest.TestCase):
             "is_final": True,
         })
 
-    def test_resamples_livekit_rate_audio_to_whisper_rate(self):
+    def test_resamples_transport_rate_audio_to_whisper_rate(self):
         samples = [0.0, 1.0, 0.0, -1.0, 0.0, 1.0]
 
         resampled = _resample_to_whisper_rate(samples, sample_rate_hz=48_000)

@@ -15,19 +15,33 @@ Read these files before changing code or docs:
 
 Use the current user request as the authority. If these docs conflict with an explicit user instruction, follow the user and record the reason in the handoff.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `moabdelmoez/tarteel-realtime`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use this repo's GitHub triage label mapping; `needs-info` maps to `question`, and `wontfix` maps to `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: read root `CONTEXT.md` and `docs/adr/` when present. See `docs/agents/domain.md`.
+
 ## Project Rules
 
 - Use `uv` for Python execution and dependency management. Do not use `pip` directly.
-- Keep heavyweight ASR dependencies optional. Whisper, Torch, LiveKit worker extras, and GPU-only packages must not become default test dependencies without explicit approval.
-- Do not commit secrets. `.env`, RunPod env files, Cloudflare R2 credentials, LiveKit credentials, and raw user audio must remain local or ignored.
+- Keep heavyweight ASR dependencies optional. Whisper, Torch, and GPU-only packages must not become default test dependencies without explicit approval.
+- Do not commit secrets. `.env`, RunPod env files, Cloudflare R2 credentials, and raw user audio must remain local or ignored.
 - Do not mutate canonical Quran data in place. Treat `data/tanzil/quran-simple-clean.txt` as pinned local input.
 - Preserve user changes. Do not run destructive git commands or revert unrelated edits.
 - Prefer small verified slices. Update harness docs after meaningful changes.
-- WebSocket `/ws/recitation` remains the fallback transport. LiveKit is the preferred MVP mobile-to-RunPod path when Cloud credentials are configured.
+- WebSocket `/ws/recitation` is the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and use the iOS `Custom` preset.
 
 ## Repository Map
 
-- `tarteel_realtime/`: Python backend, Quran parsing, locator, session engine, ASR adapters, LiveKit worker.
+- `tarteel_realtime/`: Python backend, Quran parsing, locator, session engine, ASR adapters, and WebSocket transport.
 - `tests/`: deterministic Python tests; must stay fast and avoid network/GPU requirements.
 - `ios/TarteelClientCore/`: Swift package for event decoding, state reduction, and transport abstractions.
 - `ios/TarteelPrototype/`: SwiftUI iPhone prototype.
@@ -49,9 +63,9 @@ Choose the smallest check that proves the change, then run broader checks when t
 - ASR adapter/backend changes:
   - Focused ASR tests first, then the full Python suite.
   - RunPod/GPU verification only when real model behavior is part of the claim.
-- LiveKit changes:
-  - `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api`
-  - Use the documented fake-transcript worker smoke before real ASR worker claims.
+- WebSocket transport changes:
+  - `uv run python -B -m unittest tests.test_api tests.test_recitation_stream tests.test_ws_client`
+  - Use the documented WebSocket client smoke before real ASR transport claims.
 - iOS client changes:
   - From `ios/TarteelClientCore`: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
   - iOS app build when UI or app target changes:

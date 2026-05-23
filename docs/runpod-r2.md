@@ -1,4 +1,4 @@
-# RunPod And Cloudflare R2 Artifacts
+# GPU Host (RunPod Example) And Cloudflare R2 Artifacts
 
 Use GitHub for source code and Cloudflare R2 for local artifacts that should not live in git:
 
@@ -29,9 +29,9 @@ uv run --with boto3 python scripts/r2_artifacts.py list
 
 If `list` works but upload fails with `AccessDenied` during `PutObject`, recreate or edit the R2 S3 token so it has Object Read & Write access to the `tarteel-realtime` bucket.
 
-## Download On RunPod
+## Download On A GPU Host
 
-The current repo is public, so a fresh pod can clone it over HTTPS. Put the R2 exports in `/workspace/tarteel-r2.env` manually, or configure them with RunPod secrets, then source the file inside the pod. Do not use `scp` for this workflow.
+The current repo is public, so a fresh host can clone it over HTTPS. Put the R2 exports in a local env file and source them inside the host shell (for RunPod, use `/workspace/tarteel-r2.env`). Do not use `scp` for this workflow.
 
 ```bash
 source /workspace/tarteel-r2.env
@@ -45,17 +45,19 @@ ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fix
 ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
 ```
 
-## Bootstrap A Fresh Pod
+## Bootstrap A Fresh GPU Host
 
-From a RunPod shell:
+From a host shell (RunPod example):
 
 ```bash
 source /workspace/tarteel-r2.env
-export TARTEEL_DOWNLOAD_R2_ARTIFACTS=1
-bash scripts/runpod_bootstrap.sh
+export TARTEEL_DOWNLOAD_ARTIFACTS=1
+bash scripts/gpu_bootstrap.sh
 ```
 
-When `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3` and `114002.mp3` and prepares mono 16 kHz PCM WAVs for the ASR smoke commands. Set `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
+When `TARTEEL_DOWNLOAD_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3` and `114002.mp3` and prepares mono 16 kHz PCM WAVs for the ASR smoke commands. Set `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
+
+`TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` and `scripts/runpod_bootstrap.sh` are still supported as compatibility aliases.
 
 ## Private GitHub Repos On RunPod
 
@@ -73,9 +75,9 @@ Add the printed public key to GitHub as a read-only deploy key for `moabdelmoez/
 ```bash
 export GIT_SSH_COMMAND="ssh -i /workspace/tarteel-realtime-deploy -o StrictHostKeyChecking=accept-new"
 export TARTEEL_REPO_URL="git@github.com:moabdelmoez/tarteel-realtime.git"
-export TARTEEL_DOWNLOAD_R2_ARTIFACTS=1
+export TARTEEL_DOWNLOAD_ARTIFACTS=1
 export TARTEEL_RUN_TESTS=0
-bash scripts/runpod_bootstrap.sh
+bash scripts/gpu_bootstrap.sh
 ```
 
 Do not stream `.env` into the RunPod SSH gateway from an automated PTY; the gateway can echo stdin before the shell is ready. Prefer RunPod environment variables/secrets or paste exports manually into `/workspace/tarteel-r2.env` inside the pod.

@@ -97,14 +97,23 @@ class QuranCorpus:
                 raise ValueError(f"malformed Tanzil row at line {line_number}") from exc
 
             ref = QuranRef(surah=surah, ayah=ayah)
-            words = tuple(
-                QuranWord(
-                    ref=QuranRef(surah=surah, ayah=ayah, word_index=index),
-                    text=word,
-                    normalized_text=normalize_arabic(word),
+            words_list: list[QuranWord] = []
+            for word in text.split():
+                normalized_word = normalize_arabic(word)
+                if not normalized_word:
+                    continue
+                words_list.append(
+                    QuranWord(
+                        ref=QuranRef(
+                            surah=surah,
+                            ayah=ayah,
+                            word_index=len(words_list) + 1,
+                        ),
+                        text=word,
+                        normalized_text=normalized_word,
+                    )
                 )
-                for index, word in enumerate(text.split(), start=1)
-            )
+            words = tuple(words_list)
             ayahs.append(
                 QuranAyah(
                     ref=ref,

@@ -17,10 +17,7 @@
 		100000000000000000000008 /* RecitationSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000108 /* RecitationSessionState.swift */; };
 		100000000000000000000009 /* BackendEndpointPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000110 /* BackendEndpointPreset.swift */; };
 		100000000000000000000010 /* VoiceActivityPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000111 /* VoiceActivityPayload.swift */; };
-		100000000000000000000011 /* LiveKitRecitationToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000112 /* LiveKitRecitationToken.swift */; };
-		100000000000000000000012 /* LiveKitRecitationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000113 /* LiveKitRecitationClient.swift */; };
 		100000000000000000000013 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
-		100000000000000000000014 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000202 /* LiveKit */; };
 		100000000000000000000015 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 /* End PBXBuildFile section */
@@ -32,7 +29,6 @@
 		100000000000000000000103 /* RecitationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RecitationViewModel.swift; sourceTree = "<group>"; };
 		100000000000000000000104 /* BackendWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/BackendWebSocketClient.swift; sourceTree = "<group>"; };
 		100000000000000000000105 /* MicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
-		100000000000000000000113 /* LiveKitRecitationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/LiveKitRecitationClient.swift; sourceTree = "<group>"; };
 		100000000000000000000114 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/VoiceActivityDetector.swift; sourceTree = "<group>"; };
 		100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mlmodelc; path = Models/silero-vad-unified-256ms-v6.0.0.mlmodelc; sourceTree = "<group>"; };
 		100000000000000000000109 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -41,7 +37,6 @@
 		100000000000000000000108 /* RecitationSessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift; sourceTree = "<group>"; };
 		100000000000000000000110 /* BackendEndpointPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/BackendEndpointPreset.swift; sourceTree = "<group>"; };
 		100000000000000000000111 /* VoiceActivityPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/VoiceActivityPayload.swift; sourceTree = "<group>"; };
-		100000000000000000000112 /* LiveKitRecitationToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/LiveKitRecitationToken.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,7 +44,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				100000000000000000000014 /* LiveKit in Frameworks */,
 				100000000000000000000015 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -74,7 +68,6 @@
 				100000000000000000000103 /* RecitationViewModel.swift */,
 				100000000000000000000104 /* BackendWebSocketClient.swift */,
 				100000000000000000000105 /* MicrophoneAudioStreamer.swift */,
-				100000000000000000000113 /* LiveKitRecitationClient.swift */,
 				100000000000000000000114 /* VoiceActivityDetector.swift */,
 				100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */,
 				100000000000000000000109 /* Info.plist */,
@@ -90,7 +83,6 @@
 				100000000000000000000108 /* RecitationSessionState.swift */,
 				100000000000000000000110 /* BackendEndpointPreset.swift */,
 				100000000000000000000111 /* VoiceActivityPayload.swift */,
-				100000000000000000000112 /* LiveKitRecitationToken.swift */,
 			);
 			name = "Shared Core";
 			sourceTree = "<group>";
@@ -120,7 +112,6 @@
 			);
 			name = TarteelPrototype;
 			packageProductDependencies = (
-				100000000000000000000202 /* LiveKit */,
 				100000000000000000000203 /* FluidAudio */,
 			);
 			productName = TarteelPrototype;
@@ -152,7 +143,6 @@
 			);
 			mainGroup = 100000000000000000000040;
 			packageReferences = (
-				100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
 				100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			productRefGroup = 100000000000000000000043 /* Products */;
@@ -190,8 +180,6 @@
 				100000000000000000000008 /* RecitationSessionState.swift in Sources */,
 				100000000000000000000009 /* BackendEndpointPreset.swift in Sources */,
 				100000000000000000000010 /* VoiceActivityPayload.swift in Sources */,
-				100000000000000000000011 /* LiveKitRecitationToken.swift in Sources */,
-				100000000000000000000012 /* LiveKitRecitationClient.swift in Sources */,
 				100000000000000000000013 /* VoiceActivityDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -390,14 +378,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/livekit/client-sdk-swift.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.13.0;
-			};
-		};
 		100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
@@ -409,11 +389,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		100000000000000000000202 /* LiveKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 100000000000000000000200 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
-			productName = LiveKit;
-		};
 		100000000000000000000203 /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 100000000000000000000201 /* XCRemoteSwiftPackageReference "FluidAudio" */;

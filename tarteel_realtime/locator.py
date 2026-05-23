@@ -1,53 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
-from enum import StrEnum
 
-from rapidfuzz import fuzz
-
+from tarteel_realtime.locator_matching import LocatorSearchScope, QuranCandidateFinder
+from tarteel_realtime.locator_types import (
+    LocatorCandidate,
+    LocatorDecision,
+    LocatorStatus,
+)
 from tarteel_realtime.quran import QuranCorpus, QuranRef, normalize_arabic
 
 
-class LocatorStatus(StrEnum):
-    LOCKED = "locked"
-    AMBIGUOUS = "ambiguous"
-    NOT_FOUND = "not_found"
-
-
-@dataclass(frozen=True)
-class LocatorCandidate:
-    ayah_ref: QuranRef
-    start_ref: QuranRef
-    matched_words: int
-    score: float
-
-
-@dataclass(frozen=True)
-class LocatorDecision:
-    status: LocatorStatus
-    candidates: tuple[LocatorCandidate, ...] = ()
-    reason: str | None = None
-
-    @property
-    def best(self) -> LocatorCandidate | None:
-        if not self.candidates:
-            return None
-        return self.candidates[0]
-
-
 class QuranLocator:
-    _TOLERANT_WORD_THRESHOLD = 0.60
-    _PREFERRED_TOLERANT_WORD_THRESHOLD = 0.54
-    _TOLERANT_AVERAGE_THRESHOLD = 0.72
-    _AYAH_START_BONUS = 0.01
-    _PREFERRED_AYAH_BONUS = 1.0
-
     def __init__(self, corpus: QuranCorpus, minimum_lock_words: int = 3) -> None:
         if minimum_lock_words < 1:
             raise ValueError("minimum_lock_words must be positive")
-        self._corpus = corpus
         self._minimum_lock_words = minimum_lock_words
+        self._candidate_finder = QuranCandidateFinder(corpus)
 
     def locate(
         self,
@@ -64,40 +33,41 @@ class QuranLocator:
                 reason="no_recognized_words",
             )
 
-        candidates = self._find_candidates(
+        candidates = self._candidate_finder.exact_candidates(
             recognized_words,
+            scope=LocatorSearchScope.from_refs(
+                preferred_ref=preferred_ref,
+                allowed_ayah_refs=allowed_ayah_refs,
+                minimum_start_ref=minimum_start_ref,
+            ),
+        )
+        return self._decision_from_candidates(
+            candidates,
+            recognized_word_count=len(recognized_words),
+            locked_reason="unique_match",
+        )
+
+    def locate_recitation(
+        self,
+        recognized_text: str,
+        *,
+        preferred_ref: QuranRef | None = None,
+        allowed_ayah_refs: Iterable[QuranRef] | None = None,
+        minimum_start_ref: QuranRef | None = None,
+    ) -> LocatorDecision:
+        decision = self.locate(
+            recognized_text,
             preferred_ref=preferred_ref,
             allowed_ayah_refs=allowed_ayah_refs,
             minimum_start_ref=minimum_start_ref,
         )
-        if not candidates:
-            return LocatorDecision(
-                status=LocatorStatus.NOT_FOUND,
-                reason="no_match",
-            )
-
-        if len(recognized_words) < self._minimum_lock_words:
-            return LocatorDecision(
-                status=LocatorStatus.AMBIGUOUS,
-                candidates=candidates,
-                reason="insufficient_context",
-            )
-
-        top_score = candidates[0].score
-        tied_top_candidates = tuple(
-            candidate for candidate in candidates if candidate.score == top_score
-        )
-        if len(tied_top_candidates) > 1:
-            return LocatorDecision(
-                status=LocatorStatus.AMBIGUOUS,
-                candidates=tied_top_candidates,
-                reason="multiple_matches",
-            )
-
-        return LocatorDecision(
-            status=LocatorStatus.LOCKED,
-            candidates=(candidates[0],),
-            reason="unique_match",
+        if decision.status != LocatorStatus.NOT_FOUND:
+            return decision
+        return self.locate_tolerant(
+            recognized_text,
+            preferred_ref=preferred_ref,
+            allowed_ayah_refs=allowed_ayah_refs,
+            minimum_start_ref=minimum_start_ref,
         )
 
     def locate_tolerant(
@@ -115,28 +85,44 @@ class QuranLocator:
                 reason="no_recognized_words",
             )
 
-        candidates = self._find_tolerant_candidates(
-            recognized_words,
+        scope = LocatorSearchScope.from_refs(
             preferred_ref=preferred_ref,
             allowed_ayah_refs=allowed_ayah_refs,
             minimum_start_ref=minimum_start_ref,
         )
+        candidates = self._candidate_finder.tolerant_candidates(
+            recognized_words,
+            scope=scope,
+        )
         reason = "tolerant_match"
         if not candidates:
-            candidates = self._find_tolerant_span_candidates(
+            candidates = self._candidate_finder.tolerant_span_candidates(
                 recognized_words,
-                preferred_ref=preferred_ref,
-                allowed_ayah_refs=allowed_ayah_refs,
-                minimum_start_ref=minimum_start_ref,
+                scope=scope,
+                minimum_lock_words=self._minimum_lock_words,
             )
             reason = "tolerant_span_match"
+
+        return self._decision_from_candidates(
+            candidates,
+            recognized_word_count=len(recognized_words),
+            locked_reason=reason,
+        )
+
+    def _decision_from_candidates(
+        self,
+        candidates: tuple[LocatorCandidate, ...],
+        *,
+        recognized_word_count: int,
+        locked_reason: str,
+    ) -> LocatorDecision:
         if not candidates:
             return LocatorDecision(
                 status=LocatorStatus.NOT_FOUND,
                 reason="no_match",
             )
 
-        if len(recognized_words) < self._minimum_lock_words:
+        if recognized_word_count < self._minimum_lock_words:
             return LocatorDecision(
                 status=LocatorStatus.AMBIGUOUS,
                 candidates=candidates,
@@ -157,221 +143,5 @@ class QuranLocator:
         return LocatorDecision(
             status=LocatorStatus.LOCKED,
             candidates=(candidates[0],),
-            reason=reason,
+            reason=locked_reason,
         )
-
-    def _find_candidates(
-        self,
-        recognized_words: list[str],
-        *,
-        preferred_ref: QuranRef | None = None,
-        allowed_ayah_refs: Iterable[QuranRef] | None = None,
-        minimum_start_ref: QuranRef | None = None,
-    ) -> tuple[LocatorCandidate, ...]:
-        candidates: list[LocatorCandidate] = []
-        recognized_length = len(recognized_words)
-        allowed_refs = _ayah_ref_set(allowed_ayah_refs)
-
-        for ayah in self._corpus.ayahs():
-            if allowed_refs is not None and ayah.ref not in allowed_refs:
-                continue
-            ayah_words = [word.normalized_text for word in ayah.words]
-            for start_index in range(0, len(ayah_words) - recognized_length + 1):
-                candidate_words = ayah_words[start_index:start_index + recognized_length]
-                if candidate_words != recognized_words:
-                    continue
-
-                start_ref = ayah.words[start_index].ref
-                if _starts_before_minimum(start_ref, minimum_start_ref):
-                    continue
-                candidates.append(
-                    LocatorCandidate(
-                        ayah_ref=ayah.ref,
-                        start_ref=start_ref,
-                        matched_words=recognized_length,
-                        score=(
-                            float(recognized_length)
-                            + self._preferred_ayah_bonus(ayah.ref, preferred_ref)
-                        ),
-                    )
-                )
-
-        return _sort_candidates(candidates)
-
-    def _find_tolerant_candidates(
-        self,
-        recognized_words: list[str],
-        *,
-        preferred_ref: QuranRef | None = None,
-        allowed_ayah_refs: Iterable[QuranRef] | None = None,
-        minimum_start_ref: QuranRef | None = None,
-    ) -> tuple[LocatorCandidate, ...]:
-        candidates: list[LocatorCandidate] = []
-        recognized_length = len(recognized_words)
-        allowed_refs = _ayah_ref_set(allowed_ayah_refs)
-
-        for ayah in self._corpus.ayahs():
-            if allowed_refs is not None and ayah.ref not in allowed_refs:
-                continue
-            ayah_words = [word.normalized_text for word in ayah.words]
-            for start_index in range(0, len(ayah_words) - recognized_length + 1):
-                candidate_words = ayah_words[start_index:start_index + recognized_length]
-                similarities = tuple(
-                    _word_similarity(recognized_word, candidate_word)
-                    for recognized_word, candidate_word in zip(
-                        recognized_words,
-                        candidate_words,
-                    )
-                )
-                word_threshold = (
-                    self._PREFERRED_TOLERANT_WORD_THRESHOLD
-                    if self._is_preferred_ayah(ayah.ref, preferred_ref)
-                    else self._TOLERANT_WORD_THRESHOLD
-                )
-                if any(
-                    similarity < word_threshold
-                    for similarity in similarities
-                ):
-                    continue
-
-                average_similarity = sum(similarities) / recognized_length
-                if average_similarity < self._TOLERANT_AVERAGE_THRESHOLD:
-                    continue
-
-                start_ref = ayah.words[start_index].ref
-                if _starts_before_minimum(start_ref, minimum_start_ref):
-                    continue
-                ayah_start_bonus = (
-                    self._AYAH_START_BONUS
-                    if start_ref.word_index == 1
-                    else 0.0
-                )
-                candidates.append(
-                    LocatorCandidate(
-                        ayah_ref=ayah.ref,
-                        start_ref=start_ref,
-                        matched_words=recognized_length,
-                        score=(
-                            sum(similarities)
-                            + ayah_start_bonus
-                            + self._preferred_ayah_bonus(ayah.ref, preferred_ref)
-                        ),
-                    )
-                )
-
-        return _sort_candidates(candidates)
-
-    def _find_tolerant_span_candidates(
-        self,
-        recognized_words: list[str],
-        *,
-        preferred_ref: QuranRef | None = None,
-        allowed_ayah_refs: Iterable[QuranRef] | None = None,
-        minimum_start_ref: QuranRef | None = None,
-    ) -> tuple[LocatorCandidate, ...]:
-        if len(recognized_words) <= self._minimum_lock_words:
-            return ()
-
-        candidates: dict[tuple[QuranRef, QuranRef, int], LocatorCandidate] = {}
-        for window_length in range(
-            len(recognized_words) - 1,
-            self._minimum_lock_words - 1,
-            -1,
-        ):
-            for start_index in range(0, len(recognized_words) - window_length + 1):
-                window_words = recognized_words[start_index:start_index + window_length]
-                for candidate in self._find_tolerant_candidates(
-                    window_words,
-                    preferred_ref=preferred_ref,
-                    allowed_ayah_refs=allowed_ayah_refs,
-                    minimum_start_ref=minimum_start_ref,
-                ):
-                    key = (
-                        candidate.ayah_ref,
-                        candidate.start_ref,
-                        candidate.matched_words,
-                    )
-                    existing = candidates.get(key)
-                    if existing is None or candidate.score > existing.score:
-                        candidates[key] = candidate
-
-        return _sort_candidates(candidates.values())
-
-    def _preferred_ayah_bonus(
-        self,
-        ayah_ref: QuranRef,
-        preferred_ref: QuranRef | None,
-    ) -> float:
-        if preferred_ref is None:
-            return 0.0
-        if self._is_preferred_ayah(ayah_ref, preferred_ref):
-            return self._PREFERRED_AYAH_BONUS
-        return 0.0
-
-    def _is_preferred_ayah(
-        self,
-        ayah_ref: QuranRef,
-        preferred_ref: QuranRef | None,
-    ) -> bool:
-        return (
-            preferred_ref is not None
-            and ayah_ref.surah == preferred_ref.surah
-            and ayah_ref.ayah == preferred_ref.ayah
-        )
-
-
-def _word_similarity(recognized_word: str, candidate_word: str) -> float:
-    if recognized_word == candidate_word:
-        return 1.0
-
-    ratio = fuzz.ratio(recognized_word, candidate_word) / 100.0
-    if len(recognized_word) == len(candidate_word):
-        return ratio
-
-    shorter_length = min(len(recognized_word), len(candidate_word))
-    if shorter_length < 3:
-        return ratio
-
-    partial_ratio = fuzz.partial_ratio(recognized_word, candidate_word) / 100.0
-    if partial_ratio < 0.95:
-        return ratio
-    return max(ratio, partial_ratio)
-
-
-def _sort_candidates(candidates: Iterable[LocatorCandidate]) -> tuple[LocatorCandidate, ...]:
-    return tuple(
-        sorted(
-            candidates,
-            key=lambda candidate: (
-                -candidate.score,
-                candidate.ayah_ref.surah,
-                candidate.ayah_ref.ayah,
-                candidate.start_ref.word_index or 0,
-            ),
-        )
-    )
-
-
-def _ayah_ref_set(ayah_refs: Iterable[QuranRef] | None) -> set[QuranRef] | None:
-    if ayah_refs is None:
-        return None
-    return {
-        QuranRef(surah=ref.surah, ayah=ref.ayah)
-        for ref in ayah_refs
-    }
-
-
-def _starts_before_minimum(
-    start_ref: QuranRef,
-    minimum_start_ref: QuranRef | None,
-) -> bool:
-    if minimum_start_ref is None:
-        return False
-    if start_ref.word_index is None or minimum_start_ref.word_index is None:
-        return False
-    if (
-        start_ref.surah != minimum_start_ref.surah
-        or start_ref.ayah != minimum_start_ref.ayah
-    ):
-        return False
-    return start_ref.word_index < minimum_start_ref.word_index

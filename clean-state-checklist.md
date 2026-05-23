@@ -6,31 +6,39 @@
 - [ ] ASR backend/WebSocket client tests still run when touched: `uv run python -B -m unittest tests.test_asr_app tests.test_ws_client`.
 - [ ] ASR buffering tests still run when touched: `uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app`.
 - [ ] Tanzil data workflow tests still run when touched: `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest`.
+- [ ] Quran parser changes still keep standalone pause marks from becoming empty words: `uv run python -B -m unittest tests.test_quran_data tests.test_locator tests.test_session`.
+- [ ] Recitation progression changes keep ordered recovery behavior stable: `uv run python -B -m unittest tests.test_progression tests.test_session tests.test_locator`.
+- [ ] Session event construction changes keep event shape stable: `uv run python -B -m unittest tests.test_session_events tests.test_session tests.test_event_payloads`.
+- [ ] Recitation stream changes keep the WebSocket event/payload/diagnostics path stable: `uv run python -B -m unittest tests.test_recitation_stream tests.test_api tests.test_event_payloads`.
+- [ ] Locator internals changes keep the public recitation-location seam stable: `uv run python -B -m unittest tests.test_locator_matching tests.test_locator tests.test_session tests.test_progression tests.test_api tests.test_recitation_stream`.
+- [ ] Session transition policy changes keep `RecitationSession` as a recognizer adapter and preserve event behavior: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_session_events tests.test_progression tests.test_api tests.test_recitation_stream`.
+- [ ] ASR runtime wiring changes keep env parsing and recognizer factories stable for the WebSocket ASR app: `uv run python -B -m unittest tests.test_asr_runtime tests.test_asr_app`.
 - [ ] iOS client core tests still run when touched: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
 - [ ] iOS app still builds when touched: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
 - [ ] iOS WebSocket client changes still wait for the socket handshake before streaming and keep Simulator backend connection errors actionable: `uv run python -B -m unittest tests.test_ios_websocket_client -v`.
+- [ ] iOS endpoint preset changes keep Simulator fixed to local WebSocket and Custom able to use RunPod WSS URLs: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter BackendEndpointPresetTests`.
 - [ ] The compile check still runs: `uv run python -m compileall -q tarteel_realtime tests`.
 - [ ] The sample evaluator still runs: `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`.
 - [ ] The sample Tanzil manifest smoke still runs: `uv run python -m tarteel_realtime.quran_data --tanzil-path fixtures/quran/sample-tanzil.txt --source-name sample-fixture`.
 - [ ] R2 helper tests still run when touched: `uv run python -B -m unittest tests.test_r2_artifacts`.
-- [ ] RunPod bootstrap tests still run when touched: `uv run python -B -m unittest tests.test_runpod_bootstrap`.
-- [ ] RunPod bootstrap syntax still validates when touched: `bash -n scripts/runpod_bootstrap.sh`.
-- [ ] LiveKit token/API/worker tests still run when touched: `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api`.
-- [ ] LiveKit transport smoke still has a documented fake-transcript path: `uv run --env-file .env --with livekit --with livekit-api python -m tarteel_realtime.livekit_worker --fake-transcript "مَلِكِ"`.
-- [ ] iOS client-side VAD source checks still run when touched: `uv run python -B -m unittest tests.test_ios_livekit_vad -v`.
+- [ ] GPU bootstrap tests still run when touched: `uv run python -B -m unittest tests.test_runpod_bootstrap`.
+- [ ] GPU bootstrap syntax still validates when touched: `bash -n scripts/gpu_bootstrap.sh` and `bash -n scripts/runpod_bootstrap.sh`.
+- [ ] WebSocket transport tests still run when touched: `uv run python -B -m unittest tests.test_api tests.test_recitation_stream tests.test_ws_client`.
+- [ ] Recitation event payload contract changes keep FastAPI WebSocket payloads stable: `uv run python -B -m unittest tests.test_event_payloads tests.test_api`.
+- [ ] WebSocket transport smoke still works: `uv run python -m tarteel_realtime.ws_client`.
+- [ ] iOS client-side VAD source checks still run when touched: `uv run python -B -m unittest tests.test_ios_websocket_vad -v`.
 - [ ] The iOS app bundle still includes `silero-vad-unified-256ms-v6.0.0.mlmodelc` after app build.
-- [ ] LiveKit custom-capture changes still keep the app-owned flow: `MicrophoneAudioStreamer` -> `VoiceActivityDetector` -> `LiveKitRecitationClient.publishAudio(...)` -> `AudioManager.shared.mixer.capture(appAudio:)`, with VAD metadata on `tarteel.voice_activity`.
-- [ ] LiveKit worker changes preserve one fresh recitation session and rolling ASR buffer per subscribed audio track while keeping the heavy Whisper model lazily shared.
-- [ ] LiveKit worker VAD metadata changes still decode `data_received` `DataPacket` objects and attach latest metadata by participant identity before buffering audio.
-- [ ] LiveKit token/event changes preserve `session_id` end-to-end, unique default client identities, iOS filtering to the active session, and per-track task cancellation.
-- [ ] Real LiveKit ASR worker docs include `torchaudio` for 48 kHz microphone resampling.
+- [ ] iOS WebSocket capture changes keep the app-owned flow: `MicrophoneAudioStreamer` -> `VoiceActivityDetector` -> `AudioChunkPayload` -> `BackendWebSocketClient.send(...)`.
+- [ ] WebSocket transport changes preserve one fresh recitation session and rolling ASR buffer per socket connection while keeping the heavy Whisper model lazily shared by ASR runtime wiring.
 - [ ] Faster-whisper backend changes keep `faster-whisper` optional, use `TARTEEL_WHISPER_BACKEND=faster-whisper`, and include a RunPod smoke before iOS claims.
-- [ ] Real LiveKit ASR worker docs include `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`, and the speech gate still runs after transport frame decode but before rolling ASR chunking.
+- [ ] Real ASR WebSocket docs include `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`, and the speech gate still runs after WebSocket frame decode but before rolling ASR chunking.
 - [ ] iOS state reducer changes still keep the last meaningful post-lock event visible when `waiting_for_audio_buffer` packets arrive.
 - [ ] When `data/tanzil/quran-simple-clean.txt` exists, its manifest still validates: `uv run python -m tarteel_realtime.quran_data --check-manifest`.
 - [ ] Root harness docs exist and reflect the current workflow: `AGENTS.md`, `evaluator-rubric.md`, and `quality-document.md`.
+- [ ] Agent skills setup docs exist and reflect the current workflow: `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`, and `docs/agents/domain.md`.
+- [ ] Domain language docs exist and reflect current seams: `CONTEXT.md` plus `docs/adr/`.
 - [ ] `quality-document.md` is updated when quality posture, known risks, or release confidence changes.
-- [ ] `evaluator-rubric.md` still requires concrete verification evidence for local, RunPod, LiveKit, and iOS claims.
+- [ ] `evaluator-rubric.md` still requires concrete verification evidence for local, RunPod, WebSocket, and iOS claims.
 - [ ] Current progress is recorded in `codex-progress.md`.
 - [ ] Feature state in `feature_list.json` reflects what is actually passing versus unverified.
 - [ ] At most one feature in `feature_list.json` has status `in_progress`.

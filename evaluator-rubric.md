@@ -11,7 +11,7 @@ Use this rubric to score a completed agent session or implementation slice. Reco
 - Task or slice:
 - Files changed:
 - Commands verified:
-- External systems used: local only / RunPod / R2 / LiveKit / iOS Simulator / physical iPhone
+- External systems used: local only / RunPod / R2 / WebSocket / iOS Simulator / physical iPhone
 
 ## Score Summary
 
@@ -47,12 +47,12 @@ Score each dimension from 0 to its weight. Award full credit only when the claim
 
 - Uses existing modules and contracts before adding new abstractions.
 - Keeps deterministic tests independent of network, GPU, and large model downloads.
-- Preserves the fake backend and WebSocket fallback while evolving LiveKit/real-ASR paths.
+- Preserves the fake backend and WebSocket transport while evolving real-ASR paths.
 
 ### Correctness - 20
 
 - Implements the requested behavior with clear edge-case handling.
-- Does not degrade current MVP flows: fake backend, real ASR WebSocket, LiveKit worker, iOS state reducer, and canonical ayah text display.
+- Does not degrade current MVP flows: fake backend, real ASR WebSocket, iOS state reducer, and canonical ayah text display.
 - Quran references, ayah text, and ordered progression behavior remain coherent.
 
 ### Verification Quality - 20
@@ -60,12 +60,12 @@ Score each dimension from 0 to its weight. Award full credit only when the claim
 - Runs focused checks that prove the change.
 - Runs broader checks when touching shared behavior.
 - Includes exact commands and results.
-- For RunPod/GPU/LiveKit claims, includes endpoint, logs, model ID, and replay evidence rather than "it worked."
+- For RunPod/GPU/WebSocket claims, includes endpoint, logs, model ID, and replay evidence rather than "it worked."
 
 ### Safety and Secrets - 10
 
 - Does not commit credentials, raw user audio, or ignored artifact payloads.
-- Keeps R2 and LiveKit keys in local env files only.
+- Keeps R2 keys in local env files only.
 - Does not mutate canonical Tanzil input.
 - Does not run destructive git commands without explicit approval.
 

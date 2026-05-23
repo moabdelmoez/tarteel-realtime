@@ -7,7 +7,7 @@ This folder contains the first native iPhone prototype for the realtime recitati
 From the repository root:
 
 ```bash
-uv run --with livekit-api python -m uvicorn tarteel_realtime.dev_app:app --reload
+uv run python -m uvicorn tarteel_realtime.dev_app:app --reload
 ```
 
 The app connects to:
@@ -28,18 +28,15 @@ Example phone URL:
 ws://192.168.1.20:8000/ws/recitation
 ```
 
-For the older WebSocket RunPod path, keep the app on `Custom` and enter the WebSocket URL exposed by your tunnel or network bridge. The app treats real-ASR buffering events as normal listening flow: it can show `Gathering audio` before lock, then stay in `Listening` while the backend buffers more audio.
+For a remote WebSocket GPU path, keep the app on `Custom` and enter the WebSocket URL exposed by your tunnel or network bridge. The app treats real-ASR buffering events as normal listening flow: it can show `Gathering audio` before lock, then stay in `Listening` while the backend buffers more audio.
 
-For the LiveKit Cloud + RunPod path, keep the app on the `LiveKit` preset. Start the token backend with the Cloud values loaded from `.env`:
+For a RunPod real-ASR backend, enter the exposed WSS URL in `Custom`:
 
-```bash
-uv run --env-file .env --with livekit-api \
-  python -m uvicorn tarteel_realtime.dev_app:app --host 0.0.0.0 --port 8000
+```text
+wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 ```
 
-The Simulator reaches that token backend at `http://127.0.0.1:8000/livekit/recitation-token`, then connects directly to the `LIVEKIT_URL` returned by the backend. Binding to `0.0.0.0` also works for LAN or RunPod-proxied HTTP access. The RunPod worker must use the same `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `TARTEEL_LIVEKIT_ROOM` values.
-
-The LiveKit preset uses the app-owned microphone pipeline, not LiveKit's direct microphone capture path. Audio flows through `MicrophoneAudioStreamer` as mono PCM16, then through the bundled Silero VAD, then into LiveKit manual rendering with `AudioManager.shared.mixer.capture(appAudio:)`. The app publishes VAD metadata on `tarteel.voice_activity`; inactive non-event chunks are suppressed client-side, while `speech_start` and `speech_end` chunks are still sent.
+The app uses one microphone pipeline for every backend preset: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends audio chunks plus optional `voice_activity` metadata to the backend.
 
 ## Build The App
 

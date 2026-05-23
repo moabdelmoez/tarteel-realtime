@@ -4,10 +4,10 @@ Rolling quality record for the Tarteel real-time Quran recitation MVP.
 
 ## Current Baseline
 
-- Date: 2026-05-19
+- Date: 2026-05-23
 - Overall status: good enough MVP, not production-grade
 - Initial quality score: 8.0 / 10
-- Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build, LiveKit simulator verification, RunPod real-ASR proof paths, and documented R2/GitHub bootstrap flow.
+- Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build, WebSocket simulator verification, RunPod real-ASR proof paths, and documented R2/GitHub bootstrap flow.
 
 The MVP has strong harness discipline and a working real-ASR mobile path, but it still needs longer-session proof, physical-device validation, latency tuning, and more polished ordered-progression guidance.
 
@@ -15,18 +15,18 @@ The MVP has strong harness discipline and a working real-ASR mobile path, but it
 
 | Dimension | Status | Notes |
 | --- | --- | --- |
-| Correctness and reliability | Good | Core Quran parsing, locator, session state, ASR buffering, and LiveKit transport have deterministic coverage. Real ASR remains model- and audio-quality-sensitive. |
+| Correctness and reliability | Good | Core Quran parsing, locator, session state, ASR buffering, and WebSocket transport have deterministic coverage. Real ASR remains model- and audio-quality-sensitive. |
 | Test coverage | Good | Fast Python and Swift tests cover most local contracts. Real model checks are intentionally opt-in and require RunPod/GPU evidence. |
-| Architecture and boundaries | Good | Fake backend, WebSocket fallback, LiveKit path, ASR adapters, and iOS state reducer are separated. Heavy dependencies remain optional. |
+| Architecture and boundaries | Good | Fake backend, WebSocket transport, ASR adapters, and iOS state reducer are separated. Heavy dependencies remain optional. |
 | Mobile UX readiness | MVP | Simulator path works and exposes ayah/ayah text status. Physical iPhone, latency, and guidance copy need more work. |
 | ASR/model maturity | Experimental | `tarteel-ai/whisper-base-ar-quran` and `basharalrfooh/whisper-small-quran` have been compared on targeted cases, but neither is production-validated. |
 | Ops reproducibility | Good | Public GitHub plus R2 hydration and RunPod bootstrap reduce manual copying. GPU pods still need explicit user coordination. |
 | Documentation and handoff | Good | Harness files capture progress, feature state, clean-state checks, and session context. This document and rubric add quality tracking. |
-| Privacy and secrets | Good | Raw audio and credentials are not committed. R2/LiveKit/RunPod secrets stay local. Continue checking this during every artifact change. |
+| Privacy and secrets | Good | Raw audio and credentials are not committed. R2 and RunPod secrets stay local. Continue checking this during every artifact change. |
 
 ## Known Quality Debt
 
-- Physical-device LiveKit testing is still outstanding.
+- Physical-device WebSocket testing is still outstanding.
 - Longer-surah and longer-session recitation behavior needs evaluation beyond targeted Surah 102 and Surah 114 paths.
 - Latency and chunking are tuned for MVP stability, not final user experience.
 - Ordered-progression guidance exists in backend behavior but still needs polished user-facing copy.
@@ -45,6 +45,14 @@ Before treating a future slice as passing:
 - Keep `feature_list.json` with at most one `in_progress` feature.
 
 ## Quality Log
+
+### 2026-05-23 - WebSocket-Only Transport
+
+- The app and backend now use WebSocket as the only transport: `/ws/recitation` locally, by LAN, or through RunPod WSS.
+- The former room transport, token endpoint, worker modules, SDK client, package references, and smoke commands were removed.
+- iOS keeps `Simulator` and `Custom` presets only; `Custom` accepts RunPod WSS URLs and normalizes bare RunPod proxy hosts to `/ws/recitation`.
+- VAD remains transport-neutral through `AudioChunkPayload.voice_activity` and backend `AudioChunk.voice_activity`.
+- Verification passed with 27 focused Python backend/iOS-source tests, 164 full deterministic Python tests, compile check, JSON validation, 17 Swift client tests, the iOS simulator app build, and a local WebSocket smoke that returned the scripted `locked` then `wrong` events.
 
 ### 2026-05-19 - Harness Quality Baseline
 
@@ -74,27 +82,27 @@ Before treating a future slice as passing:
 - Rollback verification passed with the focused ASR buffering/session/app suite at 28 tests, the full deterministic Python suite at 143 tests, and compile check.
 - The next quality gate is a RunPod replay using restored stable defaults plus RapidFuzz, especially Surah 102 and quiet audio.
 
-### 2026-05-19 - LiveKit Pre-Buffer VAD Safety
+### 2026-05-19 - former room transport Pre-Buffer VAD Safety
 
-- The LiveKit `Last event: none` symptom was traced to an ASR crash after audio transport succeeded, not to Surah 98 matching: RunPod received iOS audio, flushed a low-energy window around `buffered_rms=124`, then Whisper/Torch raised a CUDA device-side assert before the worker could publish an event.
-- The backend now gates speech energy after WebSocket/LiveKit frame decode and before rolling ASR buffering. Low-RMS startup frames produce `waiting_for_audio_buffer` with `action=wait_vad` instead of entering Whisper.
+- The former room transport `Last event: none` symptom was traced to an ASR crash after audio transport succeeded, not to Surah 98 matching: RunPod received iOS audio, flushed a low-energy window around `buffered_rms=124`, then Whisper/Torch raised a CUDA device-side assert before the worker could publish an event.
+- The backend now gates speech energy after WebSocket/former room transport frame decode and before rolling ASR buffering. Low-RMS startup frames produce `waiting_for_audio_buffer` with `action=wait_vad` instead of entering Whisper.
 - `TARTEEL_ASR_MIN_SPEECH_RMS=400` is documented as the default, and existing `wait_quiet` safety still protects accumulated quiet windows.
-- LiveKit ASR/session exceptions now surface as `uncertain` events with `reason=asr_error`, improving failure visibility in the app.
-- Verification passed locally with 25 focused tests, 146 full deterministic tests, compile check, a RunPod compile/smoke check, and a connected RunPod LiveKit worker ready for manual Surah 98 retest.
+- former room transport ASR/session exceptions now surface as `uncertain` events with `reason=asr_error`, improving failure visibility in the app.
+- Verification passed locally with 25 focused tests, 146 full deterministic tests, compile check, a RunPod compile/smoke check, and a connected RunPod former room transport worker ready for manual Surah 98 retest.
 
-### 2026-05-19 - LiveKit Soft-Speech Gate Split
+### 2026-05-19 - former room transport Soft-Speech Gate Split
 
-- A follow-up manual LiveKit test reached ayah text but stalled at ayah 1. RunPod logs showed the worker kept receiving frames, but after the last flush the buffer stalled at about `3110ms` because the 400 RMS per-frame gate dropped too much soft recitation.
+- A follow-up manual former room transport test reached ayah text but stalled at ayah 1. RunPod logs showed the worker kept receiving frames, but after the last flush the buffer stalled at about `3110ms` because the 400 RMS per-frame gate dropped too much soft recitation.
 - The gate now uses `TARTEEL_ASR_MIN_FRAME_RMS=150` for individual decoded frames and keeps `TARTEEL_ASR_MIN_SPEECH_RMS=400` for complete buffers before Whisper. This keeps low-noise startup safety while allowing softer speech to accumulate enough audio.
 - Evidence from the failed run supported the threshold split: post-flush frames above 400 RMS totaled about `3110ms`, while frames above 150 RMS totaled about `4430ms`, enough for the 4200ms ASR window.
-- Verification passed with 16 focused buffer/app tests, 26 focused buffer/app/LiveKit worker tests, 147 full deterministic tests, compile check, RunPod compile/smoke, and a restarted RunPod LiveKit worker with a fresh log.
+- Verification passed with 16 focused buffer/app tests, 26 focused buffer/app/former room transport worker tests, 147 full deterministic tests, compile check, RunPod compile/smoke, and a restarted RunPod former room transport worker with a fresh log.
 
-### 2026-05-19 - LiveKit Session Isolation And Visible State
+### 2026-05-19 - former room transport Session Isolation And Visible State
 
-- Filtered RunPod LiveKit replay proved the worker was receiving audio and could advance Surah 98 from `98:1` to `98:2`; the remaining failure mode is noisy ASR output, not a frozen transport.
-- The LiveKit runner no longer shares one `RecitationSession` and one rolling ASR buffer across every subscribed audio track. Each track now receives a fresh worker/session/buffer while the heavy Whisper model remains lazily shared.
+- Filtered RunPod former room transport replay proved the worker was receiving audio and could advance Surah 98 from `98:1` to `98:2`; the remaining failure mode is noisy ASR output, not a frozen transport.
+- The former room transport runner no longer shares one `RecitationSession` and one rolling ASR buffer across every subscribed audio track. Each track now receives a fresh worker/session/buffer while the heavy Whisper model remains lazily shared.
 - The iOS reducer now preserves the last meaningful post-lock event when `waiting_for_audio_buffer` arrives, so the UI should not look stuck simply because buffer-wait packets are frequent.
-- Verification passed with red/green backend and Swift regressions, 27 focused backend tests, 16 Swift client core tests, 148 full deterministic Python tests, compile check, iOS app build, RunPod worker compile check, and a warm two-pass LiveKit replay that locked `114:2` twice in one worker process.
+- Verification passed with red/green backend and Swift regressions, 27 focused backend tests, 16 Swift client core tests, 148 full deterministic Python tests, compile check, iOS app build, RunPod worker compile check, and a warm two-pass former room transport replay that locked `114:2` twice in one worker process.
 - Quality risk remains ASR/progression accuracy: clean Surah 102 still skipped early short ayahs in the fixture and then produced mostly `wrong` events after `102:4`.
 
 ### 2026-05-19 - Simulator WebSocket Handshake Fix
@@ -102,15 +110,15 @@ Before treating a future slice as passing:
 - The `Simulator` preset `Socket is not connected` symptom was traced to an iOS client race: microphone streaming could begin immediately after `task.resume()` before the WebSocket open handshake had completed.
 - `BackendWebSocketClient` now waits for a successful WebSocket ping before streaming mic chunks, and Simulator connection failures now tell the user to start the local backend on `127.0.0.1:8000`.
 - Verification passed with the new red/green WebSocket source regressions, 11 focused iOS source tests, 150 full deterministic Python tests, compile/JSON/whitespace checks, a successful iOS app target build, local backend health returning HTTP 200, and the rebuilt app launched in the iPhone 17 Pro simulator.
-- Quality risk remains separate from this fix: local WebSocket connection stability is improved, but LiveKit ASR progression and model transcript quality still need their own evidence.
+- Quality risk remains separate from this fix: local WebSocket connection stability is improved, but former room transport ASR progression and model transcript quality still need their own evidence.
 
-### 2026-05-19 - LiveKit Session Isolation
+### 2026-05-19 - former room transport Session Isolation
 
-- The latest manual Surah 98 symptom was not caused primarily by RapidFuzz. RunPod logs showed six subscribed LiveKit tracks in the shared room, including stale diagnostic/warm tracks and multiple `ios-reciter` tracks, while the iOS app accepted every reliable recitation packet on the topic.
-- The LiveKit contract now carries `session_id`: token responses generate unique client identities by default, worker events include the publishing participant identity, and iOS filters incoming events to the current token session.
+- The latest manual Surah 98 symptom was not caused primarily by RapidFuzz. RunPod logs showed six subscribed former room transport tracks in the shared room, including stale diagnostic/warm tracks and multiple `ios-reciter` tracks, while the iOS app accepted every reliable recitation packet on the topic.
+- The former room transport contract now carries `session_id`: token responses generate unique client identities by default, worker events include the publishing participant identity, and iOS filters incoming events to the current token session.
 - Worker track consumers are now cancellable on `track_unsubscribed`, reducing stale background event producers in the shared room.
-- Local verification passed with red/green Python and Swift regressions, 37 focused LiveKit/API/iOS tests, 17 Swift client tests, 154 full deterministic Python tests, compile check, and iOS app build.
-- RunPod code patch, inline smoke, worker restart, and LiveKit smoke passed. The active worker is connected with a clean log, and a smoke event returned a matching `session_id`, so manual Surah 98/102 retesting can now focus on ASR/progression quality instead of shared-room event contamination.
+- Local verification passed with red/green Python and Swift regressions, 37 focused former room transport/API/iOS tests, 17 Swift client tests, 154 full deterministic Python tests, compile check, and iOS app build.
+- RunPod code patch, inline smoke, worker restart, and former room transport smoke passed. The active worker is connected with a clean log, and a smoke event returned a matching `session_id`, so manual Surah 98/102 retesting can now focus on ASR/progression quality instead of shared-room event contamination.
 
 ### 2026-05-19 - Faster-Whisper Quran Model Spike
 
@@ -121,13 +129,13 @@ Before treating a future slice as passing:
 - The current Transformers adapter cannot load this model ID because it is a CTranslate2/faster-whisper conversion, so app integration requires an optional faster-whisper backend rather than an environment-only model swap.
 - A separate quality bug was exposed: standalone Tanzil pause marks such as `ۚ` are parsed as empty Quran words, which can cause false `no_match` results even for an otherwise correct ASR transcript.
 
-### 2026-05-19 - Optional Faster-Whisper Backend For LiveKit
+### 2026-05-19 - Optional Faster-Whisper Backend For former room transport
 
 - Added a selectable ASR backend while keeping Transformers as the default. `TARTEEL_WHISPER_BACKEND=faster-whisper` now routes through a CTranslate2/faster-whisper recognizer.
-- The backend parses `cuda:0`, accepts `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`, and resamples PCM to 16 kHz before inference so LiveKit 48 kHz audio can reach faster-whisper safely.
-- Local verification passed with red/green tests, 14 focused adapter/app tests, 26 focused adapter/app/LiveKit tests, 157 full deterministic Python tests, and compile check.
+- The backend parses `cuda:0`, accepts `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`, and resamples PCM to 16 kHz before inference so former room transport 48 kHz audio can reach faster-whisper safely.
+- Local verification passed with red/green tests, 14 focused adapter/app tests, 26 focused adapter/app/former room transport tests, 157 full deterministic Python tests, and compile check.
 - RunPod verification passed for model construction and a short `114002.wav` recognizer smoke: transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`.
-- The active RunPod LiveKit worker is connected using the OdyAsh faster-whisper model and returned a matching-session smoke event, so manual iOS Simulator testing can proceed.
+- The active RunPod former room transport worker is connected using the OdyAsh faster-whisper model and returned a matching-session smoke event, so manual iOS Simulator testing can proceed.
 - Operational risk: the pod workspace mount hit a write quota during patching, so the active worker is running from `/tmp/tarteel-realtime-live`; future pod edits should repair or freshly bootstrap `/workspace/tarteel-realtime`.
 
 ### 2026-05-19 - Explicit iOS Silero VAD Bundle
@@ -136,12 +144,90 @@ Before treating a future slice as passing:
 - `VoiceActivityDetector` now prefers the bundled Core ML model through `VadManager(config: .default, vadModel:)`, falls back to `VadManager()` only when the bundle is absent, and uses FluidAudio's streaming `processStreamingChunk(...)` state machine.
 - VAD stream state resets on recording start/stop, preventing stale speech state from leaking between sessions.
 - Verification passed with red/green iOS VAD source tests, 10 focused iOS VAD tests, 17 Swift client core tests, a successful iOS app target build, and a built-app resource check confirming the `.mlmodelc` is packaged.
-- Quality risk: this currently improves the WebSocket fallback metadata path. The LiveKit preset still publishes microphone audio through LiveKit directly, so using iOS VAD to affect LiveKit transport needs a separate data-topic or custom-capture design.
+- Quality risk: this currently improves the WebSocket fallback metadata path. The former room transport preset still publishes microphone audio through former room transport directly, so using iOS VAD to affect former room transport transport needs a separate data-topic or custom-capture design.
 
-### 2026-05-20 - LiveKit Client-Side VAD Capture Path
+### 2026-05-20 - former room transport Client-Side VAD Capture Path
 
-- The LiveKit iOS preset now uses the same app-owned microphone stream as WebSocket: PCM16 capture, bundled Silero VAD, then a transport adapter.
-- LiveKit uses SDK manual rendering mode and `AudioManager.shared.mixer.capture(appAudio:)`, with VAD metadata published on `tarteel.voice_activity`.
-- The worker decodes LiveKit Python `DataPacket` objects and attaches latest VAD metadata by participant identity before rolling ASR buffering.
-- Local verification passed for the new red/green iOS source and worker tests, 47 focused LiveKit/token/API/iOS contract tests, 167 full Python tests, compile check, 17 Swift client core tests, JSON validation, `git diff --check`, and an iOS app target build.
-- Quality risk: manual LiveKit mic verification is still required, especially to check whether client-side suppression clips initial speech before VAD triggers.
+- The former room transport iOS preset now uses the same app-owned microphone stream as WebSocket: PCM16 capture, bundled Silero VAD, then a transport adapter.
+- former room transport uses SDK manual rendering mode and `AudioManager.shared.mixer.capture(appAudio:)`, with VAD metadata published on `former.transport.voice_activity`.
+- The worker decodes former room transport Python `DataPacket` objects and attaches latest VAD metadata by participant identity before rolling ASR buffering.
+- Local verification passed for the new red/green iOS source and worker tests, 47 focused former room transport/token/API/iOS contract tests, 167 full Python tests, compile check, 17 Swift client core tests, JSON validation, `git diff --check`, and an iOS app target build.
+- Quality risk: manual former room transport mic verification is still required, especially to check whether client-side suppression clips initial speech before VAD triggers.
+
+### 2026-05-21 - Quran Tokenization And Locator Interface Cleanup
+
+- `QuranCorpus` now skips standalone Tanzil tokens whose normalized text is empty, so pause marks such as `ۚ` preserve canonical ayah text without creating empty `QuranWord` entries or shifting following word refs.
+- `QuranLocator.locate_recitation(...)` centralizes exact-first, tolerant-fallback matching, and `RecitationSession` now uses it for both initial lock and ordered-progression recovery.
+- Verification passed with red/green parser and locator regressions, 50 focused Quran/locator/session/evaluator tests, 172 full deterministic tests, compile check, JSON validation, active-feature sanity `[]`, `git diff --check`, and a final 43-test touched-area rerun after harness updates.
+- Quality risk: this is local deterministic evidence. The active RunPod worker still needs redeployment or fresh bootstrap before Surah 98/102 live behavior can be judged against the parser cleanup.
+
+### 2026-05-21 - Event Payload Contract Module Cleanup
+
+- `SessionEvent` wire payload encoding now lives in `tarteel_realtime/event_payloads.py`, so the FastAPI WebSocket path and former room transport worker share the same payload module without coupling former room transport to the FastAPI transport module.
+- Canonical ayah text enrichment remains part of the shared payload encoder, preserving the visible `Ayah text` contract for both transports.
+- Verification passed with red/green `tests.test_event_payloads`, 31 focused event/API/former room transport/app tests, 173 full deterministic tests, compile check, JSON validation, active-feature sanity `[]`, and `git diff --check`.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Recitation Progression Module Cleanup
+
+- `RecitationProgression` now owns next expected refs, progression anchors, ordered ayah scope, and ordered miss counts.
+- `RecitationSession` remains the orchestrator for recognizer/location/alignment/event flow, but no longer owns the progression state implementation directly.
+- Verification passed with red/green `tests.test_progression`, 50 focused progression/session/locator/API/payload tests, 177 full deterministic tests, compile check, JSON validation, active-feature sanity `[]`, and `git diff --check`.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Session Event Module Cleanup
+
+- `SessionEvent`, `SessionEventType`, and named session-event constructors now live in `tarteel_realtime/session_events.py`.
+- `RecitationSession` remains responsible for recognition/location/alignment orchestration, but delegates event construction to the new module.
+- Verification passed with red/green `tests.test_session_events`, 70 focused session/progression/locator/API/payload/former room transport tests, 180 full deterministic tests, compile check, JSON validation, active-feature sanity `[]`, and `git diff --check`.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Shared Recitation Stream Module
+
+- `RecitationStream` now owns the shared `AudioChunk -> SessionEvent -> payload -> diagnostics` flow behind both WebSocket and former room transport.
+- WebSocket recognizer failures now return visible `uncertain/asr_error` events instead of closing the socket, matching the former room transport safety behavior.
+- Verification passed with red/green `tests.test_recitation_stream`, adapter red tests for WebSocket ASR errors and former room transport diagnostics, 32 focused transport tests, 185 full deterministic tests, and compile check.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - former room transport Worker Split
+
+- former room transport frame decoding, VAD metadata decoding/tracking, room handler registration, and recitation publishing now live in separate modules.
+- `former-room-transport_worker.py` is reduced to the former room transport room runner/CLI surface while preserving compatibility imports for existing tests and smoke helpers.
+- Verification passed with red/green `tests.test_former-room-transport_room`, `tests.test_former-room-transport_audio`, and `tests.test_former-room-transport_recitation`; 43 focused former room transport/API tests; 190 full deterministic tests; and compile check.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Locator Internals Cleanup
+
+- Exact matching, tolerant matching, tolerant span matching, scope constraints, candidate sorting, and RapidFuzz word similarity now live in `locator_matching.py`.
+- Locator decision types now live in `locator_types.py`, while `QuranLocator.locate_recitation(...)` remains the public seam used by session callers.
+- Verification passed with red/green `tests.test_locator_matching`, 75 focused locator/session/API/stream/former room transport tests, 193 full deterministic tests, and compile check.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Session Transition Policy Extraction
+
+- `RecitationTransitionPolicy` now owns the post-recognition decision tree for initial lock, ordered guidance, alignment progress, tolerant ordered recovery, and wrong events.
+- `RecitationSession` is narrowed to the recognizer adapter: it recognizes an `AudioChunk`, then delegates the `RecognitionResult` to the transition policy.
+- Verification passed with red/green `tests.test_session_transitions`, 78 focused session/API/stream/former room transport tests, 196 full deterministic tests, and compile check.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Shared ASR Runtime Wiring
+
+- `asr_runtime.py` now owns ASR runtime settings, env parsing, lazy recognizer factory wiring, buffered recognizer factory wiring, and runtime defaults shared by ASR app and former room transport worker paths.
+- `asr_app.py` is narrowed to FastAPI composition and compatibility re-exports, while former room transport imports runtime wiring directly from `asr_runtime.py`.
+- Verification passed with red/green `tests.test_asr_runtime`, 29 focused runtime/asr_app/former room transport tests, 200 full deterministic tests, and compile check.
+- Quality risk: this is local source cleanup only. The active RunPod worker still needs redeployment or fresh bootstrap before live diagnostics reflect this module layout.
+
+### 2026-05-21 - Domain Docs And ADR Slice
+
+- Added root `CONTEXT.md` for shared domain language and seam definitions.
+- Added ADRs for recitation stream/transition seams and shared ASR runtime wiring under `docs/adr/`.
+- Structured checks passed (`feature_list.json` parse, active-feature sanity, whitespace check), with the full deterministic suite and compile check already green in the preceding slice.
+- Quality risk: documentation is now aligned with code seams locally, but deployed runtime behavior still depends on updating the active GPU worker with these local slices.
+
+### 2026-05-21 - Provider-Neutral GPU Bootstrap Entry
+
+- Added `scripts/gpu_bootstrap.sh` as the preferred bootstrap entrypoint and kept `scripts/runpod_bootstrap.sh` as a compatibility wrapper.
+- Bootstrap defaults are now host-portable: `/workspace` paths are used when present, with `$HOME` fallbacks on non-RunPod hosts.
+- Artifact-download intent now accepts `TARTEEL_DOWNLOAD_ARTIFACTS=1` while preserving `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` compatibility.
+- Verification passed with `tests.test_runpod_bootstrap` (6 tests) and `bash -n` syntax checks for both bootstrap scripts.
+- Quality risk: this improves portability at the scripting seam, but runtime behavior still depends on bootstrapping and validating the active GPU worker with the latest local architecture slices.

@@ -56,6 +56,23 @@ class QuranCorpusTests(unittest.TestCase):
             ],
         )
 
+    def test_skips_tanzil_tokens_that_normalize_to_empty_without_shifting_refs(self):
+        corpus = QuranCorpus.from_tanzil_lines([
+            "98|6|إِنَّ ۚ الَّذِينَ كَفَرُوا",
+        ])
+
+        ayah = corpus.get_ayah(QuranRef(surah=98, ayah=6))
+
+        self.assertEqual(ayah.text, "إِنَّ ۚ الَّذِينَ كَفَرُوا")
+        self.assertEqual(
+            [(word.ref, word.text, word.normalized_text) for word in ayah.words],
+            [
+                (QuranRef(surah=98, ayah=6, word_index=1), "إِنَّ", "ان"),
+                (QuranRef(surah=98, ayah=6, word_index=2), "الَّذِينَ", "الذين"),
+                (QuranRef(surah=98, ayah=6, word_index=3), "كَفَرُوا", "كفروا"),
+            ],
+        )
+
     def test_returns_a_single_word_by_quran_reference(self):
         corpus = QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES)
 

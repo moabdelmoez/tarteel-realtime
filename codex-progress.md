@@ -12,11 +12,36 @@
   - `uv run python -m tarteel_realtime.evaluate fixtures/evaluation/juz-amma-smoke.jsonl --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --mvp-scope`
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path fixtures/quran/sample-tanzil.txt --minimum-lock-words 2 --device cuda:0`
-- Current highest-priority unfinished feature: live ayah progression quality after the transport/session fixes; the local Simulator WebSocket race is fixed and the app is relaunched for manual retesting.
-- Current blocker: reduced-window live tracking remains blocked; stable defaults are restored to `4200/4200/0`, and LiveKit/ASR quality now needs separate longer-surah evidence with `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
+- Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
+- Current highest-priority unfinished feature: live ayah progression quality after the WebSocket transport/session fixes.
+- Current blocker: reduced-window live tracking remains blocked; stable defaults are restored to `4200/4200/0`, and WebSocket ASR quality needs separate longer-surah evidence with `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+### Session 064
+
+- Date: 2026-05-23
+- Goal: Remove the former room transport and make WebSocket the only app/backend transport.
+- Completed:
+  - Created worktree `.worktrees/websocket-only` on a dedicated WebSocket-only implementation branch and carried the current dirty snapshot into it.
+  - Removed the token endpoint, backend worker modules, smoke helper, iOS SDK client, token model, preset, and SwiftPM package references for the former room transport.
+  - Kept `WS /ws/recitation`, `RecitationStream`, canonical event payloads, diagnostics, ASR buffering, and WebSocket VAD metadata.
+  - Added WebSocket session-isolation coverage proving each socket gets a fresh `RecitationStream`.
+  - Updated current docs, ADRs, checklist, feature state, and iOS README toward WebSocket-only operation.
+- Verification run:
+  - Baseline before removal: `uv run python -B -m unittest discover -s tests -v` passed with 204 tests.
+  - Focused backend/iOS source run: `uv run python -B -m unittest tests.test_api tests.test_recitation_stream tests.test_event_payloads tests.test_ios_websocket_client tests.test_ios_websocket_vad tests.test_asr_runtime -v` passed with 27 tests.
+  - Full Python deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` passed with 164 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - `feature_list.json` parsed successfully: `uv run python -B -m json.tool feature_list.json`.
+  - Swift client core: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` passed with 17 tests.
+  - iOS app target build succeeded: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - Local WebSocket smoke passed: `uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8010/ws/recitation` returned the scripted `locked` event for `114:2` followed by the expected `wrong` event.
+- Known risk or unresolved issue:
+  - Physical iPhone testing against a real RunPod WSS ASR backend is still outstanding.
+  - Live progression quality still depends on ASR transcript stability and needs longer-surah evidence.
+- Next best step: test the iOS Custom preset against the RunPod WSS `/ws/recitation` endpoint and capture device/server logs.
 
 ### Session 001
 
@@ -1364,15 +1389,15 @@
 ### Session 036
 
 - Date: 2026-05-19
-- Goal: Land the LiveKit Cloud + VAD WebRTC transport after simulator/manual RunPod verification.
+- Goal: Land the former room transport Cloud + VAD WebRTC transport after simulator/manual RunPod verification.
 - Completed:
-  - Created and used the isolated worktree branch `codex/livekit-vad-webrtc`.
+  - Created and used the isolated worktree branch `codex/former-room-transport-vad-webrtc`.
   - Added optional VAD metadata to the audio chunk payload while preserving `WS /ws/recitation` as the fallback transport.
-  - Added LiveKit token minting, Cloud configuration, Python LiveKit worker, and deterministic LiveKit smoke tooling.
-  - Added guarded iOS LiveKit transport support, linked LiveKit and FluidAudio through SwiftPM, and kept the app buildable through compile guards.
-  - Documented LiveKit Cloud env placeholders in `.env.example`, the local token backend flow, and the RunPod worker flow.
-  - Started the RunPod GPU worker against LiveKit Cloud with `torchaudio` included for 48 kHz microphone resampling.
-  - User manually verified the iOS Simulator LiveKit preset returns recitation info instead of remaining stuck on `waiting_for_audio_buffer`.
+  - Added former room transport token minting, Cloud configuration, Python former room transport worker, and deterministic former room transport smoke tooling.
+  - Added guarded iOS former room transport transport support, linked former room transport and FluidAudio through SwiftPM, and kept the app buildable through compile guards.
+  - Documented former room transport Cloud env placeholders in `.env.example`, the local token backend flow, and the RunPod worker flow.
+  - Started the RunPod GPU worker against former room transport Cloud with `torchaudio` included for 48 kHz microphone resampling.
+  - User manually verified the iOS Simulator former room transport preset returns recitation info instead of remaining stuck on `waiting_for_audio_buffer`.
   - Marked `mobile-002` passing and updated the harness docs for merge.
 - Verification run:
   - `uv run python -B -m json.tool feature_list.json`.
@@ -1393,9 +1418,9 @@
   - `README.md`
   - `ios/README.md`
   - `tarteel_realtime/api.py`
-  - `tarteel_realtime/livekit_tokens.py`
-  - `tarteel_realtime/livekit_worker.py`
-  - `tarteel_realtime/livekit_smoke.py`
+  - `tarteel_realtime/former-room-transport_tokens.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tarteel_realtime/former-room-transport_smoke.py`
   - `ios/TarteelClientCore/`
   - `ios/TarteelPrototype/`
   - `tests/`
@@ -1404,9 +1429,9 @@
   - `clean-state-checklist.md`
   - `session-handoff.md`
 - Known risk or unresolved issue:
-  - The passing manual signal is from the iOS Simulator; physical-device LiveKit testing is still outstanding.
+  - The passing manual signal is from the iOS Simulator; physical-device former room transport testing is still outstanding.
   - Longer live-recitation sessions still need latency/chunking and ordered-progression UX tuning.
-- Next best step: merge `codex/livekit-vad-webrtc` to `main`, push `main`, then choose the next product slice.
+- Next best step: merge `codex/former-room-transport-vad-webrtc` to `main`, push `main`, then choose the next product slice.
 
 ### Session 037
 
@@ -1580,44 +1605,44 @@
 ### Session 041
 
 - Date: 2026-05-19
-- Goal: Fix the LiveKit mic path that showed `Last event: none` during Surah 98 by gating non-speech before ASR chunking and surfacing worker ASR failures.
+- Goal: Fix the former room transport mic path that showed `Last event: none` during Surah 98 by gating non-speech before ASR chunking and surfacing worker ASR failures.
 - Completed:
-  - Confirmed the failure was not Surah 98 or RapidFuzz matching: RunPod LiveKit logs showed the iOS participant subscribed successfully, audio frames reached the worker, a low-energy window flushed with `buffered_rms=124`, and Whisper/Torch then raised a CUDA device-side assert before any recitation event could be published.
+  - Confirmed the failure was not Surah 98 or RapidFuzz matching: RunPod former room transport logs showed the iOS participant subscribed successfully, audio frames reached the worker, a low-energy window flushed with `buffered_rms=124`, and Whisper/Torch then raised a CUDA device-side assert before any recitation event could be published.
   - Added a configurable pre-buffer speech-energy gate at the backend audio-frame layer:
-    - WebSocket/LiveKit transport frame decode remains first.
+    - WebSocket/former room transport transport frame decode remains first.
     - VAD/speech-energy filtering now runs before the rolling ASR buffer appends audio.
     - ASR chunking/inference only receives speech-like PCM unless explicit VAD metadata marks speech activity.
   - Added `TARTEEL_ASR_MIN_SPEECH_RMS=400` as the documented default and ASR app setting.
   - Kept the existing ready-window `wait_quiet` safety so quiet buffers that do accumulate still avoid Whisper inference.
-  - Updated the LiveKit worker so ASR exceptions produce a reliable `uncertain` event with `reason=asr_error` instead of silently killing the audio consumer.
+  - Updated the former room transport worker so ASR exceptions produce a reliable `uncertain` event with `reason=asr_error` instead of silently killing the audio consumer.
   - Patched the same runtime changes into the user-approved RunPod pod through the already-open SSH session, using `/workspace/tarteel-r2.env` without printing secrets.
-  - Restarted the RunPod LiveKit worker with stable defaults plus `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
+  - Restarted the RunPod former room transport worker with stable defaults plus `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
 - Verification run:
-  - Red/green tests for pre-buffer low-RMS gating, `incoming_rms`/`wait_vad` logs, ASR app env wiring, and LiveKit worker ASR exception handling.
-  - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_app tests.test_livekit_worker -v`.
+  - Red/green tests for pre-buffer low-RMS gating, `incoming_rms`/`wait_vad` logs, ASR app env wiring, and former room transport worker ASR exception handling.
+  - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_app tests.test_former-room-transport_worker -v`.
   - `uv run python -B -m unittest discover -s tests -v`.
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - RunPod: `python -m compileall -q tarteel_realtime`.
   - RunPod smoke: a synthetic RMS 124 frame logged `action=wait_vad` and was not included in the recognizer PCM; a later speech-energy frame flushed and returned `ok True`.
-  - RunPod LiveKit restart: worker process running and log shows `livekit_worker connected url=wss://tarteel-realtime-a4pc5yse.livekit.cloud room=tarteel-recitation`.
-  - Local token backend check: `curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/livekit/recitation-token` returned `200`.
+  - RunPod former room transport restart: worker process running and log shows `former-room-transport_worker connected url=wss://tarteel-realtime-a4pc5yse.former-room-transport.cloud room=tarteel-recitation`.
+  - Local token backend check: `curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/former-room-transport/removed-transport-token` returned `200`.
 - Evidence captured:
   - Focused local suite passed with 25 tests.
   - Full deterministic Python suite passed with 146 tests.
   - Compile check passed.
   - RunPod compile check passed.
   - RunPod pre-buffer VAD smoke printed `ok True` and logged `incoming_rms=124 action=wait_vad`, proving the problematic low-energy first frame is no longer appended to the ASR buffer.
-  - RunPod LiveKit env loaded with a valid LiveKit host and both API key/secret present without printing credentials.
-  - RunPod LiveKit worker process is running from `/workspace/tarteel-realtime` with `TARTEEL_ASR_MIN_AUDIO_MS=4200`, `TARTEEL_ASR_FLUSH_MS=4200`, `TARTEEL_ASR_TAIL_MS=0`, and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
+  - RunPod former room transport env loaded with a valid former room transport host and both API key/secret present without printing credentials.
+  - RunPod former room transport worker process is running from `/workspace/tarteel-realtime` with `TARTEEL_ASR_MIN_AUDIO_MS=4200`, `TARTEEL_ASR_FLUSH_MS=4200`, `TARTEEL_ASR_TAIL_MS=0`, and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
 - Files or artifacts updated:
   - `.env.example`
   - `README.md`
   - `tarteel_realtime/asr_app.py`
   - `tarteel_realtime/buffered_recognition.py`
-  - `tarteel_realtime/livekit_worker.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
   - `tests/test_asr_app.py`
   - `tests/test_buffered_recognition.py`
-  - `tests/test_livekit_worker.py`
+  - `tests/test_former-room-transport_worker.py`
   - `codex-progress.md`
   - `feature_list.json`
   - `session-handoff.md`
@@ -1627,12 +1652,12 @@
   - The RunPod worker is patched in the live pod workspace for immediate manual testing; a fresh pod still needs the repo changes deployed or pulled normally.
   - The fix prevents low-energy startup frames from poisoning Whisper and makes ASR failures visible, but it does not by itself guarantee Surah 98 or Surah 102 live progression quality.
   - `TARTEEL_ASR_MIN_SPEECH_RMS=400` is a conservative starting threshold and may need tuning after real mic tests across devices and rooms.
-- Next best step: in the simulator, keep the local token URL at `http://127.0.0.1:8000/livekit/recitation-token`, select LiveKit, tap the mic, and recite Surah 98 again while watching the RunPod LiveKit worker log for `wait_vad`, `flush`, and published event behavior.
+- Next best step: in the simulator, keep the local token URL at `http://127.0.0.1:8000/former-room-transport/removed-transport-token`, select former room transport, tap the mic, and recite Surah 98 again while watching the RunPod former room transport worker log for `wait_vad`, `flush`, and published event behavior.
 
 ### Session 042
 
 - Date: 2026-05-19
-- Goal: Investigate why the manual LiveKit retest locked ayah 1 but did not advance when recitation continued.
+- Goal: Investigate why the manual former room transport retest locked ayah 1 but did not advance when recitation continued.
 - Completed:
   - Reconnected to the user-approved RunPod pod via SSH and inspected the live worker log after the manual test.
   - Confirmed the transport was still alive and receiving frames; the failure was not a disconnected worker or frozen UI.
@@ -1642,22 +1667,22 @@
   - Split the safety thresholds:
     - `TARTEEL_ASR_MIN_FRAME_RMS=150` gates individual transport frames before buffering.
     - `TARTEEL_ASR_MIN_SPEECH_RMS=400` still gates the complete ASR window before Whisper inference.
-  - Patched the same runtime change into the active RunPod workspace and restarted the LiveKit worker with both thresholds.
+  - Patched the same runtime change into the active RunPod workspace and restarted the former room transport worker with both thresholds.
 - Verification run:
   - Red/green tests first failed because `minimum_frame_rms` did not exist.
   - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_app -v`.
-  - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_app tests.test_livekit_worker -v`.
+  - `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_app tests.test_former-room-transport_worker -v`.
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - `uv run python -B -m unittest discover -s tests -v`.
   - RunPod: `python -m compileall -q tarteel_realtime`.
   - RunPod smoke: RMS `124` frame produced `action=wait_vad`; RMS `220` soft speech was retained; combined buffered RMS `724` flushed and returned `ok True`.
-  - RunPod LiveKit worker restart with `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
+  - RunPod former room transport worker restart with `TARTEEL_ASR_MIN_FRAME_RMS=150` and `TARTEEL_ASR_MIN_SPEECH_RMS=400`.
 - Evidence captured:
   - Focused buffer/app suite passed with 16 tests.
-  - Focused buffer/app/LiveKit worker suite passed with 26 tests.
+  - Focused buffer/app/former room transport worker suite passed with 26 tests.
   - Full deterministic Python suite passed with 147 tests.
   - Compile check passed.
-  - RunPod worker is connected to the LiveKit room from process `12817`/`12835` with a fresh log.
+  - RunPod worker is connected to the former room transport room from process `12817`/`12835` with a fresh log.
 - Files or artifacts updated:
   - `.env.example`
   - `README.md`
@@ -1673,30 +1698,30 @@
 - Known risk or unresolved issue:
   - Manual retest after the split-threshold restart is still pending.
   - This should make ayah 2 reach Whisper more reliably, but ASR/matching quality after the flush still depends on the model transcript.
-- Next best step: retest in the simulator. If it still stalls, inspect the fresh `/tmp/tarteel-livekit-worker.log`; the old log was rotated before the restart so the next run is clean.
+- Next best step: retest in the simulator. If it still stalls, inspect the fresh `/tmp/tarteel-former-room-transport-worker.log`; the old log was rotated before the restart so the next run is clean.
 
 ### Session 043
 
 - Date: 2026-05-19
-- Goal: Investigate the manual LiveKit symptom where the UI showed ayah 98:1/102:1 and then appeared stuck after recitation continued.
+- Goal: Investigate the manual former room transport symptom where the UI showed ayah 98:1/102:1 and then appeared stuck after recitation continued.
 - Completed:
-  - Used the user-approved RunPod SSH path and ran filtered LiveKit replay diagnostics that printed only meaningful tracking events instead of thousands of `waiting_for_audio_buffer` packets.
-  - Confirmed the LiveKit transport and ASR worker were not frozen: Surah 98 replay emitted `locked` for `98:1`, later `locked` for `98:2`, and many intervening `wrong` events from noisy ASR transcripts.
+  - Used the user-approved RunPod SSH path and ran filtered former room transport replay diagnostics that printed only meaningful tracking events instead of thousands of `waiting_for_audio_buffer` packets.
+  - Confirmed the former room transport transport and ASR worker were not frozen: Surah 98 replay emitted `locked` for `98:1`, later `locked` for `98:2`, and many intervening `wrong` events from noisy ASR transcripts.
   - Confirmed Surah 102 clean replay remains ASR-quality-sensitive: it skipped early short ayahs in the fixture, first locked at `102:3`, advanced to `102:4`, then emitted mostly `wrong` events.
-  - Found a backend integration bug: the LiveKit runner created one shared `LiveKitRecitationWorker`, so all LiveKit tracks shared the same recitation session and rolling ASR buffer.
-  - Added `create_livekit_recitation_worker(...)` and changed the LiveKit runner to create a fresh worker/session/buffer per subscribed audio track while still sharing the lazily loaded Whisper model underneath.
+  - Found a backend integration bug: the former room transport runner created one shared `former room transportRecitationWorker`, so all former room transport tracks shared the same recitation session and rolling ASR buffer.
+  - Added `create_former-room-transport_recitation_worker(...)` and changed the former room transport runner to create a fresh worker/session/buffer per subscribed audio track while still sharing the lazily loaded Whisper model underneath.
   - Added an iOS reducer guard so post-lock `waiting_for_audio_buffer` packets do not hide the last meaningful lock/progress/correction state.
-  - Patched the backend worker change into the active RunPod workspace and restarted the LiveKit worker.
+  - Patched the backend worker change into the active RunPod workspace and restarted the former room transport worker.
 - Verification run:
-  - Red test: `uv run python -B -m unittest tests.test_livekit_worker.LiveKitWorkerTests.test_worker_factory_creates_fresh_session_for_each_audio_track -v` failed before the helper existed.
+  - Red test: `uv run python -B -m unittest tests.test_former-room-transport_worker.former room transportWorkerTests.test_worker_factory_creates_fresh_session_for_each_audio_track -v` failed before the helper existed.
   - Red test: `swift test --filter RecitationSessionStateTests/postLockBufferingEventDoesNotHideLastMeaningfulEvent` failed because buffering changed the visible state from `locked` to `uncertain(waiting_for_audio_buffer)`.
-  - `uv run python -B -m unittest tests.test_livekit_worker tests.test_asr_app tests.test_buffered_recognition -v`.
+  - `uv run python -B -m unittest tests.test_former-room-transport_worker tests.test_asr_app tests.test_buffered_recognition -v`.
   - From `ios/TarteelClientCore`: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
   - `uv run python -B -m unittest discover -s tests -v`.
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
-  - RunPod: `uv run --with rapidfuzz python -m compileall -q tarteel_realtime/livekit_worker.py`.
-  - RunPod warm two-pass LiveKit replay for `fixtures/local_audio/114002.wav` in one worker process: first pass locked `114:2` with `reason=unique_match`; second pass also locked `114:2` with `reason=tolerant_match`.
+  - RunPod: `uv run --with rapidfuzz python -m compileall -q tarteel_realtime/former-room-transport_worker.py`.
+  - RunPod warm two-pass former room transport replay for `fixtures/local_audio/114002.wav` in one worker process: first pass locked `114:2` with `reason=unique_match`; second pass also locked `114:2` with `reason=tolerant_match`.
 - Evidence captured:
   - Focused Python backend tests passed with 27 tests.
   - Swift client core passed with 16 tests.
@@ -1704,10 +1729,10 @@
   - Compile check passed.
   - iOS app target build succeeded.
   - Updated app installed and launched in the booted iPhone 17 Pro simulator with process id `35175`.
-  - RunPod worker is connected to `wss://tarteel-realtime-a4pc5yse.livekit.cloud` room `tarteel-recitation` after the per-track worker patch.
+  - RunPod worker is connected to `wss://tarteel-realtime-a4pc5yse.former-room-transport.cloud` room `tarteel-recitation` after the per-track worker patch.
 - Files or artifacts updated:
-  - `tarteel_realtime/livekit_worker.py`
-  - `tests/test_livekit_worker.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_former-room-transport_worker.py`
   - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationSessionState.swift`
   - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationSessionStateTests.swift`
   - `codex-progress.md`
@@ -1719,7 +1744,7 @@
   - The fix removes cross-track/session leakage and makes the iOS UI hold the last meaningful event, but it does not make the ASR model more accurate.
   - Surah 98 can advance to `98:2` on clean replay, but many ASR windows are still distorted and become `wrong`.
   - Surah 102 clean replay with the current model still skipped the first short ayahs in the fixture and needs a separate ASR/model/progression strategy before it can be called stable live tracking.
-- Next best step: rebuild/relaunch the simulator app so the iOS reducer change is active, then manually retest LiveKit. If the app still appears stuck, inspect the latest meaningful backend events, not only `waiting_for_audio_buffer`, because wait packets are now intentionally suppressed after a lock in the reducer.
+- Next best step: rebuild/relaunch the simulator app so the iOS reducer change is active, then manually retest former room transport. If the app still appears stuck, inspect the latest meaningful backend events, not only `waiting_for_audio_buffer`, because wait packets are now intentionally suppressed after a lock in the reducer.
 
 ### Session 044
 
@@ -1734,7 +1759,7 @@
   - Booted the iPhone 17 Pro simulator, installed the rebuilt app, and launched it with the fixed WebSocket client.
 - Verification run:
   - `uv run python -B -m unittest tests.test_ios_websocket_client -v`.
-  - `uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_livekit_vad -v`.
+  - `uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_former-room-transport_vad -v`.
   - `uv run python -B -m unittest discover -s tests -v`.
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
   - `uv run python -m compileall -q tarteel_realtime tests`.
@@ -1763,43 +1788,43 @@
   - `clean-state-checklist.md`
   - `quality-document.md`
 - Known risk or unresolved issue:
-  - This fixes the immediate `Socket is not connected` race and gives better local-backend guidance, but it does not change ASR quality or LiveKit progression behavior.
+  - This fixes the immediate `Socket is not connected` race and gives better local-backend guidance, but it does not change ASR quality or former room transport progression behavior.
   - If the local backend is stopped, the `Simulator` preset will still fail by design, now with actionable copy.
-- Next best step: with the local backend running, tap the mic again on the `Simulator` preset. For real ASR/RunPod testing, use the `LiveKit` preset and keep investigating ASR transcript quality separately.
+- Next best step: with the local backend running, tap the mic again on the `Simulator` preset. For real ASR/RunPod testing, use the `former room transport` preset and keep investigating ASR transcript quality separately.
 
 ### Session 045
 
 - Date: 2026-05-19
-- Goal: Fix the LiveKit shared-room/session-isolation regression that could make the app show stale or unrelated post-lock events after ayah 1.
+- Goal: Fix the former room transport shared-room/session-isolation regression that could make the app show stale or unrelated post-lock events after ayah 1.
 - Completed:
-  - Investigated the active RunPod LiveKit worker log through the user-approved SSH path.
-  - Found six subscribed LiveKit audio tracks in one shared room, including old diagnostic/warm replay tracks and multiple `ios-reciter` tracks.
-  - Confirmed this made the issue larger than RapidFuzz: old tracks could continue publishing events into the same room while the iOS app accepted every `tarteel.recitation.event` packet.
-  - Added a LiveKit `session_id` contract:
+  - Investigated the active RunPod former room transport worker log through the user-approved SSH path.
+  - Found six subscribed former room transport audio tracks in one shared room, including old diagnostic/warm replay tracks and multiple `ios-reciter` tracks.
+  - Confirmed this made the issue larger than RapidFuzz: old tracks could continue publishing events into the same room while the iOS app accepted every `former.transport.recitation.event` packet.
+  - Added a former room transport `session_id` contract:
     - token responses now include `session_id`;
     - default client token requests now generate a unique `ios-reciter-...` identity/session instead of fixed `ios-reciter`;
-    - LiveKit worker event payloads include the publishing participant identity as `session_id`;
-    - iOS stores the current token `sessionId` and ignores LiveKit events from other sessions.
-  - Added `LiveKitTrackTaskRegistry` so per-track worker tasks can be cancelled when LiveKit reports `track_unsubscribed`.
+    - former room transport worker event payloads include the publishing participant identity as `session_id`;
+    - iOS stores the current token `sessionId` and ignores former room transport events from other sessions.
+  - Added `former room transportTrackTaskRegistry` so per-track worker tasks can be cancelled when former room transport reports `track_unsubscribed`.
   - Rebuilt and relaunched the iPhone simulator app with event filtering.
   - Restarted the local token backend with `.env`; it now returns unique identity/session ids.
 - Verification run:
   - Red/green local Python tests for token identity/session generation, API token payload, worker event `session_id`, track-task cancellation, and iOS source filtering.
-  - Red/green Swift tests for `LiveKitRecitationToken.sessionId` and `RecitationEvent.sessionId`.
-  - `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api tests.test_ios_livekit_vad -v`.
+  - Red/green Swift tests for `former room transportRecitationToken.sessionId` and `RecitationEvent.sessionId`.
+  - `uv run python -B -m unittest tests.test_former-room-transport_tokens tests.test_former-room-transport_worker tests.test_api tests.test_ios_former-room-transport_vad -v`.
   - From `ios/TarteelClientCore`: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`.
   - `uv run python -B -m unittest discover -s tests -v`.
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
-  - `curl -sS http://127.0.0.1:8000/livekit/recitation-token`.
+  - `curl -sS http://127.0.0.1:8000/former-room-transport/removed-transport-token`.
   - `xcrun simctl install booted /private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app`.
   - `xcrun simctl launch booted dev.mostafa.TarteelPrototype`.
   - RunPod compile check for the patched Python files.
   - RunPod inline smoke proving unique token identities, event `session_id`, and track task cancellation.
-  - RunPod LiveKit worker restart with `/workspace/tarteel-r2.env` sourced.
-  - RunPod LiveKit smoke with a unique `codex-session-smoke-...` identity.
+  - RunPod former room transport worker restart with `/workspace/tarteel-r2.env` sourced.
+  - RunPod former room transport smoke with a unique `codex-session-smoke-...` identity.
 - Evidence captured:
-  - Focused LiveKit/API/iOS source suite passed with 37 tests.
+  - Focused former room transport/API/iOS source suite passed with 37 tests.
   - Swift client core passed with 17 tests.
   - Full deterministic Python suite passed with 154 tests.
   - Compile check passed.
@@ -1807,22 +1832,22 @@
   - Local token backend returned `identity=ios-reciter-...` and matching `session_id=ios-reciter-...`.
   - Updated simulator app launched as process `47814`.
   - RunPod patch compile check passed, and inline smoke printed `token_unique True True`, `event_session ios-reciter-test locked True`, and `task_cancelled True 0`.
-  - RunPod env file check showed non-empty `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `TARTEEL_LIVEKIT_ROOM`, token TTL, and worker identity without printing secret values.
-  - RunPod worker process is running as PID `14451`/`14472` and connected to `wss://tarteel-realtime-a4pc5yse.livekit.cloud` room `tarteel-recitation`.
-  - LiveKit smoke returned a `waiting_for_audio_buffer` event with `session_id=codex-session-smoke-1779193849`, proving session ids round-trip through the room.
+  - RunPod env file check showed non-empty `FORMER_TRANSPORT_URL`, `FORMER_TRANSPORT_API_KEY`, `FORMER_TRANSPORT_API_SECRET`, `TARTEEL_FORMER_TRANSPORT_ROOM`, token TTL, and worker identity without printing secret values.
+  - RunPod worker process is running as PID `14451`/`14472` and connected to `wss://tarteel-realtime-a4pc5yse.former-room-transport.cloud` room `tarteel-recitation`.
+  - former room transport smoke returned a `waiting_for_audio_buffer` event with `session_id=codex-session-smoke-1779193849`, proving session ids round-trip through the room.
   - Fresh worker log after restart shows one subscribed smoke track and no old diagnostic/warm tracks before manual retesting.
 - Files or artifacts updated:
   - `tarteel_realtime/api.py`
-  - `tarteel_realtime/livekit_tokens.py`
-  - `tarteel_realtime/livekit_worker.py`
-  - `ios/TarteelClientCore/Sources/TarteelClientCore/LiveKitRecitationToken.swift`
+  - `tarteel_realtime/former-room-transport_tokens.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/former room transportRecitationToken.swift`
   - `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationEvent.swift`
   - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationEventTests.swift`
-  - `ios/TarteelPrototype/TarteelPrototype/App/LiveKitRecitationClient.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/former room transportRecitationClient.swift`
   - `tests/test_api.py`
-  - `tests/test_livekit_tokens.py`
-  - `tests/test_livekit_worker.py`
-  - `tests/test_ios_livekit_vad.py`
+  - `tests/test_former-room-transport_tokens.py`
+  - `tests/test_former-room-transport_worker.py`
+  - `tests/test_ios_former-room-transport_vad.py`
   - `codex-progress.md`
   - `feature_list.json`
   - `session-handoff.md`
@@ -1830,7 +1855,7 @@
 - Known risk or unresolved issue:
   - Session isolation is now active locally and on the RunPod worker, but manual Surah 98/102 quality still depends on ASR transcript quality and the post-lock correction policy.
   - The worker was restarted with a clean log; if the app still shows a stale or wrong event, inspect whether the event `session_id` matches the current iOS token before blaming matching.
-- Next best step: retest Surah 98 from a fresh LiveKit mic tap. If it still shows a red correction after ayah 1, collect the matching worker log lines for that unique `ios-reciter-...` session id and decide whether to soften one-off post-lock ASR mismatches into `uncertain`.
+- Next best step: retest Surah 98 from a fresh former room transport mic tap. If it still shows a red correction after ayah 1, collect the matching worker log lines for that unique `ios-reciter-...` session id and decide whether to soften one-off post-lock ASR mismatches into `uncertain`.
 
 ### Session 046
 
@@ -1866,33 +1891,33 @@
   - This model is a valid faster-whisper/CTranslate2 model, not a drop-in replacement for the current Transformers pipeline adapter.
   - Integrating it into the app would require a new optional faster-whisper backend path and tests.
   - The Quran tokenization bug around standalone pause marks should be fixed before judging Surah 98 no-match behavior as purely ASR/model failure.
-- Next best step: fix the empty pause-marker word parsing in `QuranCorpus`, then decide whether to add an optional faster-whisper backend for direct app/LiveKit comparison against the current Transformers model.
+- Next best step: fix the empty pause-marker word parsing in `QuranCorpus`, then decide whether to add an optional faster-whisper backend for direct app/former room transport comparison against the current Transformers model.
 
 ### Session 047
 
 - Date: 2026-05-19
-- Goal: Implement optional faster-whisper backend support and start a RunPod LiveKit worker so the iOS Simulator can test `OdyAsh/faster-whisper-base-ar-quran`.
+- Goal: Implement optional faster-whisper backend support and start a RunPod former room transport worker so the iOS Simulator can test `OdyAsh/faster-whisper-base-ar-quran`.
 - Completed:
   - Added `WhisperConfig.backend` and `WhisperConfig.compute_type`.
   - Added `WhisperRecognizer.from_config(...)` with the existing Transformers backend as the default and a new `faster-whisper` backend selector.
   - Added `FasterWhisperBackend`, including `cuda:0` parsing for CTranslate2 and PCM resampling to 16 kHz before inference.
   - Added env wiring through `TARTEEL_WHISPER_BACKEND=faster-whisper` and `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`.
-  - Updated `.env.example` and README with faster-whisper WebSocket and LiveKit worker commands.
-  - Started the RunPod LiveKit worker with `OdyAsh/faster-whisper-base-ar-quran` for iOS Simulator testing.
+  - Updated `.env.example` and README with faster-whisper WebSocket and former room transport worker commands.
+  - Started the RunPod former room transport worker with `OdyAsh/faster-whisper-base-ar-quran` for iOS Simulator testing.
 - Verification run:
   - Red test first: `uv run python -B -m unittest tests.test_whisper_adapter tests.test_asr_app -v` failed because `FasterWhisperBackend` and `whisper_backend` settings did not exist.
   - Green focused run: `uv run python -B -m unittest tests.test_whisper_adapter tests.test_asr_app -v` passed with 14 tests.
-  - Focused LiveKit/backend run: `uv run python -B -m unittest tests.test_whisper_adapter tests.test_asr_app tests.test_livekit_worker -v` passed with 26 tests.
+  - Focused former room transport/backend run: `uv run python -B -m unittest tests.test_whisper_adapter tests.test_asr_app tests.test_former-room-transport_worker -v` passed with 26 tests.
   - `uv run python -m compileall -q tarteel_realtime tests`.
   - Full local suite: `uv run python -B -m unittest discover -s tests -v` passed with 157 tests.
-  - Local token backend check: `curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/livekit/recitation-token` returned `200`.
+  - Local token backend check: `curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/former-room-transport/removed-transport-token` returned `200`.
   - RunPod faster-whisper recognizer smoke from `/tmp/tarteel-realtime-live`: `114002.wav` returned transcript `مَلِكِ النَّاسِ`, normalized `ملك الناس`.
-  - RunPod LiveKit smoke with identity `codex-faster-smoke-1779196104` returned `waiting_for_audio_buffer` with matching `session_id`.
+  - RunPod former room transport smoke with identity `codex-faster-smoke-1779196104` returned `waiting_for_audio_buffer` with matching `session_id`.
 - Evidence captured:
   - The new faster-whisper backend keeps heavy dependencies opt-in; no default dependency was added to `pyproject.toml`.
-  - The LiveKit worker is running as PID `15968` from `/tmp/tarteel-realtime-live` with `--with livekit --with livekit-api --with faster-whisper --with rapidfuzz`.
-  - Worker log shows it connected to `wss://tarteel-realtime-a4pc5yse.livekit.cloud` room `tarteel-recitation`.
-  - Worker log shows subscribed 48 kHz smoke tracks and `buffered_recognizer` events, confirming the LiveKit audio path reaches the faster-whisper worker process.
+  - The former room transport worker is running as PID `15968` from `/tmp/tarteel-realtime-live` with `--with former-room-transport --with former-room-transport-api --with faster-whisper --with rapidfuzz`.
+  - Worker log shows it connected to `wss://tarteel-realtime-a4pc5yse.former-room-transport.cloud` room `tarteel-recitation`.
+  - Worker log shows subscribed 48 kHz smoke tracks and `buffered_recognizer` events, confirming the former room transport audio path reaches the faster-whisper worker process.
   - The pod `/workspace/tarteel-realtime` mount hit a write quota and left `tarteel_realtime/whisper_adapter.py` empty there; the active worker is intentionally running from the repaired `/tmp/tarteel-realtime-live` runtime copy.
 - Files or artifacts updated:
   - `.env.example`
@@ -1910,7 +1935,7 @@
   - Manual iOS Simulator recitation quality is not yet observed after the worker restart.
   - The active pod worker is a runtime copy under `/tmp` because `/workspace/tarteel-realtime` is currently quota-blocked for writes.
   - The original Quran pause-marker tokenization issue remains unfixed.
-- Next best step: user should select the iOS `LiveKit` preset and tap the mic. If events do not progress, inspect `/tmp/tarteel-livekit-worker.log` and filter by the current `ios-reciter-...` session id.
+- Next best step: user should select the iOS `former room transport` preset and tap the mic. If events do not progress, inspect `/tmp/tarteel-former-room-transport-worker.log` and filter by the current `ios-reciter-...` session id.
 
 ### Session 048
 
@@ -1925,9 +1950,9 @@
   - Reset VAD stream state when recording starts or stops.
   - Documented the bundled Silero VAD model path and fallback behavior in `README.md`.
 - Verification run:
-  - Red test first: `uv run python -B -m unittest tests.test_ios_livekit_vad -v` failed on missing streaming VAD usage, missing bundled Core ML model loading, and missing stream reset.
-  - Red model packaging test: `uv run python -B -m unittest tests.test_ios_livekit_vad.IOSLiveKitVADSourceTests.test_silero_vad_coreml_bundle_is_packaged_with_ios_app -v` failed because the model bundle was absent.
-  - Green focused test: `uv run python -B -m unittest tests.test_ios_livekit_vad -v` passed with 10 tests.
+  - Red test first: `uv run python -B -m unittest tests.test_ios_former-room-transport_vad -v` failed on missing streaming VAD usage, missing bundled Core ML model loading, and missing stream reset.
+  - Red model packaging test: `uv run python -B -m unittest tests.test_ios_former-room-transport_vad.IOSformer room transportVADSourceTests.test_silero_vad_coreml_bundle_is_packaged_with_ios_app -v` failed because the model bundle was absent.
+  - Green focused test: `uv run python -B -m unittest tests.test_ios_former-room-transport_vad -v` passed with 10 tests.
   - Swift client core: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` passed with 17 tests from `ios/TarteelClientCore`.
   - iOS app build: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build` passed.
   - Built app resource check found `/private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app/silero-vad-unified-256ms-v6.0.0.mlmodelc`.
@@ -1935,26 +1960,26 @@
   - The app now contains the compiled Silero VAD model bundle files: `coremldata.bin`, `model.mil`, `metadata.json`, and `weights/weight.bin`.
   - Xcode compiled the FluidAudio actor-isolated streaming API usage after adding the required `await` calls around `makeStreamState()`.
 - Known risk or unresolved issue:
-  - This VAD metadata currently affects the WebSocket fallback path where `AudioChunkPayload.voice_activity` is sent. The LiveKit preset still publishes microphone audio through LiveKit directly and does not yet attach iOS VAD metadata to LiveKit audio frames.
+  - This VAD metadata currently affects the WebSocket fallback path where `AudioChunkPayload.voice_activity` is sent. The former room transport preset still publishes microphone audio through former room transport directly and does not yet attach iOS VAD metadata to former room transport audio frames.
   - Manual iOS Simulator recitation quality with bundled VAD has not yet been observed.
-- Next best step: manually test the iOS WebSocket fallback path with local mic to verify `speech_start`/`speech_end` metadata reaches the backend, then decide whether to publish VAD metadata over a LiveKit data topic or move LiveKit to custom audio capture.
+- Next best step: manually test the iOS WebSocket fallback path with local mic to verify `speech_start`/`speech_end` metadata reaches the backend, then decide whether to publish VAD metadata over a former room transport data topic or move former room transport to custom audio capture.
 
 ### Session 049
 
 - Date: 2026-05-20
-- Goal: Move the LiveKit iOS path onto the app-owned microphone pipeline so client-side Silero VAD runs before WebRTC transport.
+- Goal: Move the former room transport iOS path onto the app-owned microphone pipeline so client-side Silero VAD runs before WebRTC transport.
 - Completed:
-  - Changed the iOS LiveKit path to start `MicrophoneAudioStreamer` after token connection, run `VoiceActivityDetector` on each PCM16 chunk, and publish via `LiveKitRecitationClient.publishAudio(...)`.
-  - Switched the LiveKit Swift client into SDK manual rendering mode and feed allowed chunks with `AudioManager.shared.mixer.capture(appAudio:)`.
-  - Added `tarteel.voice_activity` as a LiveKit data topic carrying sequence number, sample rate, and `VoiceActivityPayload`.
+  - Changed the iOS former room transport path to start `MicrophoneAudioStreamer` after token connection, run `VoiceActivityDetector` on each PCM16 chunk, and publish via `former room transportRecitationClient.publishAudio(...)`.
+  - Switched the former room transport Swift client into SDK manual rendering mode and feed allowed chunks with `AudioManager.shared.mixer.capture(appAudio:)`.
+  - Added `former.transport.voice_activity` as a former room transport data topic carrying sequence number, sample rate, and `VoiceActivityPayload`.
   - Added conservative client-side gating: chunks publish normally when VAD is unavailable, but inactive non-event chunks are suppressed when VAD is available; `speech_start` and `speech_end` chunks are still sent.
-  - Updated the Python LiveKit worker to decode VAD `DataPacket` objects, store latest metadata per participant identity, and attach it to `AudioChunk.voice_activity` before rolling ASR buffering.
+  - Updated the Python former room transport worker to decode VAD `DataPacket` objects, store latest metadata per participant identity, and attach it to `AudioChunk.voice_activity` before rolling ASR buffering.
   - Updated README, iOS README, feature state, clean checklist, handoff, and quality notes for the new transport-agnostic capture flow.
 - Verification run:
-  - Red tests first: `uv run python -B -m unittest tests.test_ios_livekit_vad -v` failed on missing manual rendering, LiveKit VAD metadata publishing, and app-owned LiveKit audio chunking.
-  - Red worker regression: `uv run python -B -m unittest tests.test_livekit_worker.LiveKitWorkerTests.test_decodes_livekit_vad_data_packet_object -v` failed because LiveKit Python `DataPacket` objects were not decoded.
-  - Green focused run: `uv run python -B -m unittest tests.test_livekit_worker tests.test_ios_livekit_vad -v` passed with 29 tests.
-  - Contract/API focused run: `uv run python -B -m unittest tests.test_livekit_tokens tests.test_livekit_worker tests.test_api tests.test_ios_livekit_vad -v` passed with 47 tests.
+  - Red tests first: `uv run python -B -m unittest tests.test_ios_former-room-transport_vad -v` failed on missing manual rendering, former room transport VAD metadata publishing, and app-owned former room transport audio chunking.
+  - Red worker regression: `uv run python -B -m unittest tests.test_former-room-transport_worker.former room transportWorkerTests.test_decodes_former-room-transport_vad_data_packet_object -v` failed because former room transport Python `DataPacket` objects were not decoded.
+  - Green focused run: `uv run python -B -m unittest tests.test_former-room-transport_worker tests.test_ios_former-room-transport_vad -v` passed with 29 tests.
+  - Contract/API focused run: `uv run python -B -m unittest tests.test_former-room-transport_tokens tests.test_former-room-transport_worker tests.test_api tests.test_ios_former-room-transport_vad -v` passed with 47 tests.
   - Full Python deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` passed with 167 tests.
   - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
   - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` passed with 17 tests.
@@ -1962,35 +1987,440 @@
   - `git diff --check` passed.
   - iOS app target build succeeded with `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
 - Evidence captured:
-  - The app source now shows one logical path for both transports: mic capture -> Silero VAD -> WebSocket payload or LiveKit manual rendering adapter.
-  - The LiveKit worker source now handles the documented Python `data_received` `DataPacket` shape and still keeps per-track sessions/buffers.
+  - The app source now shows one logical path for both transports: mic capture -> Silero VAD -> WebSocket payload or former room transport manual rendering adapter.
+  - The former room transport worker source now handles the documented Python `data_received` `DataPacket` shape and still keeps per-track sessions/buffers.
 - Known risk or unresolved issue:
-  - Manual LiveKit mic verification has not yet been run after this custom-capture change.
+  - Manual former room transport mic verification has not yet been run after this custom-capture change.
   - Client-side suppression can reduce non-speech bandwidth, but real recitation should be checked for clipped first syllables before treating this as final gating behavior.
-- Next best step: rebuild/install the app, run the LiveKit preset against the active worker, and inspect worker logs for the current `ios-reciter-...` session id plus `tarteel.voice_activity` behavior.
+- Next best step: rebuild/install the app, run the former room transport preset against the active worker, and inspect worker logs for the current `ios-reciter-...` session id plus `former.transport.voice_activity` behavior.
 
 ### Session 050
 
 - Date: 2026-05-21
-- Goal: Fix the LiveKit/iOS state where a noisy ASR window visibly contained Surah 102 text but the app still showed `Ayah: none` and no Tanzil ayah text.
+- Goal: Fix the former room transport/iOS state where a noisy ASR window visibly contained Surah 102 text but the app still showed `Ayah: none` and no Tanzil ayah text.
 - Completed:
   - Found the contract root cause: `ayah_text` is attached from Tanzil only when the backend event carries `ayah_ref` or `start_ref`; the live event was `locating/no_match`, so iOS had no reference to display.
   - Added tolerant span matching for noisy ASR windows so a valid Quran phrase inside a longer/noisy transcript can still lock.
   - Added regressions proving `فكلا سوف تعلمون كلا لو` locks to `102:3`, and the WebSocket payload returns `ayah_text` from the corpus.
   - Published deployment branch `codex/runpod-span-lock` at commit `34608ff`.
-  - Updated RunPod pod `5noujehu3dp1t9` to commit `34608ff`, installed `rapidfuzz`, and restarted both the LiveKit worker and token/API server.
+  - Updated RunPod pod `5noujehu3dp1t9` to commit `34608ff`, installed `rapidfuzz`, and restarted both the former room transport worker and token/API server.
 - Verification run:
   - Red first: focused locator/session tests failed because the noisy ASR window returned `not_found`/`locating`.
   - Green focused local run: `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_returns_tanzil_ayah_text_for_noisy_span_lock tests.test_locator.QuranLocatorTests.test_tolerant_locator_recovers_valid_phrase_inside_noisy_asr_window tests.test_session.RecitationSessionTests.test_noisy_live_asr_window_locks_on_valid_surah_102_span -v`.
-  - Focused backend run: `uv run python -B -m unittest tests.test_locator tests.test_session tests.test_api tests.test_livekit_worker -v` passed with 61 tests.
+  - Focused backend run: `uv run python -B -m unittest tests.test_locator tests.test_session tests.test_api tests.test_former-room-transport_worker -v` passed with 61 tests.
   - Full local Python suite: `uv run python -B -m unittest discover -s tests -v` passed with 170 tests.
   - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
   - RunPod focused verification passed for the noisy span locator/session/API payload tests.
-  - Public RunPod `/health` returned HTTP 200; public token endpoint returned HTTP 200 with safe fields matching the LiveKit Cloud room.
+  - Public RunPod `/health` returned HTTP 200; public token endpoint returned HTTP 200 with safe fields matching the former room transport Cloud room.
 - Evidence captured:
   - RunPod safe settings show backend `faster-whisper`, model `OdyAsh/faster-whisper-base-ar-quran`, device `cuda:0`, compute `float16`, and `rapidfuzz 3.14.5`.
-  - RunPod worker log shows it connected to `wss://tarteel-realtime-a4pc5yse.livekit.cloud` room `tarteel-recitation`.
+  - RunPod worker log shows it connected to `wss://tarteel-realtime-a4pc5yse.former-room-transport.cloud` room `tarteel-recitation`.
 - Known risk or unresolved issue:
   - Manual simulator mic retest is still needed to confirm the live ASR window now produces visible `Ayah` and `Ayah text`.
   - The ASR can still misrecognize or skip early short ayahs; this fix makes usable spans lock instead of falling all the way to `no_match`.
-- Next best step: retry in the simulator with the LiveKit URL already configured and watch for `locked (tolerant_span_match)` plus a populated `Ayah`/`Ayah text` panel.
+- Next best step: retry in the simulator with the former room transport URL already configured and watch for `locked (tolerant_span_match)` plus a populated `Ayah`/`Ayah text` panel.
+
+### Session 051
+
+- Date: 2026-05-21
+- Goal: Configure Matt Pocock engineering skills for this repository.
+- Completed:
+  - Added an `## Agent skills` block to `AGENTS.md`.
+  - Created `docs/agents/issue-tracker.md` for GitHub Issues in `moabdelmoez/tarteel-realtime`.
+  - Created `docs/agents/triage-labels.md` mapping canonical roles to repo labels, including `needs-info -> question` and `wontfix -> wontfix`.
+  - Created `docs/agents/domain.md` documenting a single-context domain-doc layout using root `CONTEXT.md` and `docs/adr/` when present.
+  - Updated harness state so future agents know these setup docs are part of the workflow.
+- Verification run:
+  - `git diff --check`
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"`
+  - `uv run python -B -m unittest discover -s tests -v`
+- Evidence captured:
+  - Repo remote was confirmed as `https://github.com/moabdelmoez/tarteel-realtime.git`.
+  - Existing GitHub labels were checked: `question` and `wontfix` exist; the remaining workflow labels can be added later as needed.
+  - `feature_list.json` parsed successfully.
+  - Active-feature sanity check returned `[]`.
+  - `git diff --check` passed.
+  - Full Python deterministic suite passed: 170 tests.
+- Files or artifacts updated:
+  - `AGENTS.md`
+  - `docs/agents/issue-tracker.md`
+  - `docs/agents/triage-labels.md`
+  - `docs/agents/domain.md`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+- Known risk or unresolved issue:
+  - `CONTEXT.md` and `docs/adr/` do not exist yet; the domain setup intentionally tells consumers to proceed silently until those docs are created.
+- Next best step: use `to-issues`, `to-prd`, `triage`, `diagnose`, `tdd`, `improve-codebase-architecture`, and `zoom-out` with the new repo-specific setup docs.
+
+### Session 052
+
+- Date: 2026-05-21
+- Goal: Implement the first architecture improvement slice without broad refactoring: fix Quran token cleanup and centralize recitation location policy.
+- Completed:
+  - Added a regression proving standalone Tanzil pause marks such as `ۚ` do not become empty `QuranWord` entries or shift following word refs.
+  - Updated `QuranCorpus.from_tanzil_lines(...)` to preserve full ayah text while skipping tokens whose normalized form is empty and assigning compact word refs from accepted Quran words.
+  - Added `QuranLocator.locate_recitation(...)` as the exact-first, tolerant-fallback public policy for recitation text.
+  - Updated `RecitationSession` to use `locate_recitation(...)` for initial lock and ordered-progression recovery instead of duplicating locator fallback policy.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_quran_data.QuranCorpusTests.test_skips_tanzil_tokens_that_normalize_to_empty_without_shifting_refs -v` failed because `ۚ` created an empty normalized word and shifted refs.
+  - Green parser run: `uv run python -B -m unittest tests.test_quran_data.QuranCorpusTests.test_skips_tanzil_tokens_that_normalize_to_empty_without_shifting_refs tests.test_quran_data -v` passed.
+  - Red first: `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_locate_recitation_uses_exact_match_before_tolerant_fallback -v` failed because `QuranLocator.locate_recitation` did not exist.
+  - Green locator/session run: `uv run python -B -m unittest tests.test_locator.QuranLocatorTests.test_locate_recitation_uses_exact_match_before_tolerant_fallback tests.test_locator tests.test_session -v` passed.
+  - Focused shared run: `uv run python -B -m unittest tests.test_quran_data tests.test_locator tests.test_session tests.test_evaluate_cli -v` passed with 50 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 172 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Structured and whitespace checks: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, and `git diff --check` passed.
+  - Final touched-area rerun after harness updates: `uv run python -B -m unittest tests.test_quran_data tests.test_locator tests.test_session -v` passed with 43 tests.
+- Files or artifacts updated:
+  - `tarteel_realtime/quran.py`
+  - `tarteel_realtime/locator.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_quran_data.py`
+  - `tests/test_locator.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is local deterministic evidence only. The active RunPod worker was not redeployed with this slice, so live Surah 98/102 behavior should not be judged against the local fix until the pod runtime is updated.
+- Next best step: deploy or fresh-bootstrap the local Quran tokenization and locator-interface slice to RunPod, then rerun the targeted former room transport or WSS Surah 98/102 checks with logs tied to the current `ios-reciter-...` session id.
+
+### Session 053
+
+- Date: 2026-05-21
+- Goal: Implement the next architecture improvement slice: move shared recitation-event wire payload encoding out of the FastAPI transport module.
+- Completed:
+  - Added `tarteel_realtime/event_payloads.py` as the module for encoding `SessionEvent` objects into the WebSocket/former room transport wire payload.
+  - Moved canonical ayah text enrichment and Quran ref string conversion for event payloads out of `api.py`.
+  - Updated the FastAPI WebSocket path and former room transport worker to use `event_payloads.session_event_to_payload(...)`.
+  - Removed the former room transport worker's dependency on the FastAPI `api.py` module for shared payload behavior.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_event_payloads -v` failed because `tarteel_realtime.event_payloads` did not exist.
+  - Green focused payload run: `uv run python -B -m unittest tests.test_event_payloads -v` passed.
+  - Transport-focused run: `uv run python -B -m unittest tests.test_event_payloads tests.test_api tests.test_former-room-transport_worker -v` passed with 30 tests.
+  - Broader transport/app run: `uv run python -B -m unittest tests.test_event_payloads tests.test_api tests.test_former-room-transport_worker tests.test_app_factory -v` passed with 31 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 173 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Structured and whitespace checks: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, and `git diff --check` passed.
+- Files or artifacts updated:
+  - `tarteel_realtime/event_payloads.py`
+  - `tarteel_realtime/api.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_event_payloads.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local transport-contract refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: deploy the accumulated local architecture slices before judging active RunPod former room transport behavior.
+
+### Session 054
+
+- Date: 2026-05-21
+- Goal: Implement the next architecture improvement slice: move recitation progression state out of `RecitationSession`.
+- Completed:
+  - Added `tarteel_realtime/progression.py` with `RecitationProgression` for next expected refs, progression anchors, ordered ayah scope, ordered miss counting, and candidate-match advancement.
+  - Updated `RecitationSession` to keep recognizer/location/alignment/event orchestration while delegating progression state and ref calculations to `RecitationProgression`.
+  - Kept `SessionEvent` shape and external session behavior unchanged.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_progression -v` failed because `tarteel_realtime.progression` did not exist.
+  - Green progression run: `uv run python -B -m unittest tests.test_progression -v` passed with 4 tests.
+  - Session-focused run: `uv run python -B -m unittest tests.test_progression tests.test_session -v` passed with 20 tests.
+  - Shared behavior run: `uv run python -B -m unittest tests.test_progression tests.test_session tests.test_locator tests.test_api tests.test_event_payloads -v` passed with 50 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 177 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Structured and whitespace checks: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, and `git diff --check` passed.
+- Files or artifacts updated:
+  - `tarteel_realtime/progression.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_progression.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: deploy the accumulated local architecture slices before judging active RunPod former room transport behavior.
+
+### Session 055
+
+- Date: 2026-05-21
+- Goal: Implement the next architecture improvement slice: move session event shape and construction helpers out of `RecitationSession`.
+- Completed:
+  - Added `tarteel_realtime/session_events.py` with `SessionEvent`, `SessionEventType`, and named event factory helpers.
+  - Updated `RecitationSession` to call named event helpers instead of hand-building `SessionEvent(...)` throughout the orchestration flow.
+  - Updated `event_payloads.py` and `former-room-transport_worker.py` to import event types/helpers from `session_events`, while `session.py` still re-exports `SessionEvent` and `SessionEventType` for existing imports.
+  - Kept the external event payload shape unchanged.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_session_events -v` failed because `tarteel_realtime.session_events` did not exist.
+  - Green event factory run: `uv run python -B -m unittest tests.test_session_events -v` passed with 3 tests.
+  - Session-focused run: `uv run python -B -m unittest tests.test_session_events tests.test_session -v` passed with 19 tests.
+  - Transport-focused run: `uv run python -B -m unittest tests.test_session_events tests.test_session tests.test_event_payloads tests.test_former-room-transport_worker -v` passed with 37 tests.
+  - Shared behavior run: `uv run python -B -m unittest tests.test_session_events tests.test_session tests.test_progression tests.test_locator tests.test_api tests.test_event_payloads tests.test_former-room-transport_worker -v` passed with 70 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 180 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Structured and whitespace checks: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, and `git diff --check` passed.
+- Files or artifacts updated:
+  - `tarteel_realtime/session_events.py`
+  - `tarteel_realtime/session.py`
+  - `tarteel_realtime/event_payloads.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_session_events.py`
+  - `tests/test_event_payloads.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: deploy the accumulated local architecture slices before judging active RunPod former room transport behavior.
+
+### Session 056
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 2: add a shared recitation stream module behind WebSocket and former room transport.
+- Completed:
+  - Added `tarteel_realtime/recitation_stream.py` with `RecitationStream`, `RecitationStreamResult`, shared payload generation, shared diagnostics, PCM level helpers, and ASR-error surfacing as `uncertain/asr_error`.
+  - Updated the FastAPI WebSocket adapter to use `RecitationStream` for `AudioChunk -> SessionEvent -> payload -> diagnostics`.
+  - Updated the former room transport worker adapter to use the same stream module and log the same diagnostics shape.
+  - Preserved the existing WebSocket/former room transport payload contract while making WebSocket recognizer failures return visible `uncertain` events instead of closing the socket.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_recitation_stream -v` failed because `tarteel_realtime.recitation_stream` did not exist.
+  - Adapter red tests failed before integration: WebSocket recognizer errors closed the socket, and former room transport emitted no shared diagnostics log.
+  - Green stream/adapter run: `uv run python -B -m unittest tests.test_recitation_stream tests.test_api.ApiTests.test_websocket_returns_uncertain_event_when_recognizer_raises tests.test_former-room-transport_worker.former room transportWorkerTests.test_worker_logs_shared_recitation_diagnostics -v` passed with 5 tests.
+  - Transport-focused run: `uv run python -B -m unittest tests.test_api tests.test_former-room-transport_worker tests.test_event_payloads -v` passed with 32 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 185 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/recitation_stream.py`
+  - `tarteel_realtime/api.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_recitation_stream.py`
+  - `tests/test_api.py`
+  - `tests/test_former-room-transport_worker.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: continue to architecture slice 3, splitting former room transport worker room plumbing from the recitation worker core.
+
+### Session 057
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 3: split former room transport worker room plumbing from frame decoding, VAD tracking, and recitation worker core.
+- Completed:
+  - Added `tarteel_realtime/former-room-transport_audio.py` for former room transport audio-frame to `AudioChunk` conversion.
+  - Added `tarteel_realtime/former-room-transport_voice_activity.py` for former room transport VAD data-topic decoding.
+  - Added `tarteel_realtime/former-room-transport_room.py` for voice-activity tracking, track task registry, room event handlers, and audio-stream consumption.
+  - Added `tarteel_realtime/former-room-transport_recitation.py` for the recitation worker core, fake transcript recognizer support, and worker recognizer factory.
+  - Shrank `former-room-transport_worker.py` into the CLI/room runner and compatibility re-export module.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_former-room-transport_room -v` failed because `tarteel_realtime.former-room-transport_room` did not exist.
+  - Red first: `uv run python -B -m unittest tests.test_former-room-transport_audio -v` failed because `tarteel_realtime.former-room-transport_audio` did not exist.
+  - Red first: `uv run python -B -m unittest tests.test_former-room-transport_recitation -v` failed because `tarteel_realtime.former-room-transport_recitation` did not exist.
+  - Green focused split run: `uv run python -B -m unittest tests.test_former-room-transport_audio tests.test_former-room-transport_room tests.test_former-room-transport_recitation tests.test_former-room-transport_worker -v` passed with 23 tests.
+  - Focused former room transport/API run: `uv run python -B -m unittest tests.test_former-room-transport_audio tests.test_former-room-transport_room tests.test_former-room-transport_recitation tests.test_former-room-transport_worker tests.test_former-room-transport_tokens tests.test_api -v` passed with 43 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 190 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/former-room-transport_audio.py`
+  - `tarteel_realtime/former-room-transport_voice_activity.py`
+  - `tarteel_realtime/former-room-transport_room.py`
+  - `tarteel_realtime/former-room-transport_recitation.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_former-room-transport_audio.py`
+  - `tests/test_former-room-transport_room.py`
+  - `tests/test_former-room-transport_recitation.py`
+  - `tests/test_former-room-transport_worker.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: continue to architecture slice 4, cleaning locator internals while preserving `QuranLocator.locate_recitation(...)`.
+
+### Session 058
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 4: clean locator internals while preserving `QuranLocator.locate_recitation(...)`.
+- Completed:
+  - Added `tarteel_realtime/locator_types.py` for locator status, candidate, and decision types.
+  - Added `tarteel_realtime/locator_matching.py` for exact matching, tolerant matching, tolerant span matching, scope constraints, scoring config, candidate sorting, and RapidFuzz word similarity.
+  - Reduced `tarteel_realtime/locator.py` to the public locator interface and decision policy, keeping `QuranLocator.locate_recitation(...)` stable for callers.
+  - Added direct tests for `QuranCandidateFinder` scope constraints, progression preference, and noisy transcript span search.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_locator_matching -v` failed because `tarteel_realtime.locator_matching` did not exist.
+  - Green locator internals run: `uv run python -B -m unittest tests.test_locator_matching tests.test_locator tests.test_session -v` passed with 36 tests after the extraction.
+  - Shared behavior run: `uv run python -B -m unittest tests.test_locator_matching tests.test_locator tests.test_session tests.test_progression tests.test_api tests.test_event_payloads tests.test_recitation_stream tests.test_former-room-transport_worker -v` passed with 75 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 193 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/locator_types.py`
+  - `tarteel_realtime/locator_matching.py`
+  - `tarteel_realtime/locator.py`
+  - `tests/test_locator_matching.py`
+  - `tests/test_locator.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: continue to architecture slice 5, extracting the post-recognition transition policy out of `RecitationSession`.
+
+### Session 059
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 5: extract the post-recognition transition policy out of `RecitationSession`.
+- Completed:
+  - Added `tarteel_realtime/session_transitions.py` with `RecitationTransitionPolicy`.
+  - Moved the post-recognition decision tree for initial location, ayah-boundary guidance, alignment progress, tolerant ordered recovery, and hard wrong events into the transition policy.
+  - Reduced `RecitationSession` to the recognizer adapter: `AudioChunk -> RecognitionResult -> RecitationTransitionPolicy`.
+  - Added direct transition-policy tests that drive `RecognitionResult` objects without depending on audio chunks or a recognizer.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_session_transitions -v` failed because `tarteel_realtime.session_transitions` did not exist.
+  - Green transition-policy run: `uv run python -B -m unittest tests.test_session_transitions -v` passed with 3 tests.
+  - Shared behavior run: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_session_events tests.test_progression tests.test_locator tests.test_api tests.test_event_payloads tests.test_recitation_stream tests.test_former-room-transport_worker -v` passed with 78 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 196 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/session_transitions.py`
+  - `tarteel_realtime/session.py`
+  - `tests/test_session_transitions.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: continue to architecture slice 6, moving ASR runtime wiring into a shared module.
+
+### Session 060
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 6: move ASR runtime wiring into a shared module used by ASR app and former room transport.
+- Completed:
+  - Added `tarteel_realtime/asr_runtime.py` for shared ASR settings parsing and recognizer factory wiring.
+  - Moved env parsing (`settings_from_env`), lazy recognizer factory, buffered recognizer factory, and runtime defaults into the shared runtime module.
+  - Updated `asr_app.py` to focus on FastAPI composition while re-exporting runtime symbols for compatibility (`AsrAppSettings = AsrRuntimeSettings`).
+  - Updated former room transport runtime paths to import ASR wiring from `asr_runtime.py` directly.
+  - Added runtime-focused tests in `tests/test_asr_runtime.py`, including a source guard that former room transport recitation wiring imports from `asr_runtime`.
+- Verification run:
+  - Red first: `uv run python -B -m unittest tests.test_asr_runtime -v` failed because `tarteel_realtime.asr_runtime` did not exist.
+  - Green focused run: `uv run python -B -m unittest tests.test_asr_runtime tests.test_asr_app tests.test_former-room-transport_recitation tests.test_former-room-transport_worker -v` passed with 29 tests.
+  - Full deterministic suite: `uv run python -B -m unittest discover -s tests -v` passed with 200 tests.
+  - Compile check: `uv run python -m compileall -q tarteel_realtime tests`.
+- Files or artifacts updated:
+  - `tarteel_realtime/asr_runtime.py`
+  - `tarteel_realtime/asr_app.py`
+  - `tarteel_realtime/former-room-transport_recitation.py`
+  - `tarteel_realtime/former-room-transport_worker.py`
+  - `tests/test_asr_runtime.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This is a local architecture refactor. The active RunPod worker was not redeployed with this slice.
+- Next best step: continue to architecture slice 7, adding domain docs and ADRs for the established seams.
+
+### Session 061
+
+- Date: 2026-05-21
+- Goal: Implement architecture slice 7: add domain docs and ADRs for session/runtime seams.
+- Completed:
+  - Added root `CONTEXT.md` with shared domain language and seam definitions.
+  - Added `docs/adr/0001-recitation-stream-and-transition-seams.md`.
+  - Added `docs/adr/0002-shared-asr-runtime-wiring.md`.
+  - Updated harness docs to include this documentation slice and verification evidence.
+- Verification run:
+  - Structured file checks: `uv run python -B -m json.tool feature_list.json`.
+  - Active-feature sanity: `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"` returned `[]`.
+  - Whitespace check: `git diff --check`.
+  - Baseline carried from the immediately preceding slice: full deterministic suite passed with 200 tests and compile check passed.
+- Files or artifacts updated:
+  - `CONTEXT.md`
+  - `docs/adr/0001-recitation-stream-and-transition-seams.md`
+  - `docs/adr/0002-shared-asr-runtime-wiring.md`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - Local architecture/documentation slices are complete but not redeployed to the active RunPod worker yet.
+- Next best step: deploy or fresh-bootstrap the target GPU runtime with the accumulated local slices before evaluating live transport behavior.
+
+### Session 062
+
+- Date: 2026-05-21
+- Goal: Continue architecture work with a provider-neutral GPU bootstrap seam so infrastructure scripts are not coupled to RunPod naming.
+- Completed:
+  - Added `scripts/gpu_bootstrap.sh` as the provider-neutral bootstrap entrypoint.
+  - Kept `scripts/runpod_bootstrap.sh` as a compatibility wrapper delegating to `gpu_bootstrap.sh`.
+  - Added host-default portability in bootstrap (`/workspace` defaults with `$HOME` fallback) plus `TARTEEL_DOWNLOAD_ARTIFACTS` alias support while preserving `TARTEEL_DOWNLOAD_R2_ARTIFACTS`.
+  - Updated bootstrap tests to validate the new wrapper + shared script behavior.
+  - Updated docs to prefer GPU-host wording and `scripts/gpu_bootstrap.sh`, with RunPod retained as an example path.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_runpod_bootstrap -v` passed with 6 tests.
+  - `uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap -v` passed with 11 tests.
+  - `bash -n scripts/gpu_bootstrap.sh` passed.
+  - `bash -n scripts/runpod_bootstrap.sh` passed.
+- Files or artifacts updated:
+  - `scripts/gpu_bootstrap.sh`
+  - `scripts/runpod_bootstrap.sh`
+  - `tests/test_runpod_bootstrap.py`
+  - `README.md`
+  - `docs/runpod-r2.md`
+  - `ios/README.md`
+  - `clean-state-checklist.md`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - This portability slice is local-only until the active GPU worker runtime is fresh-bootstrapped using `scripts/gpu_bootstrap.sh` (or the compatibility wrapper).
+- Next best step: run a fresh GPU-host bootstrap from the preferred neutral entrypoint, then redeploy and re-run former room transport/WebSocket real-ASR validation.
+
+### Session 063
+
+- Date: 2026-05-23
+- Goal: Fix the iOS Simulator former room transport token fetch error caused by using a RunPod WebSocket URL in the former room transport preset.
+- Completed:
+  - Diagnosed the screenshot: the app was on the `former room transport` preset while the editable URL was a `/ws/recitation` WebSocket endpoint, so `URLSession` attempted an HTTP token fetch from the wrong path.
+  - Added former room transport token URL normalization in `BackendEndpointPreset`: `wss://.../ws/recitation` becomes `https://.../former-room-transport/removed-transport-token`, and bare RunPod proxy hosts receive an `https://` scheme.
+  - Updated `RecitationViewModel` to keep former room transport token URL state separate from the Custom WebSocket URL state.
+  - Rebuilt, installed, and launched the fixed app in the booted iPhone 17 Pro simulator.
+- Verification run:
+  - Red first: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter BackendEndpointPresetTests` failed because `recordingURLText` did not exist.
+  - Red first: `uv run python -B -m unittest tests.test_ios_websocket_client -v` failed because `RecitationViewModel` had no separate former room transport URL state.
+  - Green focused Swift preset tests passed with 7 tests.
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` passed with 21 tests.
+  - `uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_former-room-transport_vad -v` passed with 18 tests.
+  - `git diff --check` passed.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build` succeeded.
+  - Installed and launched `dev.mostafa.TarteelPrototype` in the booted iPhone 17 Pro simulator as process `92608`.
+- Files or artifacts updated:
+  - `ios/TarteelClientCore/Sources/TarteelClientCore/BackendEndpointPreset.swift`
+  - `ios/TarteelClientCore/Tests/TarteelClientCoreTests/BackendEndpointPresetTests.swift`
+  - `ios/TarteelPrototype/TarteelPrototype/App/RecitationViewModel.swift`
+  - `tests/test_ios_websocket_client.py`
+  - Harness docs/state files.
+- Known risk or unresolved issue:
+  - The active RunPod worker/token service was prepared separately for manual testing, but this local app fix was not committed or pushed.
+- Next best step: in the Simulator, select `former room transport` and use `https://0qudx1ctbmw1xc-8000.proxy.runpod.net/former-room-transport/removed-transport-token`, or paste the WebSocket URL and let the app normalize it before starting.

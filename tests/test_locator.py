@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-import tarteel_realtime.locator as locator_module
+import tarteel_realtime.locator_matching as locator_matching_module
 from tarteel_realtime.locator import LocatorStatus, QuranLocator
 from tarteel_realtime.quran import QuranCorpus, QuranRef
 
@@ -82,6 +82,17 @@ class QuranLocatorTests(unittest.TestCase):
         self.assertEqual(decision.reason, "no_match")
         self.assertEqual(decision.candidates, ())
 
+    def test_locate_recitation_uses_exact_match_before_tolerant_fallback(self):
+        exact_decision = self.locator.locate_recitation("مَلِكِ النَّاسِ")
+        tolerant_decision = self.locator.locate_recitation("حَتَّى زُرْتُمُ الْمَقَى")
+
+        self.assertEqual(exact_decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(exact_decision.reason, "unique_match")
+        self.assertEqual(exact_decision.best.ayah_ref, QuranRef(surah=114, ayah=2))
+        self.assertEqual(tolerant_decision.status, LocatorStatus.LOCKED)
+        self.assertEqual(tolerant_decision.reason, "tolerant_match")
+        self.assertEqual(tolerant_decision.best.ayah_ref, QuranRef(surah=102, ayah=2))
+
     def test_empty_transcript_is_uncertain(self):
         decision = self.locator.locate("")
 
@@ -125,7 +136,7 @@ class QuranLocatorTests(unittest.TestCase):
         self.assertGreaterEqual(decision.best.matched_words, 3)
 
     def test_tolerant_locator_uses_rapidfuzz_backend(self):
-        source = Path(locator_module.__file__).read_text(encoding="utf-8")
+        source = Path(locator_matching_module.__file__).read_text(encoding="utf-8")
 
         self.assertIn("rapidfuzz", source)
         self.assertNotIn("SequenceMatcher", source)
