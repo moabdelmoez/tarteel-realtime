@@ -12,10 +12,12 @@ fi
 REPO_URL="${TARTEEL_REPO_URL:-https://github.com/moabdelmoez/tarteel-realtime.git}"
 APP_DIR="${TARTEEL_APP_DIR:-$DEFAULT_APP_DIR}"
 CACHE_ROOT="${TARTEEL_CACHE_ROOT:-$DEFAULT_CACHE_ROOT}"
+GIT_REF="${TARTEEL_GIT_REF:-}"
 export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"
 
 DOWNLOAD_R2_ARTIFACTS="${TARTEEL_DOWNLOAD_ARTIFACTS:-${TARTEEL_DOWNLOAD_R2_ARTIFACTS:-0}}"
 PREPARE_AUDIO_WAVS="${TARTEEL_PREPARE_AUDIO_WAVS:-$DOWNLOAD_R2_ARTIFACTS}"
+LOCAL_AUDIO_SAMPLES="${TARTEEL_LOCAL_AUDIO_SAMPLES:-004001 004002 004003 108001 108002 108003}"
 
 download_r2_artifact() {
   local key="$1"
@@ -40,6 +42,19 @@ prepare_wav() {
   ffmpeg -y -i "$source_mp3" -ac 1 -ar 16000 -sample_fmt s16 "$target_wav"
 }
 
+checkout_git_ref() {
+  if [ -z "$GIT_REF" ]; then
+    git pull --ff-only
+    return 0
+  fi
+
+  git fetch origin
+  git checkout "$GIT_REF"
+  if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+    git pull --ff-only
+  fi
+}
+
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
@@ -51,12 +66,13 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 
 if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" pull --ff-only
+  git -C "$APP_DIR" fetch origin
 else
   git clone "$REPO_URL" "$APP_DIR"
 fi
 
 cd "$APP_DIR"
+checkout_git_ref
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$CACHE_ROOT/uv}"
 export HF_HOME="${HF_HOME:-$CACHE_ROOT/huggingface}"
@@ -65,13 +81,15 @@ mkdir -p "$UV_CACHE_DIR" "$HF_HOME" "$TORCH_HOME"
 
 if [ "$DOWNLOAD_R2_ARTIFACTS" = "1" ]; then
   download_r2_artifact "data/tanzil/quran-simple-clean.txt"
-  download_r2_artifact "fixtures/local_audio/114001.mp3"
-  download_r2_artifact "fixtures/local_audio/114002.mp3"
+  for sample in $LOCAL_AUDIO_SAMPLES; do
+    download_r2_artifact "fixtures/local_audio/${sample}.mp3"
+  done
 fi
 
 if [ "$PREPARE_AUDIO_WAVS" = "1" ]; then
-  prepare_wav "fixtures/local_audio/114001.mp3" "fixtures/local_audio/114001.wav"
-  prepare_wav "fixtures/local_audio/114002.mp3" "fixtures/local_audio/114002.wav"
+  for sample in $LOCAL_AUDIO_SAMPLES; do
+    prepare_wav "fixtures/local_audio/${sample}.mp3" "fixtures/local_audio/${sample}.wav"
+  done
 fi
 
 uv run python -m compileall -q tarteel_realtime tests scripts

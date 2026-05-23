@@ -83,6 +83,12 @@ def format_event(event: dict[str, Any]) -> str:
     return json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def websocket_connect_kwargs(*, disable_ping: bool) -> dict[str, Any]:
+    if not disable_ping:
+        return {}
+    return {"ping_interval": None, "ping_timeout": None}
+
+
 async def run_client(
     *,
     url: str,
@@ -90,10 +96,14 @@ async def run_client(
     sample_rate_hz: int,
     audio: SmokeAudio | None = None,
     chunk_duration_ms: int | None = None,
+    disable_ping: bool = False,
 ) -> list[dict[str, Any]]:
     import websockets
 
-    async with websockets.connect(url) as websocket:
+    async with websockets.connect(
+        url,
+        **websocket_connect_kwargs(disable_ping=disable_ping),
+    ) as websocket:
         if audio is not None:
             return await collect_audio_events(
                 websocket,
@@ -114,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE_HZ)
     parser.add_argument("--audio-path", type=Path, default=None, help="Optional PCM16LE or mono PCM16 WAV file to send.")
     parser.add_argument("--chunk-ms", type=int, default=None, help="Optional chunk size in milliseconds. Defaults to one whole-file chunk for --audio-path.")
+    parser.add_argument("--disable-ping", action="store_true", help="Disable WebSocket keepalive pings for long ASR inference windows.")
     args = parser.parse_args(argv)
 
     audio = None
@@ -126,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_rate_hz=args.sample_rate,
         audio=audio,
         chunk_duration_ms=args.chunk_ms,
+        disable_ping=args.disable_ping,
     ))
     for event in events:
         print(format_event(event))

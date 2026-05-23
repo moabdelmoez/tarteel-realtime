@@ -167,6 +167,8 @@ By default, `--audio-path` is sent as one whole-file chunk. To simulate live mic
 uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000
 ```
 
+For real ASR windows that may exceed WebSocket keepalive timeouts during model load or long inference, add `--disable-ping` to the replay command.
+
 For the first RunPod L40S chunked-WAV proof on 2026-05-17, Surah 114:2 locked reliably with a larger first buffer:
 
 ```bash
@@ -185,10 +187,11 @@ UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' 
 Then, from the same pod shell:
 
 ```bash
-uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/114002.wav --chunk-ms 1000
+uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/108001.wav --chunk-ms 1000 --disable-ping
+uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/004001.wav --chunk-ms 1000 --disable-ping
 ```
 
-Expected shape: several `waiting_for_audio_buffer` events, then a `locked` event for `114:2`. This is a capability proof, not final latency tuning.
+Expected shape: several `waiting_for_audio_buffer` events, then a meaningful `locked`, `progress`, `lock_candidate`, or `uncertain` event stream. This is a capability proof, not final latency tuning.
 
 ## WebSocket + VAD Transport
 
@@ -243,10 +246,10 @@ Download on a GPU host (RunPod example):
 ```bash
 source /workspace/tarteel-r2.env
 uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
-uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114001.mp3
-uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3
-ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114001.wav
-ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
+for sample in 004001 004002 004003 108001 108002 108003; do
+  uv run --with boto3 python scripts/r2_artifacts.py download "fixtures/local_audio/${sample}.mp3"
+  ffmpeg -y -i "fixtures/local_audio/${sample}.mp3" -ac 1 -ar 16000 -sample_fmt s16 "fixtures/local_audio/${sample}.wav"
+done
 ```
 
 For full host bootstrap steps, see `docs/runpod-r2.md`. The preferred bootstrap entrypoint is `scripts/gpu_bootstrap.sh` (with `scripts/runpod_bootstrap.sh` kept as a compatibility wrapper).

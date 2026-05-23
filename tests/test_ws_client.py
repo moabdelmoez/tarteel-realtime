@@ -9,6 +9,7 @@ from tarteel_realtime.ws_client import (
     collect_events,
     format_event,
     split_pcm_audio,
+    websocket_connect_kwargs,
 )
 from tarteel_realtime.asr_smoke import SmokeAudio
 
@@ -100,6 +101,13 @@ class WebSocketClientTests(unittest.TestCase):
         line = format_event({"type": "wrong", "expected_ref": "114:2:2"})
 
         self.assertEqual(line, '{"expected_ref":"114:2:2","type":"wrong"}')
+
+    def test_can_disable_websocket_ping_for_long_asr_windows(self):
+        self.assertEqual(
+            websocket_connect_kwargs(disable_ping=True),
+            {"ping_interval": None, "ping_timeout": None},
+        )
+        self.assertEqual(websocket_connect_kwargs(disable_ping=False), {})
 
 
 if __name__ == "__main__":

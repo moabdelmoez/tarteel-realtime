@@ -39,10 +39,10 @@ source /workspace/tarteel-r2.env
 git clone https://github.com/moabdelmoez/tarteel-realtime.git /workspace/tarteel-realtime
 cd /workspace/tarteel-realtime
 uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
-uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114001.mp3
-uv run --with boto3 python scripts/r2_artifacts.py download fixtures/local_audio/114002.mp3
-ffmpeg -y -i fixtures/local_audio/114001.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114001.wav
-ffmpeg -y -i fixtures/local_audio/114002.mp3 -ac 1 -ar 16000 -sample_fmt s16 fixtures/local_audio/114002.wav
+for sample in 004001 004002 004003 108001 108002 108003; do
+  uv run --with boto3 python scripts/r2_artifacts.py download "fixtures/local_audio/${sample}.mp3"
+  ffmpeg -y -i "fixtures/local_audio/${sample}.mp3" -ac 1 -ar 16000 -sample_fmt s16 "fixtures/local_audio/${sample}.wav"
+done
 ```
 
 ## Bootstrap A Fresh GPU Host
@@ -52,10 +52,11 @@ From a host shell (RunPod example):
 ```bash
 source /workspace/tarteel-r2.env
 export TARTEEL_DOWNLOAD_ARTIFACTS=1
+export TARTEEL_GIT_REF=codex/asr-point-1-faster-whisper-gpu  # optional branch/ref override while testing unmerged work
 bash scripts/gpu_bootstrap.sh
 ```
 
-When `TARTEEL_DOWNLOAD_ARTIFACTS=1`, the bootstrap also downloads `114001.mp3` and `114002.mp3` and prepares mono 16 kHz PCM WAVs for the ASR smoke commands. Set `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
+When `TARTEEL_DOWNLOAD_ARTIFACTS=1`, the bootstrap also downloads the default proof set `004001 004002 004003 108001 108002 108003` and prepares mono 16 kHz PCM WAVs for ASR smoke and WebSocket replay commands. Set `TARTEEL_LOCAL_AUDIO_SAMPLES` to override the sample list, `TARTEEL_PREPARE_AUDIO_WAVS=0` to skip conversion, or `TARTEEL_RUN_TESTS=0` when you only want clone, caches, artifact download, and compile checks.
 
 `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` and `scripts/runpod_bootstrap.sh` are still supported as compatibility aliases.
 
