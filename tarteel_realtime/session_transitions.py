@@ -78,7 +78,8 @@ class RecitationTransitionPolicy:
             )
 
         if locator_decision.status == LocatorStatus.AMBIGUOUS:
-            if initial_location.remember_context:
+            self._initial_transcript_context.remember(recognition.transcript)
+            if recognition_for_location.transcript != recognition.transcript:
                 self._initial_transcript_context.remember(
                     recognition_for_location.transcript
                 )
@@ -136,30 +137,34 @@ class RecitationTransitionPolicy:
                 decision=current_decision,
             )
 
-        contextual_recognition = self._initial_transcript_context.combine(recognition)
-        contextual_decision = self._locate_initial_recognition(contextual_recognition)
-        if contextual_decision.status == LocatorStatus.LOCKED:
-            return _InitialLocationResult(
-                recognition=contextual_recognition,
-                decision=contextual_decision,
-            )
-        if (
-            current_decision.status == LocatorStatus.AMBIGUOUS
-            and contextual_decision.status == LocatorStatus.AMBIGUOUS
+        ambiguous_contextual_result: _InitialLocationResult | None = None
+        for contextual_recognition in self._initial_transcript_context.combine_all(
+            recognition
         ):
-            return _InitialLocationResult(
-                recognition=contextual_recognition,
-                decision=contextual_decision,
-            )
-        if (
-            current_decision.status == LocatorStatus.AMBIGUOUS
-            and contextual_decision.status == LocatorStatus.NOT_FOUND
-        ):
-            return _InitialLocationResult(
-                recognition=recognition,
-                decision=current_decision,
-                remember_context=False,
-            )
+            contextual_decision = self._locate_initial_recognition(contextual_recognition)
+            if (
+                contextual_decision.status == LocatorStatus.LOCKED
+                and _current_decision_supports_candidate(
+                    current_decision,
+                    contextual_decision.best,
+                )
+            ):
+                return _InitialLocationResult(
+                    recognition=contextual_recognition,
+                    decision=contextual_decision,
+                )
+            if (
+                current_decision.status == LocatorStatus.AMBIGUOUS
+                and contextual_decision.status == LocatorStatus.AMBIGUOUS
+                and ambiguous_contextual_result is None
+            ):
+                ambiguous_contextual_result = _InitialLocationResult(
+                    recognition=contextual_recognition,
+                    decision=contextual_decision,
+                )
+
+        if ambiguous_contextual_result is not None:
+            return ambiguous_contextual_result
         return _InitialLocationResult(
             recognition=recognition,
             decision=current_decision,
@@ -347,33 +352,63 @@ def _is_waiting_for_audio_buffer(recognition: RecognitionResult) -> bool:
 class _InitialLocationResult:
     recognition: RecognitionResult
     decision: LocatorDecision
-    remember_context: bool = True
 
 
 class _InitialTranscriptContext:
+    _MAX_TRANSCRIPTS = 4
+
     def __init__(self) -> None:
-        self._transcript = ""
+        self._transcripts: list[str] = []
 
     @property
     def has_transcript(self) -> bool:
-        return bool(self._transcript)
+        return bool(self._transcripts)
 
-    def combine(self, recognition: RecognitionResult) -> RecognitionResult:
+    def combine_all(self, recognition: RecognitionResult) -> tuple[RecognitionResult, ...]:
         transcript = recognition.transcript.strip()
         if not transcript:
-            return recognition
-        return RecognitionResult(
-            transcript=_merge_transcripts(self._transcript, transcript),
-            confidence=recognition.confidence,
-            chunk_sequence=recognition.chunk_sequence,
-            is_final=recognition.is_final,
+            return (recognition,)
+        return tuple(
+            RecognitionResult(
+                transcript=_merge_transcripts(previous, transcript),
+                confidence=recognition.confidence,
+                chunk_sequence=recognition.chunk_sequence,
+                is_final=recognition.is_final,
+            )
+            for previous in self._transcripts
         )
 
     def remember(self, transcript: str) -> None:
-        self._transcript = transcript.strip()
+        transcript = transcript.strip()
+        if not transcript:
+            return
+        self._transcripts = [
+            existing for existing in self._transcripts if existing != transcript
+        ]
+        self._transcripts.append(transcript)
+        self._transcripts = self._transcripts[-self._MAX_TRANSCRIPTS:]
 
     def clear(self) -> None:
-        self._transcript = ""
+        self._transcripts = []
+
+
+def _current_decision_supports_candidate(
+    current_decision: LocatorDecision,
+    candidate: LocatorCandidate | None,
+) -> bool:
+    if candidate is None:
+        return False
+    if current_decision.status == LocatorStatus.NOT_FOUND:
+        return False
+    if current_decision.status == LocatorStatus.LOCKED:
+        return (
+            current_decision.best is not None
+            and ayah_ref(current_decision.best.ayah_ref) == ayah_ref(candidate.ayah_ref)
+        )
+    return any(
+        ayah_ref(current_candidate.ayah_ref) == ayah_ref(candidate.ayah_ref)
+        for current_candidate in current_decision.candidates
+    )
 
 
 def _merge_transcripts(previous: str, current: str) -> str:

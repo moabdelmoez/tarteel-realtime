@@ -136,6 +136,27 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=108, ayah=1))
         self.assertEqual(event.transcript, "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ")
 
+    def test_keeps_multiple_pre_lock_context_alternatives(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=2,
+        )
+
+        policy.handle_recognition(
+            RecognitionResult(transcript="إِنَّا", confidence=0.9, chunk_sequence=0)
+        )
+        policy.handle_recognition(
+            RecognitionResult(transcript="مَلِكِ", confidence=0.9, chunk_sequence=1)
+        )
+        event = policy.handle_recognition(
+            RecognitionResult(transcript="النَّاسِ", confidence=0.9, chunk_sequence=2)
+        )
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "unique_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
+        self.assertEqual(event.transcript, "مَلِكِ النَّاسِ")
+
     def test_waiting_event_preserves_pre_lock_transcript_context(self):
         policy = RecitationTransitionPolicy(
             corpus=self.corpus,
