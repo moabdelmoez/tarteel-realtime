@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from tarteel_realtime.quran import QuranCorpus
+from tarteel_realtime.recitation_scope import parse_recitation_scope
 from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer, VoiceActivity
 from tarteel_realtime.recitation_stream import (
     RecitationStream,
@@ -33,12 +34,22 @@ def create_app(
 
     @app.websocket("/ws/recitation")
     async def recitation_socket(websocket: WebSocket) -> None:
+        try:
+            recitation_scope = parse_recitation_scope(
+                websocket.query_params.get("scope"),
+                corpus=corpus,
+            )
+        except ValueError as exc:
+            await websocket.close(code=1008, reason=str(exc))
+            return
+
         await websocket.accept()
         stream = RecitationStream(
             corpus=corpus,
             recognizer=recognizer_factory(),
             minimum_lock_words=minimum_lock_words,
             log_transcripts=log_transcripts,
+            recitation_scope=recitation_scope,
         )
 
         try:

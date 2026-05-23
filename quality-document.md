@@ -47,6 +47,14 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-24 - Point 5 Local Selected-Recitation Scope
+
+- Point 5 adds optional selected-recitation scope on the WebSocket URL while preserving the existing audio payload contract.
+- Deterministic tests cover scope parsing, scoped initial location, out-of-scope initial no-match behavior, scoped WebSocket query wiring, and stopping ordered progression after the selected range ends.
+- Local confidence is good: focused selected-scope tests passed with 44 tests, full deterministic suite passed with 187 tests, compile passed, JSON parsed, and `git diff --check` passed.
+- Release posture: this is still a branch candidate only until RunPod faster-whisper replay proves scoped real-ASR behavior for Surah 108 and Surah 4:1-3.
+
+
 ### 2026-05-24 - Point 4 Final Lock-Stability Replay
 
 - Point 4 now prevents unscoped global tolerant-span locks from becoming initial locks; this blocked the previous `004001 -> 39:6` false lock and let the replay reach `4:1` instead.

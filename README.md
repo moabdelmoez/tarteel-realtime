@@ -182,6 +182,15 @@ uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitat
 
 For real ASR windows that may exceed WebSocket keepalive timeouts during model load or long inference, add `--disable-ping` to the replay command.
 
+If the app knows the intended recitation range, append `scope` to the WebSocket URL so matching stays inside that range before the first lock and during ordered progression. Supported forms are a whole surah like `?scope=108`, a single ayah like `?scope=108:2`, or an inclusive range like `?scope=4:1-3`.
+
+```bash
+uv run python -m tarteel_realtime.ws_client --url 'ws://127.0.0.1:8000/ws/recitation?scope=108' --audio-path path/to/mono-16k.wav --chunk-ms 1000
+uv run python -m tarteel_realtime.ws_client --url 'ws://127.0.0.1:8000/ws/recitation?scope=4:1-3' --audio-path path/to/mono-16k.wav --chunk-ms 1000
+```
+
+Without `scope`, the backend keeps the current conservative global behavior.
+
 For the first RunPod L40S chunked-WAV proof on 2026-05-17, Surah 114:2 locked reliably with a larger first buffer:
 
 ```bash

@@ -11,6 +11,7 @@ from tarteel_realtime.locator import (
 )
 from tarteel_realtime.progression import RecitationProgression, ayah_ref
 from tarteel_realtime.quran import QuranCorpus, QuranRef, normalize_arabic
+from tarteel_realtime.recitation_scope import RecitationScope
 from tarteel_realtime.recognition import RecognitionResult
 from tarteel_realtime.session_events import (
     SessionEvent,
@@ -34,6 +35,7 @@ class RecitationTransitionPolicy:
         *,
         corpus: QuranCorpus,
         minimum_lock_words: int = 3,
+        recitation_scope: RecitationScope | None = None,
     ) -> None:
         self._locator = QuranLocator(corpus, minimum_lock_words=minimum_lock_words)
         self._aligner = QuranAligner(corpus)
@@ -41,6 +43,7 @@ class RecitationTransitionPolicy:
         self._initial_transcript_context = _InitialTranscriptContext()
         self._ordered_transcript_context = _InitialTranscriptContext()
         self._corpus = corpus
+        self._recitation_scope = recitation_scope
         self._has_locked = False
 
     def handle_recognition(self, recognition: RecognitionResult) -> SessionEvent:
@@ -216,6 +219,7 @@ class RecitationTransitionPolicy:
         return self._locator.locate_recitation(
             recognition.transcript,
             preferred_ref=self._progression.progress_anchor_ref,
+            allowed_ayah_refs=self._initial_allowed_ayah_refs(),
         )
 
     def _handle_ayah_boundary(
@@ -344,7 +348,7 @@ class RecitationTransitionPolicy:
         )
 
     def _locate_ordered_progression(self, transcript: str) -> LocatorDecision:
-        allowed_ayah_refs = self._progression.ordered_allowed_ayah_refs()
+        allowed_ayah_refs = self._ordered_allowed_ayah_refs()
         if not allowed_ayah_refs:
             return LocatorDecision(
                 status=LocatorStatus.NOT_FOUND,
@@ -389,7 +393,10 @@ class RecitationTransitionPolicy:
         reason: str | None,
     ) -> SessionEvent:
         expected_start_ref = self._progression.expected_ordered_start_ref()
-        if expected_start_ref is None:
+        if (
+            expected_start_ref is None
+            or not self._is_inside_recitation_scope(expected_start_ref)
+        ):
             return uncertain_event(
                 transcript=transcript,
                 confidence=confidence,
@@ -414,6 +421,20 @@ class RecitationTransitionPolicy:
             chunk_sequence=chunk_sequence,
             expected_start_ref=expected_start_ref,
         )
+
+    def _initial_allowed_ayah_refs(self) -> tuple[QuranRef, ...] | None:
+        if self._recitation_scope is None:
+            return None
+        return self._recitation_scope.allowed_ayah_refs
+
+    def _ordered_allowed_ayah_refs(self) -> tuple[QuranRef, ...]:
+        allowed_ayah_refs = self._progression.ordered_allowed_ayah_refs()
+        if self._recitation_scope is None:
+            return allowed_ayah_refs
+        return self._recitation_scope.filter_ayah_refs(allowed_ayah_refs)
+
+    def _is_inside_recitation_scope(self, ref: QuranRef) -> bool:
+        return self._recitation_scope is None or self._recitation_scope.contains(ref)
 
 
 def _is_waiting_for_audio_buffer(recognition: RecognitionResult) -> bool:

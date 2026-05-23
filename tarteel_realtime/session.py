@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tarteel_realtime.quran import QuranCorpus
+from tarteel_realtime.recitation_scope import RecitationScope
 from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
 from tarteel_realtime.session_events import SessionEvent, SessionEventType
 from tarteel_realtime.session_transitions import RecitationTransitionPolicy
@@ -13,11 +14,13 @@ class RecitationSession:
         corpus: QuranCorpus,
         recognizer: SpeechRecognizer,
         minimum_lock_words: int = 3,
+        recitation_scope: RecitationScope | None = None,
     ) -> None:
         self._recognizer = recognizer
         self._transitions = RecitationTransitionPolicy(
             corpus=corpus,
             minimum_lock_words=minimum_lock_words,
+            recitation_scope=recitation_scope,
         )
 
     def handle_chunk(self, chunk: AudioChunk) -> SessionEvent:

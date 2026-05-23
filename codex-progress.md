@@ -14,12 +14,38 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: manual acceptance of Point 4 lock stability, followed by explicit selected-recitation scope.
-- Current blocker: Point 4 improves long-ayah false-lock behavior under RunPod faster-whisper replay, but low-latency remains not default-quality because `108002` still does not lock and long-ayah streams still emit noisy wrong/progress events.
+- Current highest-priority unfinished feature: GPU replay and manual acceptance of Point 5 selected-recitation scope.
+- Current blocker: Point 5 is locally implemented and deterministic-tested, but RunPod faster-whisper replay with scoped URLs has not yet verified whether `?scope=108` improves short Surah 108 and `?scope=4:1-3` prevents long-ayah global drift in real ASR.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
 
+
+
+### Session 071
+
+- Date: 2026-05-24
+- Goal: Implement Point 5 selected-recitation scope so the backend can restrict matching to the user-selected surah or ayah range.
+- Completed:
+  - Created worktree `.worktrees/asr-point-5-selected-recitation-scope` on branch `codex/asr-point-5-selected-recitation-scope` from Point 4 commit `9c774f2`.
+  - Added `tarteel_realtime.recitation_scope` with `RecitationScope` and `parse_recitation_scope(...)` for whole-surah scopes like `108`, single ayahs like `108:2`, and inclusive ranges like `4:1-3`.
+  - Threaded optional recitation scope through `api.create_app`, `RecitationStream`, `RecitationSession`, and `RecitationTransitionPolicy`.
+  - Exposed scope as a WebSocket query parameter: `/ws/recitation?scope=108` or `/ws/recitation?scope=4:1-3`, leaving the audio JSON payload unchanged.
+  - Restricted pre-lock location to the selected ayahs when scope is present.
+  - Restricted ordered progression after lock to the selected ayahs, so finishing the selected range does not continue into the next corpus ayah.
+  - Updated README and the clean-state checklist with scoped WebSocket examples and verification coverage.
+- Verification run:
+  - Red TDD run first failed for missing `tarteel_realtime.recitation_scope`, missing session scope wiring, and ignored WebSocket scope query.
+  - Focused selected-scope run passed: `uv run python -B -m unittest tests.test_recitation_scope tests.test_session_transitions tests.test_session tests.test_api -v` with 44 tests.
+  - Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 187 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Whitespace check passed: `git diff --check`.
+- Known risk or unresolved issue:
+  - No GPU replay has been run yet for Point 5. Real faster-whisper behavior still needs proof with scoped URLs.
+  - The iOS prototype does not yet have a dedicated selected-surah UI; manual testing can use the Custom URL query string now, and a later client slice can append scope from a real selection control.
+  - Low-latency remains opt-in until scoped real-ASR replay and manual testing show it is product-quality.
+- Next best step: push the Point 5 branch, then with GPU approval update RunPod to this branch and replay the six local audio fixtures using `?scope=108` for Surah 108 and `?scope=4:1-3` for Surah 4.
 
 ### Session 070
 

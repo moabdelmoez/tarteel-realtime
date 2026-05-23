@@ -1,6 +1,7 @@
 import unittest
 
 from tarteel_realtime.quran import QuranCorpus, QuranRef
+from tarteel_realtime.recitation_scope import parse_recitation_scope
 from tarteel_realtime.recognition import RecognitionResult
 from tarteel_realtime.session_events import SessionEventType
 from tarteel_realtime.session_transitions import RecitationTransitionPolicy
@@ -265,6 +266,34 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(second_event.ayah_ref, QuranRef(surah=108, ayah=2))
         self.assertEqual(second_event.start_ref, QuranRef(surah=108, ayah=2, word_index=1))
         self.assertEqual(second_event.transcript, "فَصَلِّ لِرَبِّكَ وَانْحَرْ")
+
+    def test_selected_scope_stops_ordered_progression_after_scope_end(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=3,
+            recitation_scope=parse_recitation_scope("108", corpus=self.corpus),
+        )
+
+        locked_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="إِنَّ شَانِئَكَ هُوَ الْأَبْتَرُ",
+                confidence=0.9,
+                chunk_sequence=0,
+            )
+        )
+        boundary_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
+                confidence=0.9,
+                chunk_sequence=1,
+            )
+        )
+
+        self.assertEqual(locked_event.type, SessionEventType.LOCKED)
+        self.assertEqual(locked_event.ayah_ref, QuranRef(surah=108, ayah=3))
+        self.assertEqual(boundary_event.type, SessionEventType.UNCERTAIN)
+        self.assertEqual(boundary_event.reason, "no_ordered_progression")
+        self.assertIsNone(boundary_event.ayah_ref)
 
     def test_waiting_events_use_policy_lock_state(self):
         policy = RecitationTransitionPolicy(

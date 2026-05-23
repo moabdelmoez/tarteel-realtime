@@ -2,40 +2,35 @@
 
 ## Verified Now
 
-- Active slice: Point 4 lock stability, isolated in `.worktrees/asr-point-4-lock-stability` on branch `codex/asr-point-4-lock-stability`.
-- Latest pushed implementation commit: `a188fd4` (`Keep unscoped tolerant spans as candidates`).
+- Active slice: Point 5 selected-recitation scope, isolated in `.worktrees/asr-point-5-selected-recitation-scope` on branch `codex/asr-point-5-selected-recitation-scope`.
+- Base: Point 4 branch commit `9c774f2` (`Record Point 4 replay evidence`).
 - WebSocket `/ws/recitation` remains the only transport.
 - Heavy ASR dependencies remain optional; default tests do not require Whisper, Torch, faster-whisper, GPU, R2, or network access.
-- The default ASR buffering profile remains `stable`; Point 4 was verified with opt-in `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`.
-- Point 4 behavior:
-  - Exact unique initial locks still lock immediately.
-  - Initial `tolerant_match` locks require prior candidate support from earlier `lock_candidate` events.
-  - Contextual tolerant locks are accepted only when the candidate was previously surfaced, not merely from re-locating merged noisy text.
-  - Unscoped global `tolerant_span_match` stays a `lock_candidate/needs_confirmation` instead of becoming an initial global lock.
-  - At ayah boundaries after first lock, short snippets accumulate only through ordered progression scope.
-- RunPod backend is running from `/workspace/tarteel-realtime` at commit `a188fd4` with faster-whisper on CUDA and low-latency buffering.
-- Public manual-test URL for the iOS Custom preset: `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`.
+- Selected scope is optional and supplied on the WebSocket URL, not inside the audio payload:
+  - Whole surah: `/ws/recitation?scope=108`
+  - Single ayah: `/ws/recitation?scope=108:2`
+  - Inclusive range: `/ws/recitation?scope=4:1-3`
+- When scope is present, initial location searches only the selected ayahs.
+- Ordered progression after first lock is also filtered to the selected ayahs, so the session does not continue into the next corpus ayah after the selected range ends.
+- Without `scope`, the backend keeps the previous global conservative behavior from Point 4.
 
 ## Verification
 
-- Focused local checks passed after final code change: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_api -v` with 37 tests.
-- Full local deterministic suite passed after final docs sanity: `uv run python -B -m unittest discover -s tests -v` with 180 tests.
-- Public health check returned HTTP 200 with `{"status":"ok"}` after the corrected faster-whisper launch.
-- Final RunPod replay from `a188fd4` with 1s chunks:
-  - `108001`: first lock `108:1` at sequence 5.
-  - `108002`: no lock; first candidate remained unrelated/multiple.
-  - `108003`: first lock `108:3` at sequence 3.
-  - `004001`: first lock `4:1` at sequence 19; previous false `39:6` lock is blocked.
-  - `004002`: first lock `4:2` at sequence 11.
-  - `004003`: first lock `4:3` at sequence 8.
+- Baseline before implementation passed: `uv run python -B -m unittest discover -s tests -v` with 180 tests.
+- Red TDD run failed first for missing `recitation_scope`, missing session scope wiring, and ignored WebSocket query scope.
+- Focused selected-scope run passed: `uv run python -B -m unittest tests.test_recitation_scope tests.test_session_transitions tests.test_session tests.test_api -v` with 44 tests.
+- Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 187 tests.
+- Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+- Whitespace check passed: `git diff --check`.
 
 ## Current Risks
 
-- Point 4 is a meaningful safety improvement, but it is not enough to make low-latency the default.
-- `108002` still needs a product/model fix; the current ASR transcript is too distorted for clean matching.
-- Long Surah 4 still has mid-ayah locks and noisy wrong/progress events after lock.
-- Explicit selected-recitation scope should be the next slice; it is the cleanest way to avoid full-Quran ambiguity when the app already knows the user selected Surah 108 or Surah 4:1-3.
+- RunPod faster-whisper replay has not been run for Point 5 yet.
+- `108002` may still no-lock if faster-whisper output remains too distorted, but scoped search should prevent unrelated full-Quran candidates from competing.
+- The iOS app can manually test scope through the Custom URL query, but it does not yet have a first-class selected-recitation UI that appends scope automatically.
+- Low-latency remains opt-in. Do not recommend merging to `main` until scoped GPU replay and manual testing are captured.
 
 ## Next Best Step
 
-Manual-test the iOS Custom preset against `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`. If accepted, keep Point 4 as the lock-stability slice and start the next worktree for selected recitation scope.
+Push the branch, ask for GPU approval, then update the RunPod workspace to `codex/asr-point-5-selected-recitation-scope` and replay all six local audio fixtures with scoped URLs: `?scope=108` for `108001`/`108002`/`108003` and `?scope=4:1-3` for `004001`/`004002`/`004003`.

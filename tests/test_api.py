@@ -108,6 +108,25 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(second_candidate["reason"], "needs_confirmation")
         self.assertEqual(second_candidate["candidate_refs"], ["102:3"])
 
+    def test_websocket_scope_query_restricts_initial_location(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines([
+                "113|1|قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
+                "114|1|قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
+            ]),
+            recognizer_factory=lambda: FakeRecognizer(["قُلْ أَعُوذُ بِرَبِّ"]),
+            minimum_lock_words=2,
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws/recitation?scope=114") as websocket:
+            websocket.send_json(chunk_payload(0))
+            event = websocket.receive_json()
+
+        self.assertEqual(event["type"], "locked")
+        self.assertEqual(event["ayah_ref"], "114:1")
+        self.assertEqual(event["start_ref"], "114:1:1")
+
     def test_websocket_returns_wrong_event(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),

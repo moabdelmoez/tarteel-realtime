@@ -1,6 +1,7 @@
 import unittest
 
 from tarteel_realtime.quran import QuranCorpus, QuranRef
+from tarteel_realtime.recitation_scope import parse_recitation_scope
 from tarteel_realtime.recognition import AudioChunk, FakeRecognizer, RecognitionResult
 from tarteel_realtime.session import RecitationSession, SessionEventType
 
@@ -162,6 +163,34 @@ class RecitationSessionTests(unittest.TestCase):
             corpus=self.corpus,
             recognizer=FakeRecognizer(["كلمة غير موجودة"]),
             minimum_lock_words=2,
+        )
+
+        event = session.handle_chunk(chunk())
+
+        self.assertEqual(event.type, SessionEventType.LOCATING)
+        self.assertEqual(event.reason, "no_match")
+
+    def test_selected_scope_resolves_repeated_initial_phrase_inside_scope(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer(["قُلْ أَعُوذُ بِرَبِّ"]),
+            minimum_lock_words=2,
+            recitation_scope=parse_recitation_scope("114", corpus=self.corpus),
+        )
+
+        event = session.handle_chunk(chunk())
+
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(event.reason, "unique_match")
+        self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=1))
+        self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=1, word_index=1))
+
+    def test_selected_scope_prevents_initial_lock_outside_scope(self):
+        session = RecitationSession(
+            corpus=self.corpus,
+            recognizer=FakeRecognizer(["مَلِكِ النَّاسِ"]),
+            minimum_lock_words=1,
+            recitation_scope=parse_recitation_scope("102", corpus=self.corpus),
         )
 
         event = session.handle_chunk(chunk())

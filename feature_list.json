@@ -423,7 +423,7 @@
             "area": "asr-buffering",
             "title": "Reduced live ASR chunking gate",
             "user_visible_behavior": "The backend should use smaller rolling ASR windows for streaming-like ayah tracking while preserving quiet-audio safety and producing usable live ayah progression on real Quran audio.",
-            "status": "blocked",
+            "status": "in_progress",
             "verification": [
                 "uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app -v",
                 "uv run python -B -m unittest discover -s tests -v",
@@ -452,9 +452,12 @@
                 "Point 4 final branch commit a188fd4 blocks unscoped global tolerant_span_match from becoming an initial lock while preserving exact unique locks and confirmed tolerant_match locks.",
                 "Point 4 final RunPod faster-whisper replay preserved short gains: 108001 locked 108:1 at sequence 5, 108003 locked 108:3 at sequence 3, and 108002 still did not lock.",
                 "Point 4 final RunPod faster-whisper replay improved long Surah 4 targets: 004001 first locked 4:1 at sequence 19 instead of false 39:6, 004002 first locked 4:2 at sequence 11, and 004003 first locked 4:3 at sequence 8.",
-                "Point 4 remains not default-quality because 108002 still no-locks, long locks can start mid-ayah, and noisy wrong/progress events remain after lock."
+                "Point 4 remains not default-quality because 108002 still no-locks, long locks can start mid-ayah, and noisy wrong/progress events remain after lock.",
+                "Point 5 selected-recitation scope branch codex/asr-point-5-selected-recitation-scope adds optional WebSocket URL scope forms such as ?scope=108 and ?scope=4:1-3 without changing the audio payload contract.",
+                "Point 5 local deterministic coverage passed for scope parsing, scoped initial location, scoped WebSocket query wiring, out-of-scope no-match, and stopping ordered progression after the selected range ends.",
+                "Point 5 local verification passed: focused selected-scope suite with 44 tests, full Python suite with 187 tests, compile check, feature_list.json validation, and git diff --check."
             ],
-            "notes": "Blocked as a default/product live-tracking gate, but Point 4 is complete as a branch/manual-test safety improvement. Low-latency remains opt-in; next slice should add selected recitation scope."
+            "notes": "Active Point 5 slice. Local selected-recitation scope is implemented and verified; RunPod faster-whisper replay with scoped URLs is required before this can move back to a passing or blocked quality decision."
         },
         {
             "id": "backend-005",

@@ -8,6 +8,7 @@ from typing import Any
 
 from tarteel_realtime.event_payloads import session_event_to_payload
 from tarteel_realtime.quran import QuranCorpus, QuranRef
+from tarteel_realtime.recitation_scope import RecitationScope
 from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
 from tarteel_realtime.session import RecitationSession
 from tarteel_realtime.session_events import SessionEvent, uncertain_event
@@ -46,12 +47,14 @@ class RecitationStream:
         recognizer: SpeechRecognizer,
         minimum_lock_words: int = 3,
         log_transcripts: bool = False,
+        recitation_scope: RecitationScope | None = None,
     ) -> None:
         self._corpus = corpus
         self._session = RecitationSession(
             corpus=corpus,
             recognizer=recognizer,
             minimum_lock_words=minimum_lock_words,
+            recitation_scope=recitation_scope,
         )
         self._log_transcripts = log_transcripts
 
