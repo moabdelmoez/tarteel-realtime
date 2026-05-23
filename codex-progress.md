@@ -21,6 +21,44 @@
 ## Session Log
 
 
+### Session 068
+
+- Date: 2026-05-24
+- Goal: Implement Point 3 of the ASR latency plan: improve short-ayah recognition stability by accumulating compatible pre-lock ASR snippets without making low-latency the default.
+- Completed:
+  - Created worktree `.worktrees/asr-point-3-short-ayah-stability` on branch `codex/asr-point-3-short-ayah-stability` from `origin/main` at `984b0aa`.
+  - Added pre-lock transcript context in `tarteel_realtime.session_transitions` so short ambiguous ASR snippets can be accumulated before the first lock.
+  - Kept current unique locks authoritative so stale context cannot block a clean current match.
+  - Added overlap-aware transcript merging for repeated rolling ASR windows.
+  - Changed pre-lock context from one saved transcript to a small recency-bounded set of alternatives, because real faster-whisper replay can emit an early wrong short phrase followed by the useful phrase.
+  - Added a guard so a contextual lock is accepted only when the current snippet's candidate set supports the locked ayah.
+  - Added deterministic coverage in `tests/test_session_transitions.py` for short-snippet accumulation, stale-context avoidance, overlap dedupe, waiting-event preservation, incompatible alternatives, and multiple pre-lock context alternatives.
+  - Pushed implementation commits through `9ef577e` on `origin/codex/asr-point-3-short-ayah-stability`.
+  - Updated the active RunPod workspace to `9ef577e` and restarted the real ASR backend with faster-whisper, CUDA `cuda:0`, `float16`, and `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`.
+- Verification run:
+  - Red TDD checks failed first for missing pre-lock accumulation, stale context poisoning, overlap duplication, incompatible context replacement, and missing multiple-context alternatives.
+  - Focused session/locator/API/stream checks passed: `uv run python -B -m unittest tests.test_session_transitions tests.test_session tests.test_locator tests.test_api tests.test_recitation_stream -v` with 55 tests.
+  - Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 178 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests scripts`.
+  - Whitespace check passed: `git diff --check`.
+  - RunPod health passed locally on the pod and through the public proxy.
+  - RunPod short Surah 108 replay with 1s chunks: `108001` now locks `108:1` at sequence 5 with `reason=tolerant_match`; `108003` now locks `108:3` at sequence 5 with `reason=tolerant_match`; `108002` still produced `locating:no_match` and no lock.
+  - RunPod long Surah 4 replay remains mixed under low-latency: `004001` first locked `39:6` at sequence 13, `004002` first locked `4:2` at sequence 9, and `004003` first locked `36:8` at sequence 8. These are not clean long-ayah progression results.
+- Files or artifacts updated:
+  - `tarteel_realtime/session_transitions.py`
+  - `tests/test_session_transitions.py`
+  - `codex-progress.md`
+  - `feature_list.json`
+  - `session-handoff.md`
+  - `clean-state-checklist.md`
+  - `quality-document.md`
+- Known risk or unresolved issue:
+  - Point 3 improves two of the three short Surah 108 fixtures, but it does not solve `108002`.
+  - Long Surah 4 low-latency replay still false-locks or locks away from the expected beginning of Surah 4; do not promote low-latency or pre-lock context behavior to a product default from this evidence alone.
+  - This context accumulation only applies before the initial lock. Post-lock ayah-boundary accumulation remains a separate optimization if manual testing still shows waits between ayahs.
+- Next best step: manual-test the iOS Custom preset against `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`, focusing on short Surah 108 startup behavior. Treat long Surah 4 as a known risk and do not push this branch to `main` until the user accepts that tradeoff or the next slice addresses false locks.
+
+
 ### Session 067
 
 - Date: 2026-05-24

@@ -267,9 +267,11 @@
                 "RunPod NVIDIA L4 faster-whisper backend from commit dbc100b ran OdyAsh/faster-whisper-base-ar-quran with compute_type=float16 on cuda:0 behind WS /ws/recitation and returned HTTP 200 health publicly.",
                 "RunPod faster-whisper replay for 108001.wav with 1s chunks returned 8 locating events and 1 lock_candidate; first non-wait event was sequence 4 at 5.776s wall time with cold model warm-up included.",
                 "RunPod faster-whisper replay for 004001.wav with 1s chunks returned 1 locked event at 4:1, 6 progress events, and first non-wait response at 0.390s wall time with 355.0ms roundtrip after warm-up; false wrong events remain.",
-                "Point 2 RunPod faster-whisper replay from commit 5ce2d36 used TARTEEL_ASR_BUFFERING_PROFILE=low-latency on cuda:0/float16 and returned first non-wait ASR-backed events at sequence 1 for five of six 1s-chunk fixtures; 004003 first returned at sequence 2."
+                "Point 2 RunPod faster-whisper replay from commit 5ce2d36 used TARTEEL_ASR_BUFFERING_PROFILE=low-latency on cuda:0/float16 and returned first non-wait ASR-backed events at sequence 1 for five of six 1s-chunk fixtures; 004003 first returned at sequence 2.",
+                "Point 3 branch codex/asr-point-3-short-ayah-stability through commit 9ef577e adds pre-lock ASR transcript context while preserving the existing WebSocket contract.",
+                "Point 3 RunPod faster-whisper replay with low-latency profile improved short fixtures: 108001 locked 108:1 at sequence 5 and 108003 locked 108:3 at sequence 5; 108002 still did not lock."
             ],
-            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU. Low-latency buffering now proves earlier ASR events, but the next risk is recognition stability for short ayahs and false wrong events under streaming chunking."
+            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU. Point 3 improves short-ayah pre-lock startup on two Surah 108 fixtures, but 108002 still no-matches and long low-latency replay still has false-lock risk."
         },
         {
             "id": "backend-003",
@@ -440,9 +442,11 @@
                 "Default basharalrfooh/whisper-small-quran did not rescue reduced windows in the short 114 gate for 2000/1500/500 or 2500/1500/500 after warm replay.",
                 "After the user decision to roll this back, the code defaults were restored to the previously stable 4200/4200/0 profile while keeping explicit env overrides available for future experiments.",
                 "Rollback verification passed locally: focused ASR buffering/session/app suite passed with 28 tests, full deterministic Python suite passed with 143 tests, and compile check passed.",
-                "Point 2 implemented a guarded opt-in low-latency profile and GPU-verified earlier ASR flushes, but replay quality remains mixed: short Surah 108 produced early lock_candidate/no_match events instead of clean locks, and long Surah 4 still emitted noisy wrong/uncertain events."
+                "Point 2 implemented a guarded opt-in low-latency profile and GPU-verified earlier ASR flushes, but replay quality remains mixed: short Surah 108 produced early lock_candidate/no_match events instead of clean locks, and long Surah 4 still emitted noisy wrong/uncertain events.",
+                "Point 3 local verification passed with 178 deterministic tests plus compile and whitespace checks after adding bounded pre-lock ASR transcript alternatives.",
+                "Point 3 RunPod replay improved short Surah 108 startup for 108001 and 108003, but 108002 still no-matched and long Surah 4 replay false-locked first at 39:6, 4:2, and 36:8 across the three long fixtures."
             ],
-            "notes": "Still blocked as a default/product live-tracking gate. A named low-latency profile now exists and is GPU-verified to reduce buffering latency, but recognition quality remains mixed for isolated short ayahs and noisy long-ayah progression, so it stays opt-in."
+            "notes": "Still blocked as a default/product live-tracking gate. Low-latency plus pre-lock context improves two short Surah 108 fixtures, but recognition quality remains mixed and long-ayah false locks persist, so it stays opt-in/manual-test only."
         },
         {
             "id": "backend-005",

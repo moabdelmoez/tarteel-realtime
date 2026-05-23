@@ -46,6 +46,14 @@ Before treating a future slice as passing:
 
 ## Quality Log
 
+### 2026-05-24 - Point 3 Pre-Lock ASR Context
+
+- Point 3 adds a bounded set of pre-lock transcript context alternatives so low-latency ASR snippets can combine before the first location lock.
+- Local proof is strong for the state-machine contract: focused session/locator/API/stream checks passed with 55 tests, full deterministic Python passed with 178 tests, compile check passed, and whitespace check passed.
+- RunPod proof is mixed but useful: `108001` improved from no lock to `108:1` at sequence 5, and `108003` improved from no clean lock to `108:3` at sequence 5.
+- `108002` still no-matches, and long Surah 4 replay still false-locks under the low-latency profile, so this is not a default-quality live tracking gate.
+- Release posture: keep this as a branch/manual-test candidate for short-ayah startup only; continue with false-lock mitigation before any main/default promotion.
+
 ### 2026-05-24 - Low-Latency ASR Buffering Profile
 
 - Point 2 adds a named opt-in `low-latency` buffering profile while keeping `stable` as the default production-safe profile.
