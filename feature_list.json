@@ -1,6 +1,6 @@
 {
     "project": "tarteel-realtime",
-    "last_updated": "2026-05-23",
+    "last_updated": "2026-05-24",
     "rules": {
         "single_active_feature": true,
         "passing_requires_evidence": true,
@@ -266,9 +266,10 @@
                 "RunPod WebSocket client for /workspace/tarteel-realtime-run/114001.wav returned type locked, transcript قُلْ أَعُوذُ بِرَبِّ النَّاسِ, ayah_ref 114:1, start_ref 114:1:1.",
                 "RunPod NVIDIA L4 faster-whisper backend from commit dbc100b ran OdyAsh/faster-whisper-base-ar-quran with compute_type=float16 on cuda:0 behind WS /ws/recitation and returned HTTP 200 health publicly.",
                 "RunPod faster-whisper replay for 108001.wav with 1s chunks returned 8 locating events and 1 lock_candidate; first non-wait event was sequence 4 at 5.776s wall time with cold model warm-up included.",
-                "RunPod faster-whisper replay for 004001.wav with 1s chunks returned 1 locked event at 4:1, 6 progress events, and first non-wait response at 0.390s wall time with 355.0ms roundtrip after warm-up; false wrong events remain."
+                "RunPod faster-whisper replay for 004001.wav with 1s chunks returned 1 locked event at 4:1, 6 progress events, and first non-wait response at 0.390s wall time with 355.0ms roundtrip after warm-up; false wrong events remain.",
+                "Point 2 RunPod faster-whisper replay from commit 5ce2d36 used TARTEEL_ASR_BUFFERING_PROFILE=low-latency on cuda:0/float16 and returned first non-wait ASR-backed events at sequence 1 for five of six 1s-chunk fixtures; 004003 first returned at sequence 2."
             ],
-            "notes": "Passing for opt-in real ASR WebSocket proof using whole-file WAV chunks. The next risk is true live microphone chunk buffering/cadence; current Whisper path is not yet optimized for tiny streaming chunks."
+            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU. Low-latency buffering now proves earlier ASR events, but the next risk is recognition stability for short ayahs and false wrong events under streaming chunking."
         },
         {
             "id": "backend-003",
@@ -296,9 +297,13 @@
                 "RunPod one-shot model warmup for 114002.wav returned transcript مَلِكِ النَّاسِ and locator locked to 114:2.",
                 "RunPod buffered ASR WebSocket ran with TARTEEL_ASR_MIN_AUDIO_MS=4200, TARTEEL_ASR_FLUSH_MS=4200, TARTEEL_ASR_TAIL_MS=0.",
                 "RunPod WebSocket client sent fixtures/local_audio/114002.wav with --chunk-ms 1000 and received four waiting_for_audio_buffer locating events followed by type locked, transcript مَلِكِ النَّاسِ, ayah_ref 114:2, start_ref 114:2:1.",
-                "RunPod ASR server was stopped after verification; no background jobs were left running."
+                "RunPod ASR server was stopped after verification; no background jobs were left running.",
+                "Added named ASR buffering profiles: stable remains the default 4200/4200/0 profile, while low-latency uses 2000/1000/500 with the existing speech/frame RMS gates.",
+                "ASR runtime env parsing now supports TARTEEL_ASR_BUFFERING_PROFILE with explicit TARTEEL_ASR_* window/RMS variables taking precedence over the selected profile.",
+                "Point 2 local focused ASR buffering/runtime/app tests passed with 25 tests; full deterministic suite passed with 172 tests; compile, JSON validation, and git diff --check passed.",
+                "RunPod backend logs for low-latency replay confirmed first flushes at buffered_ms=2000/unflushed_ms=2000 and tail-preserving later flushes around buffered_ms=2500/unflushed_ms=2000."
             ],
-            "notes": "Passing for the narrow chunked-WAV proof. The 4.2s first buffer is a pragmatic MVP setting for Whisper stability; future work should tune latency and eventually use a streaming/segmentation-aware model path."
+            "notes": "Passing for the rolling-buffer contract with stable defaults plus an opt-in low-latency profile. The 4.2s stable profile remains the default; low-latency is verified to reduce first ASR flush timing on RunPod, but product acceptance still depends on manual app cadence and later recognition-quality slices."
         },
         {
             "id": "mobile-002",
@@ -434,9 +439,10 @@
                 "Fallback 3000/2000/500 with tarteel-ai still did not pass long Surah 102: 64 events with 1 locked, 42 uncertain, and 19 wrong.",
                 "Default basharalrfooh/whisper-small-quran did not rescue reduced windows in the short 114 gate for 2000/1500/500 or 2500/1500/500 after warm replay.",
                 "After the user decision to roll this back, the code defaults were restored to the previously stable 4200/4200/0 profile while keeping explicit env overrides available for future experiments.",
-                "Rollback verification passed locally: focused ASR buffering/session/app suite passed with 28 tests, full deterministic Python suite passed with 143 tests, and compile check passed."
+                "Rollback verification passed locally: focused ASR buffering/session/app suite passed with 28 tests, full deterministic Python suite passed with 143 tests, and compile check passed.",
+                "Point 2 implemented a guarded opt-in low-latency profile and GPU-verified earlier ASR flushes, but replay quality remains mixed: short Surah 108 produced early lock_candidate/no_match events instead of clean locks, and long Surah 4 still emitted noisy wrong/uncertain events."
             ],
-            "notes": "Still blocked for the reduced-window live tracking goal and no longer active as the default backend profile. The stable 4200/4200/0 defaults are restored; see backend-005 for the retained RapidFuzz matching slice and mixed RunPod evidence."
+            "notes": "Still blocked as a default/product live-tracking gate. A named low-latency profile now exists and is GPU-verified to reduce buffering latency, but recognition quality remains mixed for isolated short ayahs and noisy long-ayah progression, so it stays opt-in."
         },
         {
             "id": "backend-005",
@@ -500,7 +506,8 @@
                 "Public WSS replay through wss://tlk814bso1lnjs-8000.proxy.runpod.net/ws/recitation completed for concatenated Surah 108 and returned a locked event for 108:3; pod-local long Surah 4 replay locked 4:1 and produced progress events.",
                 "The rebuilt iOS simulator app was installed and launched in the iPhone 17 Pro simulator as process 4167 with microphone permission granted and the RunPod WSS URL copied to the simulator pasteboard.",
                 "Point 1 public WSS smoke against wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation returned a locating waiting_for_audio_buffer packet with --disable-ping, proving the WebSocket-only manual-test URL is reachable.",
-                "Point 1 RunPod faster-whisper replay kept the existing WS /ws/recitation payload contract while exercising the new Surah 108 and Surah 4 fixtures over chunked audio."
+                "Point 1 RunPod faster-whisper replay kept the existing WS /ws/recitation payload contract while exercising the new Surah 108 and Surah 4 fixtures over chunked audio.",
+                "Point 2 public RunPod health succeeded at https://ku0qwcps749c48-8000.proxy.runpod.net/health while the low-latency faster-whisper backend served the existing WS /ws/recitation contract for all six fixture replays."
             ],
             "notes": "WebSocket is now the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and enter the /ws/recitation URL in the iOS Custom preset. Latest RunPod transport evidence is healthy, but ASR quality still needs work for isolated short ayahs and false wrong events on long ayahs."
         },
@@ -550,7 +557,8 @@
                 "Portability slice verification passed: uv run python -B -m unittest tests.test_runpod_bootstrap -v (6 tests), uv run python -B -m unittest tests.test_r2_artifacts tests.test_runpod_bootstrap -v (11 tests), bash -n scripts/gpu_bootstrap.sh, and bash -n scripts/runpod_bootstrap.sh.",
                 "GPU bootstrap now supports TARTEEL_GIT_REF for branch/commit testing and TARTEEL_LOCAL_AUDIO_SAMPLES for replay fixture selection; default samples are 004001, 004002, 004003, 108001, 108002, and 108003.",
                 "RunPod bootstrap from commit dbc100b hydrated full Tanzil plus all six new MP3 fixtures from R2, converted them to mono 16 kHz WAV, and validated the Tanzil manifest with checksum 054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49.",
-                "Point 1 local verification passed with focused bootstrap/WebSocket/ASR tests at 29 tests, bash syntax checks for both bootstrap scripts, 166 full Python tests, compile check, JSON validation, and git diff --check."
+                "Point 1 local verification passed with focused bootstrap/WebSocket/ASR tests at 29 tests, bash syntax checks for both bootstrap scripts, 166 full Python tests, compile check, JSON validation, and git diff --check.",
+                "Point 2 reused the pushed branch flow on RunPod: origin/codex/asr-point-2-low-latency-buffer at commit 5ce2d36 was fetched on the pod and verified with existing R2-hydrated local_audio fixtures."
             ],
             "notes": "No real Cloudflare credential was stored in the repository. The R2 workflow requires R2 S3 Access Key ID and Secret Access Key, not a general Cloudflare API token. Fresh bootstrap is verified on a CPU-only RunPod pod and now has a provider-neutral script entrypoint; GPU is next needed only for real ASR inference. Harness docs now include agent operating instructions, evaluator scoring, and rolling quality posture."
         }

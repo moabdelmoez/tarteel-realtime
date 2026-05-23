@@ -5,6 +5,7 @@
 - [ ] ASR smoke wrapper tests still run when touched: `uv run python -B -m unittest tests.test_asr_smoke tests.test_whisper_adapter`.
 - [ ] ASR backend/WebSocket client tests still run when touched: `uv run python -B -m unittest tests.test_asr_app tests.test_ws_client`.
 - [ ] ASR buffering tests still run when touched: `uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app`.
+- [ ] ASR buffering profile changes keep stable defaults, low-latency profile values, profile-name normalization, and env override precedence covered: `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_runtime tests.test_asr_app -v`.
 - [ ] Tanzil data workflow tests still run when touched: `uv run python -B -m unittest tests.test_evaluate_cli tests.test_quran_data_manifest`.
 - [ ] Quran parser changes still keep standalone pause marks from becoming empty words: `uv run python -B -m unittest tests.test_quran_data tests.test_locator tests.test_session`.
 - [ ] Recitation progression changes keep ordered recovery behavior stable: `uv run python -B -m unittest tests.test_progression tests.test_session tests.test_locator`.

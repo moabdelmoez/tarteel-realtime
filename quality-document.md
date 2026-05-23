@@ -4,7 +4,7 @@ Rolling quality record for the Tarteel real-time Quran recitation MVP.
 
 ## Current Baseline
 
-- Date: 2026-05-23
+- Date: 2026-05-24
 - Overall status: good enough MVP, not production-grade
 - Initial quality score: 8.0 / 10
 - Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build, WebSocket simulator verification, RunPod real-ASR proof paths, and documented R2/GitHub bootstrap flow.
@@ -45,6 +45,15 @@ Before treating a future slice as passing:
 - Keep `feature_list.json` with at most one `in_progress` feature.
 
 ## Quality Log
+
+### 2026-05-24 - Low-Latency ASR Buffering Profile
+
+- Point 2 adds a named opt-in `low-latency` buffering profile while keeping `stable` as the default production-safe profile.
+- The profile is architecture-aligned with the shared ASR runtime: env parsing selects a named profile, explicit env window variables override it, and `BufferedRecognizer` still receives a concrete config.
+- Local proof is strong for the code contract: focused ASR buffering/runtime/app tests passed, the full deterministic suite passed with 172 tests, compile check passed, JSON validation passed, and whitespace check passed.
+- RunPod proof confirms the latency mechanism: faster-whisper on CUDA `cuda:0` with `float16` flushed at 2 seconds on sequence 1 for most 1s-chunk replays, instead of waiting for the old 4.2 second stable window.
+- Quality risk remains ASR transcript quality, not transport or buffering. Short Surah 108 samples produced early events but stayed at `lock_candidate` or `no_match`; long Surah 4 samples produced early events but still emitted noisy wrong/uncertain events.
+- Release posture: keep `low-latency` opt-in until manual app testing confirms the cadence tradeoff and a later slice improves short-ayah recognition/segmentation.
 
 ### 2026-05-23 - Faster-Whisper Point 1 RunPod Replay
 

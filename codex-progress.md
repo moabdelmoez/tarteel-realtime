@@ -15,10 +15,41 @@
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
 - Current highest-priority unfinished feature: live ayah progression quality after the WebSocket transport/session fixes.
-- Current blocker: Point 1 faster-whisper GPU path is implemented and verified through RunPod replay; pause before Point 2 until manual Custom-preset testing confirms the user-facing cadence.
+- Current blocker: Point 2 low-latency buffering is implemented and GPU-verified for earlier ASR flushes, but manual Custom-preset testing is the gate before Point 3; recognition quality remains mixed for isolated short ayahs.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 067
+
+- Date: 2026-05-24
+- Goal: Implement Point 2 of the ASR latency plan: add a low-latency ASR buffering profile and verify it on the faster-whisper GPU backend before moving to the next optimization.
+- Completed:
+  - Created worktree `.worktrees/asr-point-2-low-latency-buffer` on branch `codex/asr-point-2-low-latency-buffer` from `origin/main` at `e72a81d`.
+  - Added named ASR buffering profiles in `tarteel_realtime.buffered_recognition`: default `stable` remains `4200/4200/0`, and opt-in `low-latency` uses `2000/1000/500` with the existing speech RMS gates.
+  - Wired `TARTEEL_ASR_BUFFERING_PROFILE` through shared ASR runtime env parsing while preserving explicit `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, `TARTEEL_ASR_TAIL_MS`, `TARTEEL_ASR_MIN_SPEECH_RMS`, and `TARTEEL_ASR_MIN_FRAME_RMS` overrides.
+  - Added deterministic tests for profile defaults, underscore normalization, env parsing, and explicit override precedence in `tests/test_buffered_recognition.py`, `tests/test_asr_runtime.py`, and `tests/test_asr_app.py`.
+  - Updated README and RunPod/R2 docs with the low-latency profile and faster-whisper replay command.
+  - Pushed implementation commit `5ce2d36` to `origin/codex/asr-point-2-low-latency-buffer`.
+  - Updated the active RunPod workspace to commit `5ce2d36` and started the real ASR backend on `0.0.0.0:8000` with `TARTEEL_WHISPER_BACKEND=faster-whisper`, `TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran`, CUDA `cuda:0`, `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`, and `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`.
+  - Verified public health at `https://ku0qwcps749c48-8000.proxy.runpod.net/health` and left the manual-test WSS backend running at `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`.
+  - Replayed all six `fixtures/local_audio` WAVs with 1s WebSocket chunks on RunPod. First non-wait ASR-backed events arrived at sequence 1 for `108001`, `108002`, `108003`, `004001`, and `004002`; `004003` first arrived at sequence 2.
+  - Backend logs confirmed the low-latency profile behavior: first flush at `buffered_ms=2000 unflushed_ms=2000 action=flush`, then tail-preserving flushes around `buffered_ms=2500 unflushed_ms=2000`.
+- Verification run:
+  - Red TDD run first failed for the missing `buffering_profile_config` and missing runtime `buffering_profile` setting.
+  - Baseline focused ASR tests passed before implementation: `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_runtime tests.test_asr_app -v` with 19 tests.
+  - Focused post-implementation ASR tests passed: `uv run python -B -m unittest tests.test_buffered_recognition tests.test_asr_runtime tests.test_asr_app -v` with 25 tests.
+  - Full local deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 172 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests scripts`.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Whitespace check passed: `git diff --check`.
+  - RunPod process env proof showed `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`, `TARTEEL_WHISPER_BACKEND=faster-whisper`, `TARTEEL_WHISPER_DEVICE=cuda:0`, and `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`.
+- Known risk or unresolved issue:
+  - This point reduces backend buffering latency, but recognition quality is still mixed. Short Surah 108 samples produced early ASR events but stayed at `lock_candidate` or `no_match`; they did not lock cleanly.
+  - Long Surah 4 samples produced early ASR events; `004003` eventually locked once, but the replay also emitted noisy `wrong` events and the lock target was not consistently the expected Surah 4 progression.
+  - Low-latency is intentionally opt-in and not the default profile yet.
+- Next best step: manually test the iOS Custom preset with `wss://ku0qwcps749c48-8000.proxy.runpod.net/ws/recitation`; if the user accepts the cadence tradeoff, start Point 3 in a new worktree.
 
 
 ### Session 066
