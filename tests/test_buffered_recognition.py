@@ -1,7 +1,11 @@
 import unittest
 import struct
 
-from tarteel_realtime.buffered_recognition import BufferedRecognitionConfig, BufferedRecognizer
+from tarteel_realtime.buffered_recognition import (
+    BufferedRecognitionConfig,
+    BufferedRecognizer,
+    buffering_profile_config,
+)
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, VoiceActivity
 
 
@@ -36,6 +40,21 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(config.tail_audio_ms, 0)
         self.assertEqual(config.minimum_speech_rms, 400)
         self.assertEqual(config.minimum_frame_rms, 150)
+
+    def test_low_latency_buffering_profile_uses_shorter_windows_with_tail_context(self):
+        config = buffering_profile_config("low-latency")
+
+        self.assertEqual(config.minimum_audio_ms, 2_000)
+        self.assertEqual(config.flush_interval_ms, 1_000)
+        self.assertEqual(config.tail_audio_ms, 500)
+        self.assertEqual(config.minimum_speech_rms, 400)
+        self.assertEqual(config.minimum_frame_rms, 150)
+
+    def test_buffering_profile_names_accept_underscores(self):
+        self.assertEqual(
+            buffering_profile_config("low_latency"),
+            buffering_profile_config("low-latency"),
+        )
 
     def test_waits_until_minimum_audio_before_calling_inner_recognizer(self):
         inner = RecordingRecognizer()

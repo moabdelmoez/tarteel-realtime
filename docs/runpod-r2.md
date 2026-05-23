@@ -60,6 +60,8 @@ When `TARTEEL_DOWNLOAD_ARTIFACTS=1`, the bootstrap also downloads the default pr
 
 `TARTEEL_DOWNLOAD_R2_ARTIFACTS=1` and `scripts/runpod_bootstrap.sh` are still supported as compatibility aliases.
 
+For Point 2 low-latency ASR replay, start the real backend with `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`. This selects `2000/1000/500` ASR buffering while preserving the existing speech RMS gates; individual `TARTEEL_ASR_*` window variables can still override the profile for one-off experiments.
+
 ## Private GitHub Repos On RunPod
 
 The default `TARTEEL_REPO_URL` is an HTTPS GitHub URL. This works while the repo remains public. If the repository becomes private, a fresh pod cannot clone it without GitHub credentials. The bootstrap sets `GIT_TERMINAL_PROMPT=0` so missing auth fails fast instead of hanging at a username/password prompt.

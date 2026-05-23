@@ -32,6 +32,33 @@ class BufferedRecognitionConfig:
             raise ValueError("minimum_frame_rms must be non-negative")
 
 
+DEFAULT_BUFFERING_PROFILE = "stable"
+LOW_LATENCY_BUFFERING_PROFILE = "low-latency"
+
+_BUFFERING_PROFILE_CONFIGS = {
+    DEFAULT_BUFFERING_PROFILE: BufferedRecognitionConfig(),
+    LOW_LATENCY_BUFFERING_PROFILE: BufferedRecognitionConfig(
+        minimum_audio_ms=2_000,
+        flush_interval_ms=1_000,
+        tail_audio_ms=500,
+        minimum_speech_rms=400,
+        minimum_frame_rms=150,
+    ),
+}
+
+
+def normalize_buffering_profile_name(value: str) -> str:
+    profile = value.strip().lower().replace("_", "-")
+    if profile not in _BUFFERING_PROFILE_CONFIGS:
+        allowed = ", ".join(sorted(_BUFFERING_PROFILE_CONFIGS))
+        raise ValueError(f"unknown ASR buffering profile {value!r}; expected one of: {allowed}")
+    return profile
+
+
+def buffering_profile_config(value: str) -> BufferedRecognitionConfig:
+    return _BUFFERING_PROFILE_CONFIGS[normalize_buffering_profile_name(value)]
+
+
 class BufferedRecognizer:
     def __init__(
         self,

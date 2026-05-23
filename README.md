@@ -114,9 +114,10 @@ This path prints one compact JSON transcription payload. It does not store raw a
 
 The default backend remains `tarteel_realtime.dev_app:app` with `FakeRecognizer`. The real ASR backend is a separate opt-in app that uses the same `WS /ws/recitation` contract and lazy-loads the Whisper model on the first audio chunk.
 
-The real ASR backend buffers short mic chunks in memory before calling Whisper. Default buffering is:
+The real ASR backend buffers short mic chunks in memory before calling Whisper. Default buffering is the stable profile:
 
 ```text
+TARTEEL_ASR_BUFFERING_PROFILE=stable
 TARTEEL_ASR_MIN_AUDIO_MS=4200
 TARTEEL_ASR_FLUSH_MS=4200
 TARTEEL_ASR_TAIL_MS=0
@@ -125,7 +126,18 @@ TARTEEL_ASR_MIN_FRAME_RMS=150
 TARTEEL_WHISPER_BACKEND=transformers
 ```
 
-Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. The default is the stable larger-window profile; smaller experimental windows can still be supplied through environment variables.
+For GPU replay with faster-whisper, the opt-in low-latency buffering profile is:
+
+```text
+TARTEEL_ASR_BUFFERING_PROFILE=low-latency
+TARTEEL_ASR_MIN_AUDIO_MS=2000
+TARTEEL_ASR_FLUSH_MS=1000
+TARTEEL_ASR_TAIL_MS=500
+TARTEEL_ASR_MIN_SPEECH_RMS=400
+TARTEEL_ASR_MIN_FRAME_RMS=150
+```
+
+Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. `TARTEEL_ASR_BUFFERING_PROFILE=low-latency` gives the ASR backend a shorter first window and keeps 500ms of tail context between windows; explicit `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, `TARTEEL_ASR_TAIL_MS`, `TARTEEL_ASR_MIN_SPEECH_RMS`, or `TARTEEL_ASR_MIN_FRAME_RMS` values override the selected profile.
 
 Local or CPU smoke command:
 
@@ -152,6 +164,7 @@ TARTEEL_WHISPER_BACKEND=faster-whisper \
 TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran \
 TARTEEL_WHISPER_DEVICE=cuda:0 \
 TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
+TARTEEL_ASR_BUFFERING_PROFILE=low-latency \
 UV_NO_PROGRESS=1 uv run --with faster-whisper uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
 ```
 

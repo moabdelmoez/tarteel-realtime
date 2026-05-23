@@ -41,6 +41,7 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.language, "ar")
         self.assertIsNone(settings.device)
         self.assertIsNone(settings.faster_whisper_compute_type)
+        self.assertEqual(settings.buffering_profile, "stable")
         self.assertEqual(settings.minimum_audio_ms, 4_200)
         self.assertEqual(settings.flush_interval_ms, 4_200)
         self.assertEqual(settings.tail_audio_ms, 0)
@@ -78,6 +79,31 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.minimum_speech_rms, 550)
         self.assertEqual(settings.minimum_frame_rms, 125)
         self.assertTrue(settings.log_transcripts)
+
+    def test_settings_from_env_applies_low_latency_buffering_profile(self):
+        settings = settings_from_env({
+            "TARTEEL_ASR_BUFFERING_PROFILE": "low-latency",
+        })
+
+        self.assertEqual(settings.buffering_profile, "low-latency")
+        self.assertEqual(settings.minimum_audio_ms, 2_000)
+        self.assertEqual(settings.flush_interval_ms, 1_000)
+        self.assertEqual(settings.tail_audio_ms, 500)
+        self.assertEqual(settings.minimum_speech_rms, 400)
+        self.assertEqual(settings.minimum_frame_rms, 150)
+
+    def test_explicit_asr_window_env_overrides_profile_values(self):
+        settings = settings_from_env({
+            "TARTEEL_ASR_BUFFERING_PROFILE": "low-latency",
+            "TARTEEL_ASR_MIN_AUDIO_MS": "2300",
+            "TARTEEL_ASR_FLUSH_MS": "1200",
+            "TARTEEL_ASR_TAIL_MS": "400",
+        })
+
+        self.assertEqual(settings.buffering_profile, "low-latency")
+        self.assertEqual(settings.minimum_audio_ms, 2_300)
+        self.assertEqual(settings.flush_interval_ms, 1_200)
+        self.assertEqual(settings.tail_audio_ms, 400)
 
     def test_lazy_whisper_factory_defers_model_creation_until_first_audio_chunk(self):
         built_configs = []

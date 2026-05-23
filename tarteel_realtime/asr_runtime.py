@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 
-from tarteel_realtime.buffered_recognition import BufferedRecognitionConfig, BufferedRecognizer
+from tarteel_realtime.buffered_recognition import (
+    DEFAULT_BUFFERING_PROFILE,
+    BufferedRecognitionConfig,
+    BufferedRecognizer,
+    buffering_profile_config,
+    normalize_buffering_profile_name,
+)
 from tarteel_realtime.quran_data import DEFAULT_TANZIL_PATH
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
 from tarteel_realtime.whisper_adapter import WhisperConfig, WhisperRecognizer
@@ -24,6 +30,7 @@ class AsrRuntimeSettings:
     language: str = "ar"
     device: str | int | None = None
     faster_whisper_compute_type: str | None = None
+    buffering_profile: str = DEFAULT_BUFFERING_PROFILE
     minimum_audio_ms: int = 4_200
     flush_interval_ms: int = 4_200
     tail_audio_ms: int = 0
@@ -48,6 +55,10 @@ class LazyRecognizer:
 
 def settings_from_env(env: Mapping[str, str] | None = None) -> AsrRuntimeSettings:
     values = os.environ if env is None else env
+    buffering_profile = normalize_buffering_profile_name(
+        values.get("TARTEEL_ASR_BUFFERING_PROFILE") or DEFAULT_BUFFERING_PROFILE
+    )
+    profile_config = buffering_profile_config(buffering_profile)
     return AsrRuntimeSettings(
         tanzil_path=Path(values.get("TARTEEL_TANZIL_PATH", str(DEFAULT_TANZIL_PATH))),
         minimum_lock_words=int(values.get("TARTEEL_MINIMUM_LOCK_WORDS", "3")),
@@ -56,11 +67,12 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrRuntimeSetting
         language=values.get("TARTEEL_WHISPER_LANGUAGE", "ar"),
         device=_optional_env(values, "TARTEEL_WHISPER_DEVICE"),
         faster_whisper_compute_type=_optional_env(values, "TARTEEL_FASTER_WHISPER_COMPUTE_TYPE"),
-        minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", "4200")),
-        flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", "4200")),
-        tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", "0")),
-        minimum_speech_rms=int(values.get("TARTEEL_ASR_MIN_SPEECH_RMS", "400")),
-        minimum_frame_rms=int(values.get("TARTEEL_ASR_MIN_FRAME_RMS", "150")),
+        buffering_profile=buffering_profile,
+        minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", str(profile_config.minimum_audio_ms))),
+        flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", str(profile_config.flush_interval_ms))),
+        tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", str(profile_config.tail_audio_ms))),
+        minimum_speech_rms=int(values.get("TARTEEL_ASR_MIN_SPEECH_RMS", str(profile_config.minimum_speech_rms))),
+        minimum_frame_rms=int(values.get("TARTEEL_ASR_MIN_FRAME_RMS", str(profile_config.minimum_frame_rms))),
         log_transcripts=_env_bool(values, "TARTEEL_LOG_TRANSCRIPTS"),
     )
 
