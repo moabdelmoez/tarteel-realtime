@@ -10,7 +10,7 @@ from tarteel_realtime.locator import (
     QuranLocator,
 )
 from tarteel_realtime.progression import RecitationProgression, ayah_ref
-from tarteel_realtime.quran import QuranCorpus, normalize_arabic
+from tarteel_realtime.quran import QuranCorpus, QuranRef, normalize_arabic
 from tarteel_realtime.recognition import RecognitionResult
 from tarteel_realtime.session_events import (
     SessionEvent,
@@ -79,10 +79,18 @@ class RecitationTransitionPolicy:
             )
 
         if locator_decision.status == LocatorStatus.AMBIGUOUS:
-            self._initial_transcript_context.remember(recognition.transcript)
+            candidate_refs = tuple(
+                candidate.ayah_ref
+                for candidate in locator_decision.candidates
+            )
+            self._initial_transcript_context.remember(
+                recognition.transcript,
+                candidate_refs=candidate_refs,
+            )
             if recognition_for_location.transcript != recognition.transcript:
                 self._initial_transcript_context.remember(
-                    recognition_for_location.transcript
+                    recognition_for_location.transcript,
+                    candidate_refs=candidate_refs,
                 )
             return lock_candidate_event(
                 transcript=recognition_for_location.transcript,
@@ -189,15 +197,7 @@ class RecitationTransitionPolicy:
         self,
         candidate: LocatorCandidate | None,
     ) -> bool:
-        return any(
-            _current_decision_supports_candidate(
-                self._locate_initial_recognition(
-                    RecognitionResult(transcript=transcript, confidence=0.0)
-                ),
-                candidate,
-            )
-            for transcript in self._initial_transcript_context.transcripts
-        )
+        return self._initial_transcript_context.supports_candidate(candidate)
 
     def _locate_initial_recognition(
         self,
@@ -420,19 +420,25 @@ class _InitialLocationResult:
     decision: LocatorDecision
 
 
+@dataclass(frozen=True)
+class _InitialTranscriptEntry:
+    transcript: str
+    candidate_refs: tuple[QuranRef, ...] = ()
+
+
 class _InitialTranscriptContext:
     _MAX_TRANSCRIPTS = 4
 
     def __init__(self) -> None:
-        self._transcripts: list[str] = []
+        self._entries: list[_InitialTranscriptEntry] = []
 
     @property
     def has_transcript(self) -> bool:
-        return bool(self._transcripts)
+        return bool(self._entries)
 
     @property
     def transcripts(self) -> tuple[str, ...]:
-        return tuple(self._transcripts)
+        return tuple(entry.transcript for entry in self._entries)
 
     def combine_all(self, recognition: RecognitionResult) -> tuple[RecognitionResult, ...]:
         transcript = recognition.transcript.strip()
@@ -445,21 +451,40 @@ class _InitialTranscriptContext:
                 chunk_sequence=recognition.chunk_sequence,
                 is_final=recognition.is_final,
             )
-            for previous in self._transcripts
+            for previous in self.transcripts
         )
 
-    def remember(self, transcript: str) -> None:
+    def remember(
+        self,
+        transcript: str,
+        *,
+        candidate_refs: tuple[QuranRef, ...] = (),
+    ) -> None:
         transcript = transcript.strip()
         if not transcript:
             return
-        self._transcripts = [
-            existing for existing in self._transcripts if existing != transcript
+        self._entries = [
+            entry for entry in self._entries if entry.transcript != transcript
         ]
-        self._transcripts.append(transcript)
-        self._transcripts = self._transcripts[-self._MAX_TRANSCRIPTS:]
+        self._entries.append(
+            _InitialTranscriptEntry(
+                transcript=transcript,
+                candidate_refs=candidate_refs,
+            )
+        )
+        self._entries = self._entries[-self._MAX_TRANSCRIPTS:]
+
+    def supports_candidate(self, candidate: LocatorCandidate | None) -> bool:
+        if candidate is None:
+            return False
+        candidate_ayah_ref = ayah_ref(candidate.ayah_ref)
+        return any(
+            any(ayah_ref(candidate_ref) == candidate_ayah_ref for candidate_ref in entry.candidate_refs)
+            for entry in self._entries
+        )
 
     def clear(self) -> None:
-        self._transcripts = []
+        self._entries = []
 
 
 def _is_tolerant_decision(decision: LocatorDecision) -> bool:
