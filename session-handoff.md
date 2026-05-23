@@ -29,8 +29,8 @@
 - RunPod faster-whisper replay has not been run for Point 5 yet.
 - `108002` may still no-lock if faster-whisper output remains too distorted, but scoped search should prevent unrelated full-Quran candidates from competing.
 - The iOS app can manually test scope through the Custom URL query, but it does not yet have a first-class selected-recitation UI that appends scope automatically.
-- Low-latency remains opt-in. Do not recommend merging to `main` until scoped GPU replay and manual testing are captured.
+- Low-latency remains opt-in. The user accepted merging selected-recitation scope to `main` as an opt-in backend capability without scoped GPU replay.
 
 ## Next Best Step
 
-Push the branch, ask for GPU approval, then update the RunPod workspace to `codex/asr-point-5-selected-recitation-scope` and replay all six local audio fixtures with scoped URLs: `?scope=108` for `108001`/`108002`/`108003` and `?scope=4:1-3` for `004001`/`004002`/`004003`.
+After merge, push `main`. Later, when real-ASR proof is needed, update RunPod from `main` and replay all six local audio fixtures with scoped URLs: `?scope=108` for `108001`/`108002`/`108003` and `?scope=4:1-3` for `004001`/`004002`/`004003`.

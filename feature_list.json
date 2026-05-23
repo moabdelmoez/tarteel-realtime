@@ -423,7 +423,7 @@
             "area": "asr-buffering",
             "title": "Reduced live ASR chunking gate",
             "user_visible_behavior": "The backend should use smaller rolling ASR windows for streaming-like ayah tracking while preserving quiet-audio safety and producing usable live ayah progression on real Quran audio.",
-            "status": "in_progress",
+            "status": "blocked",
             "verification": [
                 "uv run python -B -m unittest tests.test_buffered_recognition tests.test_session tests.test_asr_app -v",
                 "uv run python -B -m unittest discover -s tests -v",
@@ -455,9 +455,10 @@
                 "Point 4 remains not default-quality because 108002 still no-locks, long locks can start mid-ayah, and noisy wrong/progress events remain after lock.",
                 "Point 5 selected-recitation scope branch codex/asr-point-5-selected-recitation-scope adds optional WebSocket URL scope forms such as ?scope=108 and ?scope=4:1-3 without changing the audio payload contract.",
                 "Point 5 local deterministic coverage passed for scope parsing, scoped initial location, scoped WebSocket query wiring, out-of-scope no-match, and stopping ordered progression after the selected range ends.",
-                "Point 5 local verification passed: focused selected-scope suite with 44 tests, full Python suite with 187 tests, compile check, feature_list.json validation, and git diff --check."
+                "Point 5 local verification passed: focused selected-scope suite with 44 tests, full Python suite with 187 tests, compile check, feature_list.json validation, and git diff --check.",
+                "Point 5 was accepted for merge to main as an opt-in backend scoping capability without GPU replay; this does not change the low-latency default-quality gate."
             ],
-            "notes": "Active Point 5 slice. Local selected-recitation scope is implemented and verified; RunPod faster-whisper replay with scoped URLs is required before this can move back to a passing or blocked quality decision."
+            "notes": "Blocked as a default/product live-tracking quality gate. Point 5 selected-recitation scope is accepted as an opt-in backend capability, but RunPod scoped faster-whisper replay and manual testing remain required before claiming low-latency default readiness."
         },
         {
             "id": "backend-005",

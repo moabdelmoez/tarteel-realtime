@@ -14,8 +14,8 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: GPU replay and manual acceptance of Point 5 selected-recitation scope.
-- Current blocker: Point 5 is locally implemented and deterministic-tested, but RunPod faster-whisper replay with scoped URLs has not yet verified whether `?scope=108` improves short Surah 108 and `?scope=4:1-3` prevents long-ayah global drift in real ASR.
+- Current highest-priority unfinished feature: scoped faster-whisper replay and manual acceptance after Point 5 merge.
+- Current blocker: Point 5 is accepted for `main` as an opt-in backend capability, but RunPod faster-whisper replay with scoped URLs has not yet verified whether `?scope=108` improves short Surah 108 and `?scope=4:1-3` prevents long-ayah global drift in real ASR.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
@@ -45,7 +45,8 @@
   - No GPU replay has been run yet for Point 5. Real faster-whisper behavior still needs proof with scoped URLs.
   - The iOS prototype does not yet have a dedicated selected-surah UI; manual testing can use the Custom URL query string now, and a later client slice can append scope from a real selection control.
   - Low-latency remains opt-in until scoped real-ASR replay and manual testing show it is product-quality.
-- Next best step: push the Point 5 branch, then with GPU approval update RunPod to this branch and replay the six local audio fixtures using `?scope=108` for Surah 108 and `?scope=4:1-3` for Surah 4.
+- Next best step: merge Point 5 to `main` as an opt-in capability, then later run scoped GPU replay when real-ASR proof is needed.
+- Merge posture: user accepted skipping GPU replay before merge; do not claim low-latency default readiness from this local evidence alone.
 
 ### Session 070
 
