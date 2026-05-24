@@ -21,6 +21,7 @@
 - [ ] iOS app still builds when touched: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
 - [ ] iOS WebSocket client changes still wait for the socket handshake before streaming and keep Simulator backend connection errors actionable: `uv run python -B -m unittest tests.test_ios_websocket_client -v`.
 - [ ] iOS endpoint preset changes keep Simulator fixed to local WebSocket and Custom able to use RunPod WSS URLs: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter BackendEndpointPresetTests`.
+- [ ] iOS selected-recitation UI changes keep Auto versus Surah mode, Surah catalog metadata, and `scope=<surah-id>` URL construction covered: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore`, plus `uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v`.
 - [ ] The compile check still runs: `uv run python -m compileall -q tarteel_realtime tests`.
 - [ ] Embedded evaluator smoke cases still run: `uv run python -B -m unittest tests.test_evaluate_cli`.
 - [ ] Full Tanzil manifest workflow still runs when the local file exists: `uv run python -m tarteel_realtime.quran_data --check-manifest`.

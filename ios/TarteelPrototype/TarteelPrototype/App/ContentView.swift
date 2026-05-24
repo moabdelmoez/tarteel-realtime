@@ -12,6 +12,33 @@ struct ContentView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
+                    Picker("Recitation", selection: Binding(
+                        get: { viewModel.recitationMode },
+                        set: { viewModel.selectRecitationMode($0) }
+                    )) {
+                        Text("Auto").tag(RecitationMode.autoDetect)
+                        Text("Surah").tag(RecitationMode.selectedSurah)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(viewModel.isRecording)
+                    .padding(.bottom, 2)
+
+                    if viewModel.recitationMode == .selectedSurah {
+                        Picker("Surah", selection: $viewModel.selectedSurahID) {
+                            ForEach(SurahCatalog.all) { surah in
+                                Text(surah.displayName).tag(surah.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.white)
+                        .disabled(viewModel.isRecording)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(.white.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
                     Picker("Backend", selection: Binding(
                         get: { viewModel.backendPreset },
                         set: { viewModel.selectBackendPreset($0) }

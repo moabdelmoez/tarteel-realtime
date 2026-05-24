@@ -47,6 +47,14 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-24 - iOS Selected-Recitation UI
+
+- The iOS prototype now exposes an Auto versus Surah recitation mode and a surah menu backed by local Quran surah metadata.
+- Selected Surah mode appends `scope=<surah-id>` to the WebSocket URL before recording, so the already-merged backend selected-scope behavior can be used without manually editing the Custom URL. Auto mode removes the app-managed `scope` query item and preserves other query parameters.
+- Local confidence is good for the client contract: Swift client core passed with 23 tests, the new iOS source guardrail passed, the full Python suite passed with 190 tests, compile and JSON checks passed, whitespace passed, and the iOS app target built successfully after rerunning with a fresh derived-data path because the old `/private/tmp/tarteel-xcode-derived` FluidAudio checkout was stale.
+- Release posture: this is ready for manual Simulator/device testing against a scoped backend. It does not by itself prove real-ASR quality; scoped RunPod replay and manual recitation remain the acceptance gate for live recognition quality.
+
+
 ### 2026-05-24 - Point 5 Local Selected-Recitation Scope
 
 - Point 5 adds optional selected-recitation scope on the WebSocket URL while preserving the existing audio payload contract.

@@ -1,14 +1,23 @@
 import Combine
 import Foundation
 
+enum RecitationMode: String, CaseIterable, Hashable, Identifiable {
+    case autoDetect
+    case selectedSurah
+
+    var id: String { rawValue }
+}
+
 @MainActor
 final class RecitationViewModel: ObservableObject {
     @Published private(set) var state = RecitationSessionState()
     @Published private(set) var isRecording = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var backendPreset = BackendEndpointPreset.simulator
+    @Published private(set) var recitationMode = RecitationMode.autoDetect
     @Published private(set) var connectionStatus = "Idle"
     @Published var backendURLText = BackendEndpointPreset.simulator.defaultURLText
+    @Published var selectedSurahID = 108
 
     private let socketClient: BackendWebSocketClient
     private let audioStreamer: MicrophoneAudioStreamer
@@ -40,6 +49,19 @@ final class RecitationViewModel: ObservableObject {
         }
     }
 
+    func selectRecitationMode(_ mode: RecitationMode) {
+        recitationMode = mode
+    }
+
+    private var recitationScopeSelection: RecitationScopeSelection {
+        switch recitationMode {
+        case .autoDetect:
+            return .autoDetect
+        case .selectedSurah:
+            return .selectedSurah(id: selectedSurahID)
+        }
+    }
+
     func toggleRecording() {
         if isRecording {
             stopRecording()
@@ -63,7 +85,10 @@ final class RecitationViewModel: ObservableObject {
         )
 
         do {
-            let urlText = backendPreset.recordingURLText(currentURLText: backendURLText)
+            let urlText = backendPreset.recordingURLText(
+                currentURLText: backendURLText,
+                recitationScope: recitationScopeSelection
+            )
             if urlText != backendURLText {
                 backendURLText = urlText
             }

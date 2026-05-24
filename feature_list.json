@@ -219,7 +219,9 @@
                 "Run xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build.",
                 "Run uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_former-room-transport_vad -v for app source guardrails.",
                 "Launch the app in Simulator and verify the initial mic screen renders.",
-                "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend."
+                "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend.",
+                "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v for selected-recitation UI source guardrails.",
+                "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore after scope URL or catalog changes."
             ],
             "evidence": [
                 "Added ios/TarteelClientCore Swift package with tested backend event decoding, audio chunk JSON encoding, and mobile session-state reduction.",
@@ -235,9 +237,13 @@
                 "WebSocket handshake regression passed with 2 tests; focused iOS source suite passed with 11 tests; full deterministic Python suite passed with 150 tests; compile check, JSON sanity, and git diff --check passed; iOS simulator app target build succeeded; local backend /health returned HTTP 200.",
                 "Booted the iPhone 17 Pro simulator, installed the rebuilt app, and launched dev.mostafa.TarteelPrototype as process 39082.",
                 "former room transport URL handling now keeps the former room transport token endpoint separate from the Custom WebSocket URL and normalizes pasted RunPod WebSocket URLs such as wss://.../ws/recitation to https://.../former-room-transport/removed-transport-token before token fetch.",
-                "former room transport URL regression passed red/green in BackendEndpointPresetTests; latest Swift client core passed with 21 tests; focused iOS source guardrails passed with 18 tests; git diff --check passed; iOS app target build succeeded; rebuilt app installed and launched in the booted iPhone 17 Pro simulator as process 92608."
+                "former room transport URL regression passed red/green in BackendEndpointPresetTests; latest Swift client core passed with 21 tests; focused iOS source guardrails passed with 18 tests; git diff --check passed; iOS app target build succeeded; rebuilt app installed and launched in the booted iPhone 17 Pro simulator as process 92608.",
+                "iOS selected-recitation UI now offers Auto global detection or Surah mode, with the Surah menu populated from a 114-surah local catalog generated from data/quran-metadata-surah-name.json.",
+                "BackendEndpointPreset.recordingURLText(currentURLText:recitationScope:) appends or replaces scope=<surah-id> for selected Surah mode, removes app-managed scope for Auto mode, and preserves unrelated query parameters.",
+                "Selected-recitation UI checks passed: Swift client core 23 tests, tests.test_ios_recitation_scope_ui with 3 tests, and iOS app target build using fresh derived data at /private/tmp/tarteel-xcode-derived-ios-scope.",
+                "Selected-recitation UI final local verification passed: full Python suite with 190 tests, compile check, feature_list.json validation, quran-metadata JSON validation, and git diff --check."
             ],
-            "notes": "Passing for the native fake-backend prototype and the guarded former room transport token URL flow. Real ASR still runs on an opt-in backend or former room transport worker."
+            "notes": "Passing for the native WebSocket prototype plus selected-recitation UI. Manual Simulator/physical-device testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },
         {
             "id": "backend-002",

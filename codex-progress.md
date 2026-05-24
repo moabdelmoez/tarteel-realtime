@@ -14,11 +14,42 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: scoped faster-whisper replay and manual acceptance after Point 5 merge.
-- Current blocker: Point 5 is accepted for `main` as an opt-in backend capability, but RunPod faster-whisper replay with scoped URLs has not yet verified whether `?scope=108` improves short Surah 108 and `?scope=4:1-3` prevents long-ayah global drift in real ASR.
+- Current highest-priority unfinished feature: manual testing of the iOS selected-recitation UI, then scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
+- Current blocker: the selected-recitation backend scope is merged, and the iOS UI slice is locally verified, but manual Simulator/device testing and scoped RunPod faster-whisper replay have not yet verified live ASR quality.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 072
+
+- Date: 2026-05-24
+- Goal: Implement the iOS selected-recitation UI so users can choose Auto global detection or select one Surah and have the app send backend scope automatically.
+- Completed:
+  - Created worktree `.worktrees/ios-selected-recitation-ui` on branch `codex/ios-selected-recitation-ui` from `main` commit `4fab816`.
+  - Added `RecitationScopeSelection` to the Swift client core with `autoDetect` and `selectedSurah(id:)`.
+  - Added `SurahCatalog` and `SurahMetadata` with all 114 surahs generated from `data/quran-metadata-surah-name.json`, including Arabic names, simple English names, and verse counts.
+  - Extended `BackendEndpointPreset` with `recordingURLText(currentURLText:recitationScope:)`, preserving the previous method for existing callers. Selected Surah mode sets or replaces `scope=<surah-id>`, while Auto removes the app-managed `scope` and preserves other query items.
+  - Added app state for `RecitationMode.autoDetect` versus `.selectedSurah`, defaulting to Auto with Surah 108 preselected for quick manual testing when Surah mode is chosen.
+  - Added SwiftUI controls: a Recitation segmented picker and a Surah menu populated from `SurahCatalog.all`.
+  - Updated the Xcode project so the app target compiles the two new shared core Swift files.
+  - Updated `ios/README.md`, the clean-state checklist, quality document, and handoff with selected-recitation UI behavior and verification posture.
+- Verification run:
+  - Baseline before implementation passed: Swift client core had 17 tests; focused iOS source guardrails had 11 tests.
+  - Red TDD run failed first for missing `SurahCatalog`, missing `RecitationScopeSelection`, missing scoped URL overload, and missing SwiftUI/ViewModel controls.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 23 tests.
+  - New iOS source guardrail passed: `uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v` with 3 tests.
+  - iOS app target build passed with fresh derived data: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-scope CODE_SIGNING_ALLOWED=NO build`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 190 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - JSON validation passed for `feature_list.json` and `data/quran-metadata-surah-name.json`.
+  - Whitespace check passed: `git diff --check`.
+- Known risk or unresolved issue:
+  - The first app build attempt against `/private/tmp/tarteel-xcode-derived` failed because the cached `FluidAudio` checkout was stale and missing `Package.swift`; fresh derived data plus network access fixed dependency resolution.
+  - No manual Simulator or physical-device UI test has been run yet.
+  - No scoped RunPod faster-whisper replay has been run from the UI slice; the UI does not change ASR quality by itself.
+  - The iOS app exposes whole-surah selection only; backend ayah/range scope remains available through direct URL editing but not first-class UI.
+- Next best step: finish full local verification, then manually test Auto and selected Surah 108/4 against a backend before merging to `main`.
 
 
 

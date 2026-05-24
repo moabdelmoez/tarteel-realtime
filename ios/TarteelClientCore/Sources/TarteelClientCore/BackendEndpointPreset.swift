@@ -43,12 +43,29 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
     }
 
     public func recordingURLText(currentURLText: String) -> String {
+        normalizedRecordingURLText(currentURLText: currentURLText, recitationScope: nil)
+    }
+
+    public func recordingURLText(
+        currentURLText: String,
+        recitationScope: RecitationScopeSelection
+    ) -> String {
+        normalizedRecordingURLText(currentURLText: currentURLText, recitationScope: recitationScope)
+    }
+
+    private func normalizedRecordingURLText(
+        currentURLText: String,
+        recitationScope: RecitationScopeSelection?
+    ) -> String {
+        let urlText: String
         switch self {
         case .simulator:
-            return defaultURLText
+            urlText = defaultURLText
         case .custom:
-            return Self.webSocketURLText(from: currentURLText)
+            urlText = Self.webSocketURLText(from: currentURLText)
         }
+
+        return Self.urlText(urlText, applying: recitationScope)
     }
 
     private static func webSocketURLText(from text: String) -> String {
@@ -78,5 +95,24 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
             return text
         }
         return "wss://\(text)"
+    }
+
+    private static func urlText(
+        _ text: String,
+        applying recitationScope: RecitationScopeSelection?
+    ) -> String {
+        guard let recitationScope else { return text }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return text
+        }
+        guard var components = URLComponents(string: text) else { return text }
+
+        var queryItems = components.queryItems?.filter { $0.name != "scope" } ?? []
+        if let scope = recitationScope.queryValue {
+            queryItems.append(URLQueryItem(name: "scope", value: scope))
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+
+        return components.string ?? text
     }
 }

@@ -36,6 +36,16 @@ For a RunPod real-ASR backend, enter the exposed WSS URL in `Custom`:
 wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 ```
 
+## Recitation Scope
+
+The app starts in `Auto` mode, which leaves Quran location detection global. Switch to `Surah` and choose a surah from the menu when the user already knows what they will recite. In `Surah` mode, the app appends `scope=<surah-id>` to the WebSocket URL before recording starts, for example:
+
+```text
+wss://<pod-id>-8000.proxy.runpod.net/ws/recitation?scope=108
+```
+
+Switching back to `Auto` removes the app-managed `scope` query item while preserving other query parameters. The backend still receives the same audio chunk payload; selected-recitation scope stays in the WebSocket URL.
+
 The app uses one microphone pipeline for every backend preset: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends audio chunks plus optional `voice_activity` metadata to the backend.
 
 ## Build The App
