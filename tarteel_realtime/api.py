@@ -32,6 +32,10 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/ping")
+    def ping() -> dict[str, str]:
+        return {"status": "ok"}
+
     @app.websocket("/ws/recitation")
     async def recitation_socket(websocket: WebSocket) -> None:
         try:

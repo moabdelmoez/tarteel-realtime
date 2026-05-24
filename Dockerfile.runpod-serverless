@@ -1,0 +1,30 @@
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_LINK_MODE=copy \
+    UV_NO_PROGRESS=1 \
+    UV_PYTHON=3.13 \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl git bash \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv python install 3.13 \
+    && uv sync --frozen
+
+COPY tarteel_realtime ./tarteel_realtime
+COPY data ./data
+COPY scripts/runpod_serverless_start.sh ./scripts/runpod_serverless_start.sh
+
+RUN chmod +x scripts/runpod_serverless_start.sh \
+    && uv run --with faster-whisper python -c "import faster_whisper"
+
+EXPOSE 8000
+
+CMD ["bash", "scripts/runpod_serverless_start.sh"]

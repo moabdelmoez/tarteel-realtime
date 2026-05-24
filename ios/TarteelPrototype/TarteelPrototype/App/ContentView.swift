@@ -61,7 +61,23 @@ struct ContentView: View {
                         .background(.white.opacity(0.10))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .disabled(viewModel.isRecording || !viewModel.backendPreset.allowsURLTextEditing)
-                        .padding(.bottom, 12)
+
+                    if viewModel.backendPreset == .custom {
+                        SecureField("RunPod API key", text: $viewModel.runPodAPIKeyText)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.white)
+                            .padding(12)
+                            .background(.white.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .disabled(viewModel.isRecording)
+
+                        Text("prototype-only direct RunPod")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.58))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     DebugStatusPanel(
                         connectionStatus: viewModel.connectionStatus,

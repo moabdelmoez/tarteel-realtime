@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from tarteel_realtime.asr_runtime import (
     DEFAULT_QURAN_WHISPER_MODEL_ID,
@@ -40,6 +41,22 @@ class AsrRuntimeTests(unittest.TestCase):
         self.assertEqual(settings.tail_audio_ms, 500)
         self.assertEqual(settings.minimum_speech_rms, 400)
         self.assertEqual(settings.minimum_frame_rms, 150)
+
+    def test_settings_from_env_uses_runpod_cached_huggingface_snapshot_when_available(self):
+        with TemporaryDirectory() as directory:
+            cache_root = Path(directory)
+            model_root = cache_root / "models--OdyAsh--faster-whisper-base-ar-quran"
+            snapshot = model_root / "snapshots" / "abc123"
+            snapshot.mkdir(parents=True)
+            (model_root / "refs").mkdir()
+            (model_root / "refs" / "main").write_text("abc123", encoding="utf-8")
+
+            settings = settings_from_env({
+                "TARTEEL_WHISPER_MODEL_ID": "OdyAsh/faster-whisper-base-ar-quran",
+                "TARTEEL_HF_CACHE_ROOT": str(cache_root),
+            })
+
+        self.assertEqual(settings.model_id, str(snapshot))
 
     def test_explicit_asr_window_env_overrides_profile_values(self):
         settings = settings_from_env({

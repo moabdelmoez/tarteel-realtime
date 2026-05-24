@@ -47,6 +47,15 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-24 - RunPod Serverless Prototype Path
+
+- The backend now exposes `/ping` for RunPod load-balancer health checks while preserving `/health` and `WS /ws/recitation`.
+- Serverless packaging is local-contract verified through `Dockerfile.runpod-serverless` and `scripts/runpod_serverless_start.sh`, which default to faster-whisper, `OdyAsh/faster-whisper-base-ar-quran`, CUDA `cuda:0`, `float16`, cached Hugging Face model lookup, and the low-latency ASR profile.
+- The ASR runtime resolves RunPod cached Hugging Face snapshots under `/runpod-volume/huggingface-cache/hub` when present, avoiding model-ID downloads on correctly configured endpoints while preserving local fallback behavior.
+- The iOS prototype can normalize bare `<endpoint-id>.api.runpod.ai` hosts, keep selected-recitation scope query handling, and send `Authorization: Bearer <token>` from a local RunPod API key field for Custom endpoints.
+- Release posture: this is ready for a serverless deployment smoke, not a live-ASR quality claim. The endpoint has not yet been built, pushed, deployed, fixture-replayed, or measured for cold start, scale-to-zero, and billing behavior.
+
+
 ### 2026-05-24 - iOS Selected-Recitation UI
 
 - The iOS prototype now exposes an Auto versus Surah recitation mode and a surah menu backed by local Quran surah metadata.

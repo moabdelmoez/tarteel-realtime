@@ -1,0 +1,13 @@
+.git
+.worktrees
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.DS_Store
+.env
+.env.*
+ios/TarteelClientCore/.build
+**/xcuserdata
+*.xcuserstate
+fixtures/local_audio

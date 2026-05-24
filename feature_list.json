@@ -241,9 +241,10 @@
                 "iOS selected-recitation UI now offers Auto global detection or Surah mode, with the Surah menu populated from a 114-surah local catalog generated from data/quran-metadata-surah-name.json.",
                 "BackendEndpointPreset.recordingURLText(currentURLText:recitationScope:) appends or replaces scope=<surah-id> for selected Surah mode, removes app-managed scope for Auto mode, and preserves unrelated query parameters.",
                 "Selected-recitation UI checks passed: Swift client core 23 tests, tests.test_ios_recitation_scope_ui with 3 tests, and iOS app target build using fresh derived data at /private/tmp/tarteel-xcode-derived-ios-scope.",
-                "Selected-recitation UI final local verification passed: full Python suite with 190 tests, compile check, feature_list.json validation, quran-metadata JSON validation, and git diff --check."
+                "Selected-recitation UI final local verification passed: full Python suite with 190 tests, compile check, feature_list.json validation, quran-metadata JSON validation, and git diff --check.",
+                "Prototype direct RunPod Serverless support adds Custom URL normalization for .api.runpod.ai hosts and a local RunPod API key field that sends Authorization: Bearer on the WebSocket request."
             ],
-            "notes": "Passing for the native WebSocket prototype plus selected-recitation UI. Manual Simulator/physical-device testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
+            "notes": "Passing for the native WebSocket prototype plus selected-recitation UI and direct RunPod prototype auth wiring. Manual Simulator/physical-device testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },
         {
             "id": "backend-002",
@@ -258,7 +259,8 @@
                 "Add deterministic tests for ASR backend factory/configuration using injected recognizers.",
                 "Run uv run python -B -m unittest discover locally.",
                 "On RunPod GPU, run the real ASR WebSocket backend with optional dependencies and verify at least one Surah 114 audio sample produces a locked event over WS.",
-                "On RunPod GPU, run the real ASR WebSocket backend with TARTEEL_WHISPER_BACKEND=faster-whisper and replay short plus long local_audio WAV fixtures with disabled WebSocket pings."
+                "On RunPod GPU, run the real ASR WebSocket backend with TARTEEL_WHISPER_BACKEND=faster-whisper and replay short plus long local_audio WAV fixtures with disabled WebSocket pings.",
+                "Run uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_runtime tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v after RunPod serverless packaging or direct-iOS prototype auth changes."
             ],
             "evidence": [
                 "Added tarteel_realtime/asr_app.py with env-driven ASR backend settings, lazy Whisper recognizer construction, and injected-recognizer test seams.",
@@ -275,9 +277,12 @@
                 "RunPod faster-whisper replay for 004001.wav with 1s chunks returned 1 locked event at 4:1, 6 progress events, and first non-wait response at 0.390s wall time with 355.0ms roundtrip after warm-up; false wrong events remain.",
                 "Point 2 RunPod faster-whisper replay from commit 5ce2d36 used TARTEEL_ASR_BUFFERING_PROFILE=low-latency on cuda:0/float16 and returned first non-wait ASR-backed events at sequence 1 for five of six 1s-chunk fixtures; 004003 first returned at sequence 2.",
                 "Point 3 branch codex/asr-point-3-short-ayah-stability through commit 9ef577e adds pre-lock ASR transcript context while preserving the existing WebSocket contract.",
-                "Point 3 RunPod faster-whisper replay with low-latency profile improved short fixtures: 108001 locked 108:1 at sequence 5 and 108003 locked 108:3 at sequence 5; 108002 still did not lock."
+                "Point 3 RunPod faster-whisper replay with low-latency profile improved short fixtures: 108001 locked 108:1 at sequence 5 and 108003 locked 108:3 at sequence 5; 108002 still did not lock.",
+                "RunPod Serverless Load Balancer prototype packaging adds /ping, Dockerfile.runpod-serverless, scripts/runpod_serverless_start.sh, faster-whisper low-latency defaults for L4/A5000/3090, and cached Hugging Face snapshot resolution under /runpod-volume/huggingface-cache/hub.",
+                "RunPod serverless focused local verification passed with 28 backend/iOS/serverless Python tests, 14 ASR runtime/app tests including cached snapshot resolution, bash syntax validation for scripts/runpod_serverless_start.sh, compileall, 24 Swift client tests, and an iOS app build at /private/tmp/tarteel-xcode-derived-serverless.",
+                "RunPod serverless final local verification passed with the full deterministic Python suite at 197 tests, feature_list.json validation, and git diff --check."
             ],
-            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU. Point 3 improves short-ayah pre-lock startup on two Surah 108 fixtures, but 108002 still no-matches and long low-latency replay still has false-lock risk."
+            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU plus local serverless packaging contracts. The RunPod Serverless endpoint has not yet been deployed or fixture-replayed, so cold-start, billing, and live ASR quality still need endpoint proof."
         },
         {
             "id": "backend-003",

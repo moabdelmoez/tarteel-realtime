@@ -83,7 +83,7 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
             components.scheme = "wss"
         }
 
-        if components.host?.contains(".proxy.runpod.net") == true && components.path.isEmpty {
+        if isRunPodHost(components.host) && components.path.isEmpty {
             components.path = "/ws/recitation"
         }
 
@@ -91,10 +91,19 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
     }
 
     private static func addWSSForRunPodHostIfNeeded(_ text: String) -> String {
-        guard !text.contains("://"), text.contains(".proxy.runpod.net") else {
+        guard !text.contains("://"), isRunPodHostText(text) else {
             return text
         }
         return "wss://\(text)"
+    }
+
+    private static func isRunPodHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        return isRunPodHostText(host)
+    }
+
+    private static func isRunPodHostText(_ text: String) -> Bool {
+        text.contains(".proxy.runpod.net") || text.contains(".api.runpod.ai")
     }
 
     private static func urlText(

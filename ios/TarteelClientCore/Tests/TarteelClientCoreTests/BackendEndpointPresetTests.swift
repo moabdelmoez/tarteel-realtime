@@ -62,6 +62,18 @@ struct BackendEndpointPresetTests {
         )
     }
 
+    @Test func selectedSurahScopeNormalizesBareRunPodServerlessHostBeforeAppendingScope() {
+        let runpodServerlessHost = "abc123.api.runpod.ai"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: runpodServerlessHost,
+                recitationScope: .selectedSurah(id: 108)
+            )
+                == "wss://abc123.api.runpod.ai/ws/recitation?scope=108"
+        )
+    }
+
     @Test func customPresetAddsWSSSchemeAndRecitationPathToRunPodHost() {
         let runpodHost = "0qudx1ctbmw1xc-8000.proxy.runpod.net"
 

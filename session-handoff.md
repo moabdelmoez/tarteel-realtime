@@ -2,35 +2,53 @@
 
 ## Verified Now
 
-- Active slice: iOS selected-recitation UI, isolated in `.worktrees/ios-selected-recitation-ui` on branch `codex/ios-selected-recitation-ui`.
-- Base: `main` commit `4fab816` (`Record Point 5 merge posture`).
-- WebSocket `/ws/recitation` remains the only transport. The app still sends the same audio chunk payload; selected-recitation scope is expressed only as a WebSocket URL query item.
-- The iOS app now has two recitation modes:
-  - `Auto`: global backend detection; app-managed `scope` is removed from the recording URL.
-  - `Surah`: user selects one surah from the local catalog; the recording URL gets `scope=<surah-id>`, for example `?scope=108`.
-- The Surah picker is populated from `SurahCatalog`, generated from `data/quran-metadata-surah-name.json` with all 114 surahs, Arabic names, English simple names, and verse counts.
-- `BackendEndpointPreset.recordingURLText(..., recitationScope:)` normalizes Simulator/Custom/RunPod URLs, replaces stale `scope`, and preserves unrelated query parameters. The old `recordingURLText(currentURLText:)` behavior remains for existing callers.
+- Active slice: RunPod Serverless prototype path, isolated in `.worktrees/runpod-serverless-prototype` on branch `codex/runpod-serverless-prototype`.
+- Base: `main` commit `5d0edd9` (`Add iOS selected-recitation UI`).
+- WebSocket `/ws/recitation` remains the only recitation transport.
+- Backend now exposes both `/health` and `/ping`; `/ping` is for RunPod Load Balancer health checks.
+- Serverless packaging files:
+  - `Dockerfile.runpod-serverless`
+  - `.dockerignore`
+  - `scripts/runpod_serverless_start.sh`
+  - `docs/runpod-serverless.md`
+- The serverless start script defaults to:
+  - `TARTEEL_WHISPER_BACKEND=faster-whisper`
+  - `TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran`
+  - `TARTEEL_WHISPER_DEVICE=cuda:0`
+  - `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`
+  - `TARTEEL_HF_CACHE_ROOT=/runpod-volume/huggingface-cache/hub`
+  - `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`
+- `settings_from_env(...)` resolves cached RunPod Hugging Face snapshots under `TARTEEL_HF_CACHE_ROOT` when present, and falls back to the model ID locally.
+- iOS Custom endpoint handling now accepts bare serverless hosts like `<endpoint-id>.api.runpod.ai`, normalizes them to `wss://.../ws/recitation`, and keeps selected-recitation `scope` query behavior.
+- iOS direct RunPod access is prototype-only: a local `RunPod API key` field sends `Authorization: Bearer <token>` on Custom WebSocket connections. Do not commit or document real keys.
 
 ## Verification
 
-- Baseline before implementation passed: Swift client core had 17 tests passing; focused iOS source guardrails had 11 tests passing.
-- Red TDD run failed first for missing `SurahCatalog`, missing `RecitationScopeSelection`, missing scoped URL overload, and missing SwiftUI/ViewModel controls.
-- Green focused checks passed:
-  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 23 tests.
-  - `uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v` with 3 tests.
-- iOS app build passed with fresh derived data: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-scope CODE_SIGNING_ALLOWED=NO build`.
-- Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 190 tests.
-- Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
-- JSON validation passed for `feature_list.json` and `data/quran-metadata-surah-name.json`.
-- Whitespace check passed: `git diff --check`.
-- The first app build attempt using `/private/tmp/tarteel-xcode-derived` failed because the cached `FluidAudio` checkout was stale and missing `Package.swift`; rerunning with fresh derived data and network access resolved package dependencies and built successfully.
+- Red tests failed first for missing `/ping`, missing serverless Docker/start files, missing `.api.runpod.ai` normalization, missing iOS bearer-token support, and missing cached Hugging Face snapshot resolution.
+- Focused serverless/backend/iOS checks passed:
+  - `uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v` with 28 tests.
+  - `uv run python -B -m unittest tests.test_asr_runtime tests.test_asr_app -v` with 14 tests.
+  - `bash -n scripts/runpod_serverless_start.sh`.
+  - `uv run python -m compileall -q tarteel_realtime tests`.
+  - Swift client core: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
+- Full deterministic Python suite passed after final harness updates with 197 tests.
+- `uv run python -B -m json.tool feature_list.json` passed.
+- `git diff --check` passed.
+- iOS app build:
+  - First attempt using `/private/tmp/tarteel-xcode-derived` failed due stale `FluidAudio` package checkout/CoreSimulator access.
+  - Rerun with escalated permissions and fresh derived data `/private/tmp/tarteel-xcode-derived-serverless` succeeded.
 
 ## Current Risks
 
-- No manual Simulator or physical-device test has been run yet for the new controls.
-- No scoped RunPod faster-whisper replay has been run from this UI slice. The UI only makes selected scope easier to exercise; it does not prove real-ASR quality.
-- The selected Surah UI currently scopes whole surahs only. Ayah-range UI remains backend-capable but not surfaced in the iOS app.
+- No RunPod Serverless endpoint has been deployed yet.
+- Docker image build/push has not been run.
+- No real endpoint cold-start, worker runtime, scale-to-zero, billing, or scoped fixture replay evidence exists yet.
+- Direct iOS-to-RunPod is not production-safe because the RunPod API key lives in the client during prototype testing.
+- The Docker build expects `data/tanzil/quran-simple-clean.txt` to be hydrated locally before build. Keep R2 keys local and out of iOS/runtime docs.
 
 ## Next Best Step
 
-Manually test the iOS app against a backend using Auto and Surah 108/4 selection before merging to `main`.
+Build and push the serverless image, create a RunPod Load Balancer endpoint with `Active workers = 0`, `Max workers = 1`, GPU `L4/A5000/3090`, and cached model `OdyAsh/faster-whisper-base-ar-quran`, then replay:
+
+- `108001`, `108002`, `108003` with `?scope=108`
+- `004001`, `004002`, `004003` with `?scope=4:1-3`
