@@ -241,6 +241,14 @@ wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 
 The `Custom` preset accepts full WebSocket URLs. For RunPod proxy hosts pasted without a scheme or path, the app normalizes to `wss://.../ws/recitation`.
 
+For the prototype RunPod Serverless path, use a Load Balancer endpoint and paste the full endpoint URL or bare host into the iOS `Custom` preset:
+
+```text
+wss://<endpoint-id>.api.runpod.ai/ws/recitation
+```
+
+Direct iOS-to-RunPod serverless testing is prototype-only because the app sends `Authorization: Bearer <RUNPOD_API_KEY>` on the WebSocket request. Enter that key in the local iOS `RunPod API key` field; do not commit it or put it in docs. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for RunPod health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
+
 The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.
 
 ## GitHub And R2 Artifact Workflow

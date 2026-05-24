@@ -14,11 +14,42 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: manual testing of the iOS selected-recitation UI, then scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
-- Current blocker: the selected-recitation backend scope is merged, and the iOS UI slice is locally verified, but manual Simulator/device testing and scoped RunPod faster-whisper replay have not yet verified live ASR quality.
+- Current highest-priority unfinished feature: deploy the RunPod Serverless Load Balancer prototype, measure cold start/scale-to-zero, then run scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
+- Current blocker: the serverless worker packaging and direct iOS prototype auth path are locally verified, but no RunPod Serverless endpoint has been deployed yet; live endpoint latency, billing, and real-ASR quality remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 073
+
+- Date: 2026-05-24
+- Goal: Implement a prototype-only RunPod Serverless Load Balancer path so the iOS app can connect directly to pay-as-you-go GPU workers while preserving the existing `/ws/recitation` contract.
+- Completed:
+  - Created worktree `.worktrees/runpod-serverless-prototype` on branch `codex/runpod-serverless-prototype` from `main` at `5d0edd9`.
+  - Added `/ping` beside `/health` for RunPod load-balancer health checks.
+  - Added `Dockerfile.runpod-serverless`, `.dockerignore`, and `scripts/runpod_serverless_start.sh` for a CUDA/cuDNN runtime image that starts `tarteel_realtime.asr_app:create_app_from_env` on `0.0.0.0:${PORT:-8000}` with faster-whisper, CUDA, float16, cached-model, and `low-latency` defaults.
+  - Added RunPod cached Hugging Face model resolution: when `TARTEEL_HF_CACHE_ROOT` contains a cached snapshot for `TARTEEL_WHISPER_MODEL_ID`, the ASR runtime passes that local snapshot path to faster-whisper; otherwise local development falls back to the model ID.
+  - Extended iOS Custom endpoint normalization to support bare RunPod serverless hosts like `<endpoint-id>.api.runpod.ai`, including selected-recitation `scope` query handling.
+  - Added prototype-only direct RunPod auth wiring in the iOS app: a local `RunPod API key` field sends `Authorization: Bearer <token>` on the WebSocket request and is only used for the Custom backend.
+  - Added `docs/runpod-serverless.md` with endpoint settings, build steps, R2 hydration rules, direct iOS prototype flow, key-generation steps, and acceptance checks; updated README, RunPod/R2 docs, clean-state checklist, feature list, quality document, and session handoff.
+- Verification run:
+  - Red tests first failed for missing `/ping`, missing serverless Docker/start files, missing `.api.runpod.ai` normalization, missing iOS bearer-token support, and missing cached Hugging Face snapshot resolution.
+  - Focused serverless/iOS/backend checks passed: `uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v` with 28 tests.
+  - Focused ASR runtime/app checks passed: `uv run python -B -m unittest tests.test_asr_runtime tests.test_asr_app -v` with 14 tests.
+  - Serverless script syntax passed: `bash -n scripts/runpod_serverless_start.sh`.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
+  - Full deterministic Python suite passed after final harness updates: `uv run python -B -m unittest discover -s tests -v` with 197 tests.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Whitespace check passed: `git diff --check`.
+  - iOS app build initially failed due stale `/private/tmp/tarteel-xcode-derived` package state and CoreSimulator access, then passed with escalated permissions and fresh derived data at `/private/tmp/tarteel-xcode-derived-serverless`.
+- Known risk or unresolved issue:
+  - The RunPod Serverless endpoint has not yet been deployed; Docker image build/push, endpoint creation, cold-start timing, worker scale-to-zero, and scoped fixture replay still need real RunPod proof.
+  - Direct iOS-to-RunPod remains prototype-only because the RunPod API key is entered into the app and sent directly from the client.
+  - Docker image expects `data/tanzil/quran-simple-clean.txt` to be present in the build context after local R2 hydration; avoid putting R2 credentials in the runtime worker or iOS app.
+  - The first real endpoint should keep `Active workers = 0`, `Max workers = 1`, and L4/A5000/3090 until cost and latency are measured.
+- Next best step: build and push the serverless image, create a RunPod Load Balancer endpoint with cached model `OdyAsh/faster-whisper-base-ar-quran`, then replay the scoped six-fixture set and test iOS Custom direct connection with a restricted prototype key.
 
 
 ### Session 072

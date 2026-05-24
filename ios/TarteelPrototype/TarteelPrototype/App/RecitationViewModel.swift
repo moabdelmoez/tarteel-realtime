@@ -18,6 +18,7 @@ final class RecitationViewModel: ObservableObject {
     @Published private(set) var connectionStatus = "Idle"
     @Published var backendURLText = BackendEndpointPreset.simulator.defaultURLText
     @Published var selectedSurahID = 108
+    @Published var runPodAPIKeyText = ""
 
     private let socketClient: BackendWebSocketClient
     private let audioStreamer: MicrophoneAudioStreamer
@@ -62,6 +63,12 @@ final class RecitationViewModel: ObservableObject {
         }
     }
 
+    private var runPodAuthorizationToken: String? {
+        guard backendPreset == .custom else { return nil }
+        let token = runPodAPIKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return token.isEmpty ? nil : token
+    }
+
     func toggleRecording() {
         if isRecording {
             stopRecording()
@@ -96,7 +103,10 @@ final class RecitationViewModel: ObservableObject {
                 throw RecitationViewModelError.invalidBackendURL
             }
 
-            try await socketClient.connect(url: backendURL) { [weak self] event in
+            try await socketClient.connect(
+                url: backendURL,
+                authorizationToken: runPodAuthorizationToken
+            ) { [weak self] event in
                 Task { @MainActor in
                     guard let self else { return }
                     let currentState = self.state

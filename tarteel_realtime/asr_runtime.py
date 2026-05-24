@@ -19,6 +19,7 @@ from tarteel_realtime.whisper_adapter import WhisperConfig, WhisperRecognizer
 
 
 DEFAULT_QURAN_WHISPER_MODEL_ID = "basharalrfooh/whisper-small-quran"
+DEFAULT_HF_CACHE_ROOT = Path("/runpod-volume/huggingface-cache/hub")
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,10 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrRuntimeSetting
     return AsrRuntimeSettings(
         tanzil_path=Path(values.get("TARTEEL_TANZIL_PATH", str(DEFAULT_TANZIL_PATH))),
         minimum_lock_words=int(values.get("TARTEEL_MINIMUM_LOCK_WORDS", "3")),
-        model_id=values.get("TARTEEL_WHISPER_MODEL_ID", DEFAULT_QURAN_WHISPER_MODEL_ID),
+        model_id=resolve_cached_huggingface_model_id(
+            values.get("TARTEEL_WHISPER_MODEL_ID", DEFAULT_QURAN_WHISPER_MODEL_ID),
+            cache_root=Path(values.get("TARTEEL_HF_CACHE_ROOT", str(DEFAULT_HF_CACHE_ROOT))),
+        ),
         whisper_backend=_whisper_backend(values.get("TARTEEL_WHISPER_BACKEND", "transformers")),
         language=values.get("TARTEEL_WHISPER_LANGUAGE", "ar"),
         device=_optional_env(values, "TARTEEL_WHISPER_DEVICE"),
@@ -135,3 +139,32 @@ def _whisper_backend(value: str) -> str:
 
 def _env_bool(values: Mapping[str, str], key: str) -> bool:
     return values.get(key, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_cached_huggingface_model_id(
+    model_id: str,
+    *,
+    cache_root: Path = DEFAULT_HF_CACHE_ROOT,
+) -> str:
+    if "/" not in model_id:
+        return model_id
+    if Path(model_id).exists():
+        return model_id
+
+    org, name = model_id.split("/", 1)
+    model_root = cache_root / f"models--{org}--{name}"
+    refs_main = model_root / "refs" / "main"
+    snapshots_dir = model_root / "snapshots"
+
+    if refs_main.is_file():
+        snapshot_hash = refs_main.read_text(encoding="utf-8").strip()
+        candidate = snapshots_dir / snapshot_hash
+        if candidate.is_dir():
+            return str(candidate)
+
+    if snapshots_dir.is_dir():
+        snapshots = sorted(path for path in snapshots_dir.iterdir() if path.is_dir())
+        if snapshots:
+            return str(snapshots[0])
+
+    return model_id

@@ -8,11 +8,16 @@ final class BackendWebSocketClient {
 
     func connect(
         url: URL,
+        authorizationToken: String? = nil,
         onEvent: @escaping @Sendable (RecitationEvent) -> Void
     ) async throws {
         disconnect()
 
-        let task = URLSession.shared.webSocketTask(with: url)
+        var request = URLRequest(url: url)
+        if let authorizationToken, !authorizationToken.isEmpty {
+            request.setValue("Bearer \(authorizationToken)", forHTTPHeaderField: "Authorization")
+        }
+        let task = URLSession.shared.webSocketTask(with: request)
         self.task = task
         task.resume()
 

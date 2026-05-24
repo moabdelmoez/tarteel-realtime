@@ -17,6 +17,28 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
             source.index("receiveTask = Task"),
         )
 
+    def test_websocket_client_can_attach_runpod_bearer_token(self) -> None:
+        source = (APP_ROOT / "BackendWebSocketClient.swift").read_text(encoding="utf-8")
+
+        self.assertIn("authorizationToken: String?", source)
+        self.assertIn("URLRequest(url: url)", source)
+        self.assertIn("Bearer \\(authorizationToken)", source)
+        self.assertIn('forHTTPHeaderField: "Authorization"', source)
+        self.assertIn("URLSession.shared.webSocketTask(with: request)", source)
+
+    def test_view_model_keeps_runpod_key_local_and_passes_it_to_socket_client(self) -> None:
+        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+
+        self.assertIn("@Published var runPodAPIKeyText", source)
+        self.assertIn("private var runPodAuthorizationToken", source)
+        self.assertIn("authorizationToken: runPodAuthorizationToken", source)
+
+    def test_content_view_exposes_prototype_only_runpod_key_field(self) -> None:
+        source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
+
+        self.assertIn('SecureField("RunPod API key"', source)
+        self.assertIn("prototype-only direct RunPod", source)
+
     def test_view_model_maps_simulator_socket_errors_to_actionable_guidance(self) -> None:
         source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 

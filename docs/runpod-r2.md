@@ -62,6 +62,24 @@ When `TARTEEL_DOWNLOAD_ARTIFACTS=1`, the bootstrap also downloads the default pr
 
 For Point 2 low-latency ASR replay, start the real backend with `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`. This selects `2000/1000/500` ASR buffering while preserving the existing speech RMS gates; individual `TARTEEL_ASR_*` window variables can still override the profile for one-off experiments.
 
+## RunPod Serverless Artifact Rule
+
+For the serverless prototype, prefer baking `data/tanzil/quran-simple-clean.txt`
+into the Docker image after hydrating it locally from R2. That keeps R2
+credentials out of the worker runtime and avoids paying GPU seconds for
+artifact download during cold start.
+
+If you build the image from a fresh machine, hydrate the Quran file first:
+
+```bash
+source /path/to/local-r2.env
+uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
+docker build -f Dockerfile.runpod-serverless -t <registry>/tarteel-runpod-serverless:latest .
+```
+
+Do not put R2 keys in iOS. The direct iOS prototype only needs the restricted
+RunPod API key for the WebSocket `Authorization` header.
+
 ## Private GitHub Repos On RunPod
 
 The default `TARTEEL_REPO_URL` is an HTTPS GitHub URL. This works while the repo remains public. If the repository becomes private, a fresh pod cannot clone it without GitHub credentials. The bootstrap sets `GIT_TERMINAL_PROMPT=0` so missing auth fails fast instead of hanging at a username/password prompt.
