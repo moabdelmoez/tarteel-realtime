@@ -4,11 +4,12 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototype" / "App"
+CORE_ROOT = REPO_ROOT / "ios" / "TarteelClientCore" / "Sources" / "TarteelClientCore"
 
 
 class IOSWebSocketClientSourceTests(unittest.TestCase):
     def test_websocket_client_waits_until_socket_is_open_before_streaming(self) -> None:
-        source = (APP_ROOT / "BackendWebSocketClient.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "BackendWebSocketClient.swift").read_text(encoding="utf-8")
 
         self.assertIn("try await waitUntilConnected(task)", source)
         self.assertIn("task.sendPing", source)
@@ -18,7 +19,7 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         )
 
     def test_websocket_client_can_attach_runpod_bearer_token(self) -> None:
-        source = (APP_ROOT / "BackendWebSocketClient.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "BackendWebSocketClient.swift").read_text(encoding="utf-8")
 
         self.assertIn("authorizationToken: String?", source)
         self.assertIn("URLRequest(url: url)", source)

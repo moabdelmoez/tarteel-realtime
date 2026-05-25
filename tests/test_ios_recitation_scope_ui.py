@@ -37,6 +37,10 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn(".pickerStyle(.menu)", source)
         self.assertIn("Image(systemName: \"gearshape.fill\")", source)
         self.assertIn("SettingsSheet(", source)
+        self.assertIn("SettingsSheet(viewModel: viewModel)", source)
+        self.assertIn("VoiceActivityIndicator(isActive: viewModel.isRecording)", source)
+        self.assertIn("Image(systemName: viewModel.isRecording ? \"xmark\" : \"mic.fill\")", source)
+        self.assertIn("DebugStatusPanel(", source)
 
 
 if __name__ == "__main__":
