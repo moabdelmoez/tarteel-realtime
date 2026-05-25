@@ -27,11 +27,11 @@ final class RecitationViewModel: ObservableObject {
     private var customBackendURLText = ""
 
     init(
-        socketClient: BackendWebSocketClient = BackendWebSocketClient(),
+        socketClient: BackendWebSocketClient? = nil,
         audioStreamer: MicrophoneAudioStreamer = MicrophoneAudioStreamer(),
         voiceActivityDetector: VoiceActivityDetector = VoiceActivityDetector()
     ) {
-        self.socketClient = socketClient
+        self.socketClient = socketClient ?? BackendWebSocketClient()
         self.audioStreamer = audioStreamer
         self.voiceActivityDetector = voiceActivityDetector
     }
