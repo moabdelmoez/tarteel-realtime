@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public protocol BackendSocketing: AnyObject {
     func connect(
         url: URL,

@@ -1,9 +1,9 @@
 import Foundation
 
+@MainActor
 public final class BackendWebSocketClient: BackendSocketing {
     private var task: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
-    private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     public init() {}
