@@ -1,12 +1,14 @@
 import Foundation
 
-final class BackendWebSocketClient {
+public final class BackendWebSocketClient: BackendSocketing, @unchecked Sendable {
     private var task: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    func connect(
+    public init() {}
+
+    public func connect(
         url: URL,
         authorizationToken: String? = nil,
         onEvent: @escaping @Sendable (RecitationEvent) -> Void
@@ -33,14 +35,14 @@ final class BackendWebSocketClient {
         }
     }
 
-    func send(_ payload: AudioChunkPayload) async throws {
+    public func send(_ payload: AudioChunkPayload) async throws {
         guard let task else { return }
         let data = try encoder.encode(payload)
         let text = String(decoding: data, as: UTF8.self)
         try await task.send(.string(text))
     }
 
-    func disconnect() {
+    public func disconnect() {
         receiveTask?.cancel()
         receiveTask = nil
         task?.cancel(with: .goingAway, reason: nil)

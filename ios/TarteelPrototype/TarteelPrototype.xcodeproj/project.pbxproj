@@ -20,6 +20,7 @@
 		100000000000000000000011 /* RecitationScopeSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000112 /* RecitationScopeSelection.swift */; };
 		100000000000000000000012 /* SurahCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000113 /* SurahCatalog.swift */; };
 		100000000000000000000013 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
+		100000000000000000000014 /* RecitationClientProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000116 /* RecitationClientProtocols.swift */; };
 		100000000000000000000015 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 /* End PBXBuildFile section */
@@ -29,7 +30,7 @@
 		100000000000000000000101 /* TarteelPrototypeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TarteelPrototypeApp.swift; sourceTree = "<group>"; };
 		100000000000000000000102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/ContentView.swift; sourceTree = "<group>"; };
 		100000000000000000000103 /* RecitationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RecitationViewModel.swift; sourceTree = "<group>"; };
-		100000000000000000000104 /* BackendWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/BackendWebSocketClient.swift; sourceTree = "<group>"; };
+		100000000000000000000104 /* BackendWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/BackendWebSocketClient.swift; sourceTree = "<group>"; };
 		100000000000000000000105 /* MicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
 		100000000000000000000114 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/VoiceActivityDetector.swift; sourceTree = "<group>"; };
 		100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mlmodelc; path = Models/silero-vad-unified-256ms-v6.0.0.mlmodelc; sourceTree = "<group>"; };
@@ -41,6 +42,7 @@
 		100000000000000000000111 /* VoiceActivityPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/VoiceActivityPayload.swift; sourceTree = "<group>"; };
 		100000000000000000000112 /* RecitationScopeSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationScopeSelection.swift; sourceTree = "<group>"; };
 		100000000000000000000113 /* SurahCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/SurahCatalog.swift; sourceTree = "<group>"; };
+		100000000000000000000116 /* RecitationClientProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationClientProtocols.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,7 +72,6 @@
 				100000000000000000000101 /* TarteelPrototypeApp.swift */,
 				100000000000000000000102 /* ContentView.swift */,
 				100000000000000000000103 /* RecitationViewModel.swift */,
-				100000000000000000000104 /* BackendWebSocketClient.swift */,
 				100000000000000000000105 /* MicrophoneAudioStreamer.swift */,
 				100000000000000000000114 /* VoiceActivityDetector.swift */,
 				100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */,
@@ -83,10 +84,12 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000106 /* AudioChunkPayload.swift */,
+				100000000000000000000104 /* BackendWebSocketClient.swift */,
 				100000000000000000000107 /* RecitationEvent.swift */,
 				100000000000000000000108 /* RecitationSessionState.swift */,
 				100000000000000000000110 /* BackendEndpointPreset.swift */,
 				100000000000000000000111 /* VoiceActivityPayload.swift */,
+				100000000000000000000116 /* RecitationClientProtocols.swift */,
 				100000000000000000000112 /* RecitationScopeSelection.swift */,
 				100000000000000000000113 /* SurahCatalog.swift */,
 			);
@@ -189,6 +192,7 @@
 				100000000000000000000011 /* RecitationScopeSelection.swift in Sources */,
 				100000000000000000000012 /* SurahCatalog.swift in Sources */,
 				100000000000000000000013 /* VoiceActivityDetector.swift in Sources */,
+				100000000000000000000014 /* RecitationClientProtocols.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
