@@ -5,7 +5,7 @@ import CoreML
 import FluidAudio
 #endif
 
-actor VoiceActivityDetector {
+actor VoiceActivityDetector: VoiceActivityDetecting {
     #if canImport(FluidAudio)
     private var manager: VadManager?
     private var streamState: VadStreamState?

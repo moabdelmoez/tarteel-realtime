@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 
-final class MicrophoneAudioStreamer {
+final class MicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let sampleRate = 16_000
     private var isTapInstalled = false

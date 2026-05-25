@@ -11,12 +11,12 @@ public protocol BackendSocketing: AnyObject {
     func disconnect()
 }
 
-public protocol AudioStreaming: AnyObject {
+public protocol AudioStreaming: AnyObject, Sendable {
     func start(onChunk: @escaping @Sendable (Data, Int) -> Void) async throws
     func stop()
 }
 
-public protocol VoiceActivityDetecting: AnyObject {
+public protocol VoiceActivityDetecting: AnyObject, Sendable {
     func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload?
     func reset() async
 }

@@ -47,6 +47,14 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-25 - Shared Recording Orchestration
+
+- `RecitationViewModel` moved from the iPhone app target into `TarteelClientCore` so future native clients can reuse the same recording, socket, VAD, reducer, selected-scope, and preference orchestration.
+- The shared view model uses protocol-injected `BackendSocketing`, `AudioStreaming`, `VoiceActivityDetecting`, and `RecitationPreferencesStoring`; the default `BackendWebSocketClient` is still created safely inside the `@MainActor` initializer body.
+- Local confidence is good for the client contract: red Swift package tests first failed because `RecitationViewModel` was missing from core, then Swift client core passed with 28 tests, focused iOS source guardrails passed with 11 tests, additional touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built successfully after clearing stale derived-data caches.
+- Release posture: safe as an architecture refactor for shared clients. It does not change or prove live ASR quality.
+
+
 ### 2026-05-25 - iOS Clean Home And Settings Sheet
 
 - The iOS prototype home screen now uses a white, readable recitation-focused layout instead of exposing backend controls inline.

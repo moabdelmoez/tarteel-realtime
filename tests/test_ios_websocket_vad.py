@@ -4,6 +4,7 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototype" / "App"
+CORE_ROOT = REPO_ROOT / "ios" / "TarteelClientCore" / "Sources" / "TarteelClientCore"
 PROJECT_PATH = (
     REPO_ROOT
     / "ios"
@@ -29,13 +30,13 @@ class IOSWebSocketVADSourceTests(unittest.TestCase):
 
     def test_voice_activity_detector_resets_stream_state_on_stop(self) -> None:
         source = (APP_ROOT / "VoiceActivityDetector.swift").read_text(encoding="utf-8")
-        view_model = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        view_model = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
         self.assertIn("func reset() async", source)
         self.assertIn("await voiceActivityDetector.reset()", view_model)
 
     def test_websocket_path_uses_app_microphone_streamer_and_vad_before_transport(self) -> None:
-        view_model = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        view_model = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
         self.assertIn("audioStreamer.start", view_model)
         self.assertIn("voiceActivityDetector.process", view_model)

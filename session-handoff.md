@@ -2,48 +2,37 @@
 
 ## Verified Now
 
-- Latest slice: iOS clean home/settings UI, completed on 2026-05-25.
+- Latest slice: Task 4, shared recording orchestration, completed on 2026-05-25.
 - WebSocket `/ws/recitation` remains the only recitation transport.
-- The iOS home screen is now a light recitation surface:
-  - top-right gear button
-  - status and ayah panel
-  - Ready/listening state text
-  - Auto/Surah segmented control
-  - Surah picker when Surah mode is active
-  - voice activity indicator
-  - mic button
-- Backend technical controls now live in the gear settings sheet:
-  - backend preset
-  - custom WebSocket URL
-  - prototype-only RunPod API key
-- The app still sends selected-recitation `scope` through `BackendEndpointPreset.recordingURLText(currentURLText:recitationScope:)`.
-- Direct RunPod access remains prototype-only because the RunPod API key is entered into the app and sent from the client.
+- `RecitationViewModel` now lives in shared core at `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationViewModel.swift`.
+- The app-local `ios/TarteelPrototype/TarteelPrototype/App/RecitationViewModel.swift` was deleted.
+- `RecitationViewModel` is a public `@MainActor ObservableObject` with injected:
+  - `BackendSocketing`
+  - `AudioStreaming`
+  - `VoiceActivityDetecting`
+  - `RecitationPreferencesStoring`
+- `BackendWebSocketClient` remains the default socket, but it is created inside the initializer body to avoid `@MainActor` default-argument isolation problems.
+- The iPhone app injects `MicrophoneAudioStreamer()` and `VoiceActivityDetector()` from `TarteelPrototypeApp.swift`.
+- The iPhone target compiles shared `RecitationViewModel.swift`, `RecitationMode.swift`, and `RecitationPreferencesStore.swift` through project file references.
+- The iOS clean home/settings UI remains unchanged from the user-facing perspective.
 
 ## Verification
 
-- Red source tests failed first for the old layout:
-  - missing `Image(systemName: "gearshape.fill")`
-  - missing `private struct SettingsSheet`
-- Focused iOS source checks passed:
+- Red TDD run failed first as expected:
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
+  - Failure: `cannot find 'RecitationViewModel' in scope`.
+- Swift client core passed after implementation with 28 tests.
+- Focused iOS source guardrails passed:
   - `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
-- Swift client core passed:
-  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
-- iOS app build:
-  - First sandboxed attempt failed because CoreSimulator access and the FluidAudio GitHub fetch were blocked.
-  - Approved rerun passed:
-    `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-clean-home CODE_SIGNING_ALLOWED=NO build`
-- Simulator visual sanity check passed:
-  - Installed and launched `dev.mostafa.TarteelPrototype` in the booted iPhone 17 Pro simulator.
-  - Screenshot captured at `/private/tmp/tarteel-clean-home.png`.
-- Final harness checks passed:
-  - `uv run python -B -m json.tool feature_list.json`
-  - `git diff --check`
-  - `uv run python -B -m unittest discover -s tests -v` with 197 tests.
+- Additional touched iOS source guardrails passed:
+  - `uv run python -B -m unittest tests.test_ios_websocket_vad tests.test_ios_audio_streamer -v` with 7 tests.
+- iOS app build passed with the requested derived-data path after clearing stale derived-data caches:
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
 
 ## Current Risks
 
-- Settings sheet interaction was compile/source verified but not manually tapped through in the simulator during this slice.
-- No live backend or microphone behavior changed; this does not prove live ASR quality.
+- This was an orchestration move, not a live backend or microphone quality proof.
+- The app target still compiles shared core source files directly; a future cleanup could make the app depend on the Swift package product instead.
 - RunPod Serverless endpoint deployment is still outstanding:
   - no Docker image build/push
   - no endpoint creation
@@ -51,7 +40,7 @@
 
 ## Next Best Step
 
-Manually open the iOS gear settings sheet in Simulator and verify backend fields are editable while idle and disabled while recording, then resume the RunPod Serverless proof:
+Continue the native macOS app task by reusing shared `RecitationViewModel` and providing macOS-specific audio/VAD adapters. The RunPod Serverless proof remains a separate outstanding path:
 
 - build and push the serverless image
 - create a RunPod Load Balancer endpoint with `Active workers = 0`, `Max workers = 1`

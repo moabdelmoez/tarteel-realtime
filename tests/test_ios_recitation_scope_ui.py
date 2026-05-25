@@ -17,10 +17,11 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn("return \"\\(id)\"", source)
 
     def test_view_model_builds_recording_url_with_selected_recitation_scope(self) -> None:
-        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
-        self.assertIn("@Published private(set) var recitationMode", source)
-        self.assertIn("@Published var selectedSurahID", source)
+        self.assertFalse((APP_ROOT / "RecitationViewModel.swift").exists())
+        self.assertIn("@Published public private(set) var recitationMode", source)
+        self.assertIn("@Published public var selectedSurahID", source)
         self.assertIn("func selectRecitationMode", source)
         self.assertIn("private var recitationScopeSelection", source)
         self.assertIn("recitationScope: recitationScopeSelection", source)

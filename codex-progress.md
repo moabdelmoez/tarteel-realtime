@@ -22,6 +22,31 @@
 ## Session Log
 
 
+### Session 075
+
+- Date: 2026-05-25
+- Goal: Move iOS recording orchestration from the app target into shared `TarteelClientCore` for reuse by future native clients.
+- Completed:
+  - Added failing package tests first in `ios/TarteelClientCore/Tests/TarteelClientCoreTests/RecitationViewModelTests.swift`; the first run failed because `RecitationViewModel` was not in the core package.
+  - Moved recording orchestration into `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationViewModel.swift` as a public `@MainActor ObservableObject`.
+  - Injected `BackendSocketing`, `AudioStreaming`, `VoiceActivityDetecting`, and `RecitationPreferencesStoring`; kept `BackendWebSocketClient` default construction inside the initializer body to avoid actor-isolated default argument issues.
+  - Deleted the app-local `TarteelPrototype/App/RecitationViewModel.swift`; `RecitationMode` now comes from shared core.
+  - Conformed `MicrophoneAudioStreamer` to `AudioStreaming` and `VoiceActivityDetector` to `VoiceActivityDetecting`.
+  - Updated `TarteelPrototypeApp.swift` to inject `MicrophoneAudioStreamer()` and `VoiceActivityDetector()` into the shared view model.
+  - Updated the Xcode project so the app target compiles the shared `RecitationViewModel.swift`, `RecitationMode.swift`, and `RecitationPreferencesStore.swift` without duplicating `RecitationClientProtocols.swift`.
+  - Updated iOS source guardrails to assert the app-local view model is gone and the shared-core orchestration owns selected scope, RunPod auth, VAD payloads, and reducer updates.
+- Verification run:
+  - Red TDD run failed first: `swift test` from `ios/TarteelClientCore` reported `cannot find 'RecitationViewModel' in scope`.
+  - Green Swift client core run passed with 28 tests after implementation.
+  - Focused source guardrails passed: `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
+  - Additional touched iOS source guardrails passed: `uv run python -B -m unittest tests.test_ios_websocket_vad tests.test_ios_audio_streamer -v` with 7 tests.
+  - iOS app build initially failed because `/private/tmp/tarteel-xcode-derived` had a stale FluidAudio checkout and then a stale explicit module cache; after clearing the derived-data directory, the requested xcodebuild command passed.
+- Known risk or unresolved issue:
+  - This is a client architecture move only. It does not change or prove live ASR quality.
+  - The app target still compiles shared source files directly through the Xcode project rather than consuming the Swift package product.
+- Next best step: continue the native macOS app work by reusing the shared `RecitationViewModel` with macOS-specific audio/VAD adapters.
+
+
 ### Session 074
 
 - Date: 2026-05-25

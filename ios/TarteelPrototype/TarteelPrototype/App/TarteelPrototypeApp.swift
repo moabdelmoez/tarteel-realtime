@@ -4,7 +4,10 @@ import SwiftUI
 struct TarteelPrototypeApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView(viewModel: RecitationViewModel())
+            ContentView(viewModel: RecitationViewModel(
+                audioStreamer: MicrophoneAudioStreamer(),
+                voiceActivityDetector: VoiceActivityDetector()
+            ))
         }
     }
 }

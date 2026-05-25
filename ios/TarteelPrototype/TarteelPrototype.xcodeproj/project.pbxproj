@@ -23,13 +23,15 @@
 		100000000000000000000014 /* RecitationClientProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000116 /* RecitationClientProtocols.swift */; };
 		100000000000000000000015 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
+		100000000000000000000017 /* RecitationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000117 /* RecitationMode.swift */; };
+		100000000000000000000018 /* RecitationPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000118 /* RecitationPreferencesStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		100000000000000000000020 /* TarteelPrototype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TarteelPrototype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000101 /* TarteelPrototypeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TarteelPrototypeApp.swift; sourceTree = "<group>"; };
 		100000000000000000000102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/ContentView.swift; sourceTree = "<group>"; };
-		100000000000000000000103 /* RecitationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RecitationViewModel.swift; sourceTree = "<group>"; };
+		100000000000000000000103 /* RecitationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationViewModel.swift; sourceTree = "<group>"; };
 		100000000000000000000104 /* BackendWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/BackendWebSocketClient.swift; sourceTree = "<group>"; };
 		100000000000000000000105 /* MicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
 		100000000000000000000114 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/VoiceActivityDetector.swift; sourceTree = "<group>"; };
@@ -43,6 +45,8 @@
 		100000000000000000000112 /* RecitationScopeSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationScopeSelection.swift; sourceTree = "<group>"; };
 		100000000000000000000113 /* SurahCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/SurahCatalog.swift; sourceTree = "<group>"; };
 		100000000000000000000116 /* RecitationClientProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationClientProtocols.swift; sourceTree = "<group>"; };
+		100000000000000000000117 /* RecitationMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationMode.swift; sourceTree = "<group>"; };
+		100000000000000000000118 /* RecitationPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationPreferencesStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,7 +75,6 @@
 			children = (
 				100000000000000000000101 /* TarteelPrototypeApp.swift */,
 				100000000000000000000102 /* ContentView.swift */,
-				100000000000000000000103 /* RecitationViewModel.swift */,
 				100000000000000000000105 /* MicrophoneAudioStreamer.swift */,
 				100000000000000000000114 /* VoiceActivityDetector.swift */,
 				100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */,
@@ -90,6 +93,9 @@
 				100000000000000000000110 /* BackendEndpointPreset.swift */,
 				100000000000000000000111 /* VoiceActivityPayload.swift */,
 				100000000000000000000116 /* RecitationClientProtocols.swift */,
+				100000000000000000000117 /* RecitationMode.swift */,
+				100000000000000000000118 /* RecitationPreferencesStore.swift */,
+				100000000000000000000103 /* RecitationViewModel.swift */,
 				100000000000000000000112 /* RecitationScopeSelection.swift */,
 				100000000000000000000113 /* SurahCatalog.swift */,
 			);
@@ -193,6 +199,8 @@
 				100000000000000000000012 /* SurahCatalog.swift in Sources */,
 				100000000000000000000013 /* VoiceActivityDetector.swift in Sources */,
 				100000000000000000000014 /* RecitationClientProtocols.swift in Sources */,
+				100000000000000000000017 /* RecitationMode.swift in Sources */,
+				100000000000000000000018 /* RecitationPreferencesStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

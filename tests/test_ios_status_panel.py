@@ -14,9 +14,9 @@ CONTENT_VIEW_PATH = (
 VIEW_MODEL_PATH = (
     REPO_ROOT
     / "ios"
-    / "TarteelPrototype"
-    / "TarteelPrototype"
-    / "App"
+    / "TarteelClientCore"
+    / "Sources"
+    / "TarteelClientCore"
     / "RecitationViewModel.swift"
 )
 

@@ -1,47 +1,68 @@
 import Combine
 import Foundation
 
-enum RecitationMode: String, CaseIterable, Hashable, Identifiable {
-    case autoDetect
-    case selectedSurah
-
-    var id: String { rawValue }
-}
-
 @MainActor
-final class RecitationViewModel: ObservableObject {
-    @Published private(set) var state = RecitationSessionState()
-    @Published private(set) var isRecording = false
-    @Published private(set) var errorMessage: String?
-    @Published private(set) var backendPreset = BackendEndpointPreset.simulator
-    @Published private(set) var recitationMode = RecitationMode.autoDetect
-    @Published private(set) var connectionStatus = "Idle"
-    @Published var backendURLText = BackendEndpointPreset.simulator.defaultURLText
-    @Published var selectedSurahID = 108
-    @Published var runPodAPIKeyText = ""
+public final class RecitationViewModel: ObservableObject {
+    @Published public private(set) var state = RecitationSessionState()
+    @Published public private(set) var isRecording = false
+    @Published public private(set) var errorMessage: String?
+    @Published public private(set) var backendPreset = BackendEndpointPreset.simulator
+    @Published public private(set) var recitationMode = RecitationMode.autoDetect
+    @Published public private(set) var connectionStatus = "Idle"
+    @Published public var backendURLText = BackendEndpointPreset.simulator.defaultURLText {
+        didSet {
+            guard backendPreset == .custom else { return }
+            customBackendURLText = backendURLText
+            preferencesStore.customBackendURLText = backendURLText
+        }
+    }
+    @Published public var selectedSurahID = 108 {
+        didSet {
+            preferencesStore.selectedSurahID = selectedSurahID
+        }
+    }
+    @Published public var runPodAPIKeyText = ""
 
-    private let socketClient: BackendWebSocketClient
-    private let audioStreamer: MicrophoneAudioStreamer
-    private let voiceActivityDetector: VoiceActivityDetector
+    private let socketClient: BackendSocketing
+    private let audioStreamer: AudioStreaming
+    private let voiceActivityDetector: VoiceActivityDetecting
+    private var preferencesStore: RecitationPreferencesStoring
     private var sequenceNumber = 0
     private var customBackendURLText = ""
 
-    init(
-        socketClient: BackendWebSocketClient? = nil,
-        audioStreamer: MicrophoneAudioStreamer = MicrophoneAudioStreamer(),
-        voiceActivityDetector: VoiceActivityDetector = VoiceActivityDetector()
+    public init(
+        socketClient: BackendSocketing? = nil,
+        audioStreamer: AudioStreaming,
+        voiceActivityDetector: VoiceActivityDetecting,
+        preferencesStore: RecitationPreferencesStoring = UserDefaultsRecitationPreferencesStore()
     ) {
         self.socketClient = socketClient ?? BackendWebSocketClient()
         self.audioStreamer = audioStreamer
         self.voiceActivityDetector = voiceActivityDetector
+        self.preferencesStore = preferencesStore
+
+        let storedPreset = preferencesStore.backendPreset
+        let storedCustomURLText = preferencesStore.customBackendURLText
+        backendPreset = storedPreset
+        customBackendURLText = storedCustomURLText
+        recitationMode = preferencesStore.recitationMode
+        selectedSurahID = preferencesStore.selectedSurahID
+        switch storedPreset {
+        case .simulator:
+            backendURLText = storedPreset.defaultURLText
+        case .custom:
+            backendURLText = storedCustomURLText
+        }
     }
 
-    func selectBackendPreset(_ preset: BackendEndpointPreset) {
+    public func selectBackendPreset(_ preset: BackendEndpointPreset) {
         if backendPreset == .custom {
             customBackendURLText = backendURLText
+            preferencesStore.customBackendURLText = backendURLText
         }
 
         backendPreset = preset
+        preferencesStore.backendPreset = preset
         switch preset {
         case .simulator:
             backendURLText = preset.defaultURLText
@@ -50,8 +71,9 @@ final class RecitationViewModel: ObservableObject {
         }
     }
 
-    func selectRecitationMode(_ mode: RecitationMode) {
+    public func selectRecitationMode(_ mode: RecitationMode) {
         recitationMode = mode
+        preferencesStore.recitationMode = mode
     }
 
     private var recitationScopeSelection: RecitationScopeSelection {
@@ -69,9 +91,11 @@ final class RecitationViewModel: ObservableObject {
         return token.isEmpty ? nil : token
     }
 
-    func toggleRecording() {
+    public func toggleRecording() {
         if isRecording {
-            stopRecording()
+            Task {
+                await stopRecording()
+            }
             return
         }
 
@@ -80,7 +104,7 @@ final class RecitationViewModel: ObservableObject {
         }
     }
 
-    private func startRecording() async {
+    func startRecording() async {
         errorMessage = nil
         connectionStatus = "Connecting"
         sequenceNumber = 0
@@ -135,7 +159,7 @@ final class RecitationViewModel: ObservableObject {
                 detail: "Start reciting"
             )
         } catch {
-            stopRecording()
+            await stopRecording()
             errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"
         }
@@ -157,16 +181,16 @@ final class RecitationViewModel: ObservableObject {
         do {
             try await socketClient.send(payload)
         } catch {
-            stopRecording()
+            await stopRecording()
             errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"
         }
     }
 
-    private func stopRecording() {
+    func stopRecording() async {
         audioStreamer.stop()
         socketClient.disconnect()
-        Task { await voiceActivityDetector.reset() }
+        await voiceActivityDetector.reset()
         isRecording = false
         connectionStatus = "Stopped"
         state = RecitationSessionState(

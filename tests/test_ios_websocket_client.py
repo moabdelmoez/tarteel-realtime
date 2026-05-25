@@ -28,9 +28,10 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         self.assertIn("URLSession.shared.webSocketTask(with: request)", source)
 
     def test_view_model_keeps_runpod_key_local_and_passes_it_to_socket_client(self) -> None:
-        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
-        self.assertIn("@Published var runPodAPIKeyText", source)
+        self.assertFalse((APP_ROOT / "RecitationViewModel.swift").exists())
+        self.assertIn("@Published public var runPodAPIKeyText", source)
         self.assertIn("private var runPodAuthorizationToken", source)
         self.assertIn("authorizationToken: runPodAuthorizationToken", source)
 
@@ -42,14 +43,14 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         self.assertIn("prototype-only direct RunPod", source)
 
     def test_view_model_maps_simulator_socket_errors_to_actionable_guidance(self) -> None:
-        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
         self.assertIn("errorMessage(for: error, backendPreset: backendPreset)", source)
         self.assertIn("Start the local Simulator backend", source)
         self.assertIn("Socket is not connected", source)
 
     def test_view_model_uses_websocket_transport_for_all_presets(self) -> None:
-        source = (APP_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
+        source = (CORE_ROOT / "RecitationViewModel.swift").read_text(encoding="utf-8")
 
         self.assertIn("try await socketClient.connect", source)
         self.assertIn("await self?.sendAudioChunk", source)
