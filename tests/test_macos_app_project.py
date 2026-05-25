@@ -59,6 +59,7 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("NSAppTransportSecurity", plist)
         self.assertNotIn("LSRequiresIPhoneOS", plist)
         self.assertNotIn("UIApplicationSceneManifest", plist)
+        self.assertNotIn("UIApplicationSupportsIndirectInputEvents", plist)
         self.assertNotIn("UILaunchScreen", plist)
 
     def test_macos_sources_define_desktop_app_surface(self) -> None:
