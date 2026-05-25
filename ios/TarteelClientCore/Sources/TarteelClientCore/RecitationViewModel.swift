@@ -29,6 +29,9 @@ public final class RecitationViewModel: ObservableObject {
     private var preferencesStore: RecitationPreferencesStoring
     private var sequenceNumber = 0
     private var customBackendURLText = ""
+    private var isStartingRecording = false
+    private var audioSendTask: Task<Void, Never>?
+    private var audioQueueGeneration = 0
 
     public init(
         socketClient: BackendSocketing? = nil,
@@ -99,15 +102,25 @@ public final class RecitationViewModel: ObservableObject {
             return
         }
 
+        guard !isStartingRecording else { return }
         Task {
             await startRecording()
         }
     }
 
     func startRecording() async {
+        guard !isStartingRecording, !isRecording else { return }
+        isStartingRecording = true
+        defer {
+            isStartingRecording = false
+        }
+
         errorMessage = nil
         connectionStatus = "Connecting"
         sequenceNumber = 0
+        audioSendTask?.cancel()
+        audioSendTask = nil
+        audioQueueGeneration += 1
         await voiceActivityDetector.reset()
         state = RecitationSessionState(
             phase: .connecting,
@@ -147,7 +160,7 @@ public final class RecitationViewModel: ObservableObject {
 
             try await audioStreamer.start { [weak self] pcm, sampleRate in
                 Task { @MainActor in
-                    await self?.sendAudioChunk(pcm: pcm, sampleRate: sampleRate)
+                    self?.enqueueAudioChunk(pcm: pcm, sampleRate: sampleRate)
                 }
             }
 
@@ -165,18 +178,41 @@ public final class RecitationViewModel: ObservableObject {
         }
     }
 
-    private func sendAudioChunk(pcm: Data, sampleRate: Int) async {
+    private func enqueueAudioChunk(pcm: Data, sampleRate: Int) {
+        let chunkSequence = sequenceNumber
+        sequenceNumber += 1
+        let previousTask = audioSendTask
+        let generation = audioQueueGeneration
+        audioSendTask = Task { [weak self, previousTask] in
+            _ = await previousTask?.result
+            guard !Task.isCancelled else { return }
+            await self?.sendAudioChunk(
+                sequenceNumber: chunkSequence,
+                pcm: pcm,
+                sampleRate: sampleRate,
+                generation: generation
+            )
+        }
+    }
+
+    private func sendAudioChunk(
+        sequenceNumber: Int,
+        pcm: Data,
+        sampleRate: Int,
+        generation: Int
+    ) async {
+        guard isAudioQueueActive(generation: generation) else { return }
         let voiceActivity = await voiceActivityDetector.process(
             pcm: pcm,
             sampleRate: sampleRate
         )
+        guard isAudioQueueActive(generation: generation) else { return }
         let payload = AudioChunkPayload(
             sequenceNumber: sequenceNumber,
             pcm: pcm,
             sampleRateHz: sampleRate,
             voiceActivity: voiceActivity
         )
-        sequenceNumber += 1
 
         do {
             try await socketClient.send(payload)
@@ -187,8 +223,15 @@ public final class RecitationViewModel: ObservableObject {
         }
     }
 
+    private func isAudioQueueActive(generation: Int) -> Bool {
+        generation == audioQueueGeneration && (isRecording || isStartingRecording)
+    }
+
     func stopRecording() async {
         audioStreamer.stop()
+        audioQueueGeneration += 1
+        audioSendTask?.cancel()
+        audioSendTask = nil
         socketClient.disconnect()
         await voiceActivityDetector.reset()
         isRecording = false

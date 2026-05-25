@@ -34,6 +34,26 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isRecording)
     }
 
+    func testDuplicateToggleWhileConnectingOnlyStartsOneSocketConnection() async throws {
+        let socket = SuspendedConnectSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        viewModel.toggleRecording()
+        await socket.waitForConnectCount(1)
+        viewModel.toggleRecording()
+        await drainScheduledTasks()
+
+        XCTAssertEqual(socket.connectCallCount, 1)
+
+        await socket.releaseAllConnections()
+        await drainScheduledTasks()
+    }
+
     func testAudioChunksIncludeVADPayloadAndIncrementSequence() async throws {
         let socket = FakeSocket()
         let audio = FakeAudioStreamer()
@@ -56,6 +76,35 @@ final class RecitationViewModelTests: XCTestCase {
 
         XCTAssertEqual(socket.sentPayloads.map(\.sequenceNumber), [0, 1])
         XCTAssertEqual(socket.sentPayloads.map(\.voiceActivity), expectedVoiceActivity)
+    }
+
+    func testAudioChunksWaitForPreviousVADAndKeepCaptureOrderSequences() async throws {
+        let socket = FakeSocket()
+        let audio = FakeAudioStreamer()
+        let vad = FirstChunkSuspendingVoiceActivityDetector()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: vad,
+            preferencesStore: FakePreferencesStore()
+        )
+
+        await viewModel.startRecording()
+        await audio.emit(pcm: Data([0x01]), sampleRate: 16_000)
+        await vad.waitForProcessCount(1)
+        await audio.emit(pcm: Data([0x02]), sampleRate: 16_000)
+        await drainScheduledTasks()
+
+        let processCountWhileFirstChunkIsSuspended = await vad.currentProcessCount()
+        XCTAssertEqual(processCountWhileFirstChunkIsSuspended, 1)
+        XCTAssertEqual(socket.sentPayloads.count, 0)
+
+        await vad.releaseFirstProcess()
+        await vad.waitForProcessCount(2)
+        await drainScheduledTasks()
+
+        XCTAssertEqual(socket.sentPayloads.map(\.sequenceNumber), [0, 1])
+        XCTAssertEqual(socket.sentPayloads.map(\.pcm), [Data([0x01]), Data([0x02])])
     }
 
     func testSocketEventsReduceRecitationSessionState() async throws {
@@ -164,6 +213,91 @@ private final class FakeAudioStreamer: AudioStreaming, @unchecked Sendable {
     func emit(pcm: Data, sampleRate: Int) async {
         onChunk?(pcm, sampleRate)
         await drainScheduledTasks()
+    }
+}
+
+@MainActor
+private final class SuspendedConnectSocket: BackendSocketing {
+    private(set) var connectCallCount = 0
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var connectionContinuations: [CheckedContinuation<Void, Never>] = []
+
+    func connect(
+        url: URL,
+        authorizationToken: String?,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async throws {
+        connectCallCount += 1
+        resumeSatisfiedWaiters()
+        await withCheckedContinuation { continuation in
+            connectionContinuations.append(continuation)
+        }
+    }
+
+    func send(_ payload: AudioChunkPayload) async throws {}
+
+    func disconnect() {}
+
+    func waitForConnectCount(_ count: Int) async {
+        guard connectCallCount < count else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append((count, continuation))
+        }
+    }
+
+    func releaseAllConnections() async {
+        let continuations = connectionContinuations
+        connectionContinuations.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        let ready = waiters.filter { connectCallCount >= $0.0 }
+        waiters.removeAll { connectCallCount >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+}
+
+private actor FirstChunkSuspendingVoiceActivityDetector: VoiceActivityDetecting {
+    private(set) var processCount = 0
+    private var firstProcessContinuation: CheckedContinuation<VoiceActivityPayload?, Never>?
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload? {
+        processCount += 1
+        resumeSatisfiedWaiters()
+        if processCount == 1 {
+            return await withCheckedContinuation { continuation in
+                firstProcessContinuation = continuation
+            }
+        }
+        return VoiceActivityPayload(probability: 0.2, isSpeechActive: false, event: .speechEnd)
+    }
+
+    func reset() async {}
+
+    func waitForProcessCount(_ count: Int) async {
+        guard processCount < count else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append((count, continuation))
+        }
+    }
+
+    func currentProcessCount() -> Int {
+        processCount
+    }
+
+    func releaseFirstProcess() {
+        firstProcessContinuation?.resume(
+            returning: VoiceActivityPayload(probability: 0.8, isSpeechActive: true, event: .speechStart)
+        )
+        firstProcessContinuation = nil
+    }
+
+    private func resumeSatisfiedWaiters() {
+        let ready = waiters.filter { processCount >= $0.0 }
+        waiters.removeAll { processCount >= $0.0 }
+        ready.forEach { $0.1.resume() }
     }
 }
 

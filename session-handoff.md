@@ -12,6 +12,8 @@
   - `VoiceActivityDetecting`
   - `RecitationPreferencesStoring`
 - `BackendWebSocketClient` remains the default socket, but it is created inside the initializer body to avoid `@MainActor` default-argument isolation problems.
+- Duplicate start attempts while the first connection is still in flight are ignored through an `isStartingRecording` guard.
+- Audio chunks are queued through a chained `audioSendTask`; sequence numbers are assigned synchronously in capture order before VAD, and queued sends are canceled/invalidated on stop.
 - The iPhone app injects `MicrophoneAudioStreamer()` and `VoiceActivityDetector()` from `TarteelPrototypeApp.swift`.
 - The iPhone target compiles shared `RecitationViewModel.swift`, `RecitationMode.swift`, and `RecitationPreferencesStore.swift` through project file references.
 - The iOS clean home/settings UI remains unchanged from the user-facing perspective.
@@ -21,7 +23,10 @@
 - Red TDD run failed first as expected:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
   - Failure: `cannot find 'RecitationViewModel' in scope`.
-- Swift client core passed after implementation with 28 tests.
+- Swift client core passed after implementation with 33 tests total: 9 XCTest-style tests plus 24 Swift Testing tests.
+- Review regression tests first failed before the fix:
+  - duplicate `toggleRecording()` while connect was suspended called `socket.connect` twice
+  - the second audio chunk reached VAD/send before the first suspended VAD call completed
 - Focused iOS source guardrails passed:
   - `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
 - Additional touched iOS source guardrails passed:

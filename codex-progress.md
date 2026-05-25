@@ -35,9 +35,11 @@
   - Updated `TarteelPrototypeApp.swift` to inject `MicrophoneAudioStreamer()` and `VoiceActivityDetector()` into the shared view model.
   - Updated the Xcode project so the app target compiles the shared `RecitationViewModel.swift`, `RecitationMode.swift`, and `RecitationPreferencesStore.swift` without duplicating `RecitationClientProtocols.swift`.
   - Updated iOS source guardrails to assert the app-local view model is gone and the shared-core orchestration owns selected scope, RunPod auth, VAD payloads, and reducer updates.
+  - Fixed review-found orchestration races by guarding duplicate starts while connecting and serializing audio chunk handling through a chained send task that assigns sequence numbers in capture order before awaiting VAD.
 - Verification run:
   - Red TDD run failed first: `swift test` from `ios/TarteelClientCore` reported `cannot find 'RecitationViewModel' in scope`.
-  - Green Swift client core run passed with 28 tests after implementation.
+  - Review regression tests failed before the fix: duplicate toggle reached `connect` twice, and a second chunk reached VAD/send while the first chunk was still suspended.
+  - Green Swift client core run passed with 33 tests total: 9 XCTest-style tests plus 24 Swift Testing tests.
   - Focused source guardrails passed: `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
   - Additional touched iOS source guardrails passed: `uv run python -B -m unittest tests.test_ios_websocket_vad tests.test_ios_audio_streamer -v` with 7 tests.
   - iOS app build initially failed because `/private/tmp/tarteel-xcode-derived` had a stale FluidAudio checkout and then a stale explicit module cache; after clearing the derived-data directory, the requested xcodebuild command passed.

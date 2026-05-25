@@ -51,7 +51,8 @@ Before treating a future slice as passing:
 
 - `RecitationViewModel` moved from the iPhone app target into `TarteelClientCore` so future native clients can reuse the same recording, socket, VAD, reducer, selected-scope, and preference orchestration.
 - The shared view model uses protocol-injected `BackendSocketing`, `AudioStreaming`, `VoiceActivityDetecting`, and `RecitationPreferencesStoring`; the default `BackendWebSocketClient` is still created safely inside the `@MainActor` initializer body.
-- Local confidence is good for the client contract: red Swift package tests first failed because `RecitationViewModel` was missing from core, then Swift client core passed with 28 tests, focused iOS source guardrails passed with 11 tests, additional touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built successfully after clearing stale derived-data caches.
+- A follow-up review fix guards duplicate starts while the first connect is in flight and serializes audio chunk handling so VAD processing and socket sends stay FIFO with capture-order sequence numbers.
+- Local confidence is good for the client contract: red Swift package tests first failed because `RecitationViewModel` was missing from core, review regression tests then failed for duplicate connect and out-of-order chunk processing before the fix, Swift client core passed with 33 tests total (9 XCTest-style tests plus 24 Swift Testing tests), focused iOS source guardrails passed with 11 tests, additional touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built successfully after clearing stale derived-data caches.
 - Release posture: safe as an architecture refactor for shared clients. It does not change or prove live ASR quality.
 
 
