@@ -1,6 +1,6 @@
 import Foundation
 
-public final class BackendWebSocketClient: BackendSocketing, @unchecked Sendable {
+public final class BackendWebSocketClient: BackendSocketing {
     private var task: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private let decoder = JSONDecoder()
@@ -30,8 +30,9 @@ public final class BackendWebSocketClient: BackendSocketing, @unchecked Sendable
             throw error
         }
 
-        receiveTask = Task { [weak self] in
-            await self?.receiveLoop(onEvent: onEvent)
+        let socketTask = task
+        receiveTask = Task { @Sendable in
+            await Self.receiveLoop(task: socketTask, onEvent: onEvent)
         }
     }
 
@@ -49,13 +50,15 @@ public final class BackendWebSocketClient: BackendSocketing, @unchecked Sendable
         task = nil
     }
 
-    private func receiveLoop(onEvent: @escaping @Sendable (RecitationEvent) -> Void) async {
-        guard let task else { return }
-
+    private static func receiveLoop(
+        task: URLSessionWebSocketTask,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async {
+        let decoder = JSONDecoder()
         while !Task.isCancelled {
             do {
                 let message = try await task.receive()
-                if let event = try decodeEvent(from: message) {
+                if let event = try decodeEvent(from: message, decoder: decoder) {
                     onEvent(event)
                 }
             } catch {
@@ -76,7 +79,10 @@ public final class BackendWebSocketClient: BackendSocketing, @unchecked Sendable
         }
     }
 
-    private func decodeEvent(from message: URLSessionWebSocketTask.Message) throws -> RecitationEvent? {
+    private static func decodeEvent(
+        from message: URLSessionWebSocketTask.Message,
+        decoder: JSONDecoder
+    ) throws -> RecitationEvent? {
         switch message {
         case .data(let data):
             return try decoder.decode(RecitationEvent.self, from: data)
