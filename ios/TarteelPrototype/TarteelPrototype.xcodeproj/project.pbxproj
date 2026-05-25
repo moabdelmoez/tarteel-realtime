@@ -25,6 +25,25 @@
 		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 		100000000000000000000017 /* RecitationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000117 /* RecitationMode.swift */; };
 		100000000000000000000018 /* RecitationPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000118 /* RecitationPreferencesStore.swift */; };
+		200000000000000000000001 /* TarteelPrototypeMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000101 /* TarteelPrototypeMacApp.swift */; };
+		200000000000000000000002 /* MacContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000102 /* MacContentView.swift */; };
+		200000000000000000000003 /* MacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000103 /* MacSettingsView.swift */; };
+		200000000000000000000004 /* MacMicrophoneAudioStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000104 /* MacMicrophoneAudioStreamer.swift */; };
+		200000000000000000000005 /* AudioChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000106 /* AudioChunkPayload.swift */; };
+		200000000000000000000006 /* BackendEndpointPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000110 /* BackendEndpointPreset.swift */; };
+		200000000000000000000007 /* BackendWebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000104 /* BackendWebSocketClient.swift */; };
+		200000000000000000000008 /* RecitationClientProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000116 /* RecitationClientProtocols.swift */; };
+		200000000000000000000009 /* RecitationEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000107 /* RecitationEvent.swift */; };
+		200000000000000000000010 /* RecitationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000117 /* RecitationMode.swift */; };
+		200000000000000000000011 /* RecitationPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000118 /* RecitationPreferencesStore.swift */; };
+		200000000000000000000012 /* RecitationScopeSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000112 /* RecitationScopeSelection.swift */; };
+		200000000000000000000013 /* RecitationSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000108 /* RecitationSessionState.swift */; };
+		200000000000000000000014 /* RecitationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000103 /* RecitationViewModel.swift */; };
+		200000000000000000000015 /* SurahCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000113 /* SurahCatalog.swift */; };
+		200000000000000000000016 /* VoiceActivityPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000111 /* VoiceActivityPayload.swift */; };
+		200000000000000000000017 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
+		200000000000000000000018 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
+		200000000000000000000019 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +66,12 @@
 		100000000000000000000116 /* RecitationClientProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationClientProtocols.swift; sourceTree = "<group>"; };
 		100000000000000000000117 /* RecitationMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationMode.swift; sourceTree = "<group>"; };
 		100000000000000000000118 /* RecitationPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationPreferencesStore.swift; sourceTree = "<group>"; };
+		200000000000000000000020 /* TarteelPrototypeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TarteelPrototypeMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000101 /* TarteelPrototypeMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TarteelPrototypeMacApp.swift; sourceTree = "<group>"; };
+		200000000000000000000102 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacContentView.swift; sourceTree = "<group>"; };
+		200000000000000000000103 /* MacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacSettingsView.swift; sourceTree = "<group>"; };
+		200000000000000000000104 /* MacMicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacMicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
+		200000000000000000000105 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +83,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		200000000000000000000030 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000019 /* FluidAudio in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -65,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000041 /* TarteelPrototype */,
+				200000000000000000000041 /* TarteelPrototypeMac */,
 				100000000000000000000042 /* Shared Core */,
 				100000000000000000000043 /* Products */,
 			);
@@ -106,8 +140,21 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000020 /* TarteelPrototype.app */,
+				200000000000000000000020 /* TarteelPrototypeMac.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		200000000000000000000041 /* TarteelPrototypeMac */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000101 /* TarteelPrototypeMacApp.swift */,
+				200000000000000000000102 /* MacContentView.swift */,
+				200000000000000000000103 /* MacSettingsView.swift */,
+				200000000000000000000104 /* MacMicrophoneAudioStreamer.swift */,
+				200000000000000000000105 /* Info.plist */,
+			);
+			path = TarteelPrototypeMac;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -133,6 +180,26 @@
 			productReference = 100000000000000000000020 /* TarteelPrototype.app */;
 			productType = "com.apple.product-type.application";
 		};
+		200000000000000000000050 /* TarteelPrototypeMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 200000000000000000000080 /* Build configuration list for PBXNativeTarget "TarteelPrototypeMac" */;
+			buildPhases = (
+				200000000000000000000060 /* Sources */,
+				200000000000000000000030 /* Frameworks */,
+				200000000000000000000070 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TarteelPrototypeMac;
+			packageProductDependencies = (
+				100000000000000000000203 /* FluidAudio */,
+			);
+			productName = TarteelPrototypeMac;
+			productReference = 200000000000000000000020 /* TarteelPrototypeMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -144,6 +211,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					100000000000000000000050 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					200000000000000000000050 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -165,6 +235,7 @@
 			projectRoot = "";
 			targets = (
 				100000000000000000000050 /* TarteelPrototype */,
+				200000000000000000000050 /* TarteelPrototypeMac */,
 			);
 		};
 /* End PBXProject section */
@@ -175,6 +246,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		200000000000000000000070 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000018 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,6 +280,30 @@
 				100000000000000000000014 /* RecitationClientProtocols.swift in Sources */,
 				100000000000000000000017 /* RecitationMode.swift in Sources */,
 				100000000000000000000018 /* RecitationPreferencesStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		200000000000000000000060 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000001 /* TarteelPrototypeMacApp.swift in Sources */,
+				200000000000000000000002 /* MacContentView.swift in Sources */,
+				200000000000000000000003 /* MacSettingsView.swift in Sources */,
+				200000000000000000000004 /* MacMicrophoneAudioStreamer.swift in Sources */,
+				200000000000000000000005 /* AudioChunkPayload.swift in Sources */,
+				200000000000000000000006 /* BackendEndpointPreset.swift in Sources */,
+				200000000000000000000007 /* BackendWebSocketClient.swift in Sources */,
+				200000000000000000000008 /* RecitationClientProtocols.swift in Sources */,
+				200000000000000000000009 /* RecitationEvent.swift in Sources */,
+				200000000000000000000010 /* RecitationMode.swift in Sources */,
+				200000000000000000000011 /* RecitationPreferencesStore.swift in Sources */,
+				200000000000000000000012 /* RecitationScopeSelection.swift in Sources */,
+				200000000000000000000013 /* RecitationSessionState.swift in Sources */,
+				200000000000000000000014 /* RecitationViewModel.swift in Sources */,
+				200000000000000000000015 /* SurahCatalog.swift in Sources */,
+				200000000000000000000016 /* VoiceActivityPayload.swift in Sources */,
+				200000000000000000000017 /* VoiceActivityDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,6 +477,54 @@
 			};
 			name = Release;
 		};
+		200000000000000000000083 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TarteelPrototypeMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mostafa.TarteelPrototypeMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		200000000000000000000084 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TarteelPrototypeMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.mostafa.TarteelPrototypeMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -391,6 +542,15 @@
 			buildConfigurations = (
 				100000000000000000000081 /* Debug */,
 				100000000000000000000082 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		200000000000000000000080 /* Build configuration list for PBXNativeTarget "TarteelPrototypeMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				200000000000000000000083 /* Debug */,
+				200000000000000000000084 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
