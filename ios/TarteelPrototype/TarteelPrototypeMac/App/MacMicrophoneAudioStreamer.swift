@@ -38,7 +38,7 @@ final class MacMicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
 
             let frameCapacity = max(
                 1,
-                AVAudioFrameCount(Double(buffer.frameLength) * outputFormat.sampleRate / sourceFormat.sampleRate)
+                AVAudioFrameCount(ceil(Double(buffer.frameLength) * outputFormat.sampleRate / sourceFormat.sampleRate))
             )
             guard let converted = AVAudioPCMBuffer(
                 pcmFormat: outputFormat,
@@ -48,7 +48,14 @@ final class MacMicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
             }
 
             var error: NSError?
+            var didProvideInput = false
             converter.convert(to: converted, error: &error) { _, status in
+                guard !didProvideInput else {
+                    status.pointee = .noDataNow
+                    return nil
+                }
+
+                didProvideInput = true
                 status.pointee = .haveData
                 return buffer
             }
