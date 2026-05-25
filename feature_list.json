@@ -210,9 +210,9 @@
         {
             "id": "mobile-001",
             "priority": 10,
-            "area": "ios",
-            "title": "Native iPhone prototype",
-            "user_visible_behavior": "A user can tap a mic, stream audio chunks to the backend, and see voice-first correction events.",
+            "area": "apple-client",
+            "title": "Native iPhone and macOS prototypes",
+            "user_visible_behavior": "A user can tap a mic on iPhone or macOS, stream audio chunks to the backend, and see voice-first correction events.",
             "status": "passing",
             "verification": [
                 "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore.",
@@ -222,7 +222,9 @@
                 "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend.",
                 "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v for selected-recitation UI source guardrails.",
                 "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore after scope URL or catalog changes.",
-                "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after home-screen or settings UI changes."
+                "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after home-screen or settings UI changes.",
+                "Run uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after Apple client project/source changes.",
+                "Run xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build after macOS app changes."
             ],
             "evidence": [
                 "Added ios/TarteelClientCore Swift package with tested backend event decoding, audio chunk JSON encoding, and mobile session-state reduction.",
@@ -249,9 +251,11 @@
                 "Clean-home simulator visual sanity check passed: installed and launched dev.mostafa.TarteelPrototype in the booted iPhone 17 Pro simulator and captured /private/tmp/tarteel-clean-home.png.",
                 "Clean-home final harness checks passed: feature_list.json validation, git diff --check, and full deterministic Python suite with 197 tests.",
                 "Recording orchestration moved into TarteelClientCore as a public @MainActor RecitationViewModel with protocol-injected BackendSocketing, AudioStreaming, VoiceActivityDetecting, and RecitationPreferencesStoring; the iPhone app injects MicrophoneAudioStreamer and VoiceActivityDetector.",
-                "Shared recording orchestration red test first failed because RecitationViewModel was missing from the core package; follow-up review regression tests then failed before the fix for duplicate connect while starting, out-of-order audio chunk handling, stale startup completion, stale send failure, and stale socket callback behavior. After implementation, Swift client core passed with 36 tests total (12 XCTest-style tests plus 24 Swift Testing tests), focused iOS source guardrails passed with 11 tests, touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built at /private/tmp/tarteel-xcode-derived after clearing stale derived-data caches."
+                "Shared recording orchestration red test first failed because RecitationViewModel was missing from the core package; follow-up review regression tests then failed before the fix for duplicate connect while starting, out-of-order audio chunk handling, stale startup completion, stale send failure, and stale socket callback behavior. After implementation, Swift client core passed with 36 tests total (12 XCTest-style tests plus 24 Swift Testing tests), focused iOS source guardrails passed with 11 tests, touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built at /private/tmp/tarteel-xcode-derived after clearing stale derived-data caches.",
+                "Native macOS prototype target TarteelPrototypeMac was added in the existing Xcode project with bundle id dev.mostafa.TarteelPrototypeMac, macOS 14 deployment, separate macOS Info.plist, native Settings scene, desktop status console, AVAudioEngine microphone capture, shared RecitationViewModel orchestration, FluidAudio/CoreML Silero VAD, and no App Sandbox entitlements.",
+                "Native macOS final verification passed: uv run python -B -m json.tool feature_list.json; uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v with 16 tests; Swift client core with 36 tests total; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode package/cache access was blocked; git diff --check; and uv run python -B -m unittest discover -s tests -v with 202 tests."
             ],
-            "notes": "Passing for the native WebSocket prototype plus selected-recitation UI and direct RunPod prototype auth wiring. Manual Simulator/physical-device testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
+            "notes": "Passing for native iPhone and macOS WebSocket prototypes plus selected-recitation UI and direct RunPod prototype auth wiring. Manual Simulator/physical-device/macOS microphone testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },
         {
             "id": "backend-002",

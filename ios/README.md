@@ -1,6 +1,6 @@
-# iOS Prototype
+# Apple Prototypes
 
-This folder contains the first native iPhone prototype for the realtime recitation flow.
+This folder contains the native Apple prototypes for the realtime recitation flow.
 
 ## Run The Backend
 
@@ -57,6 +57,24 @@ The app uses one microphone pipeline for every backend preset: `MicrophoneAudioS
 ```bash
 xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
 ```
+
+## macOS Prototype
+
+The same Xcode project also contains a native macOS developer prototype target:
+
+```bash
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build
+```
+
+The macOS app defaults to:
+
+```text
+ws://127.0.0.1:8000/ws/recitation
+```
+
+It uses a native Settings window for backend preset, custom URL, and the prototype-only RunPod API key. Non-secret settings persist between launches. The RunPod API key is memory-only unless a later Keychain slice adds secure storage.
+
+The macOS app captures microphone input, converts it to mono 16 kHz PCM16, runs the bundled FluidAudio/CoreML Silero VAD when available, and sends the same `AudioChunkPayload` shape as the iPhone app.
 
 Or open:
 

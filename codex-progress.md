@@ -22,6 +22,29 @@
 ## Session Log
 
 
+### Session 076
+
+- Date: 2026-05-25
+- Goal: Add a native macOS SwiftUI prototype alongside the existing iPhone app.
+- Completed:
+  - Added shared Apple client protocols, preferences, WebSocket transport, and recording orchestration in `TarteelClientCore`.
+  - Preserved the iPhone clean home/settings UI while injecting iPhone microphone and VAD dependencies.
+  - Added native macOS app sources, separate macOS plist, Settings scene, desktop recitation surface, status console, macOS microphone capture, and bundled VAD resource wiring.
+  - Added Xcode target `TarteelPrototypeMac` with bundle id `dev.mostafa.TarteelPrototypeMac`, macOS 14 deployment, FluidAudio linkage, and no App Sandbox entitlements.
+- Verification run:
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 36 tests total.
+  - Focused Apple source/project guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 16 tests.
+  - iPhone app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - macOS app build passed after escalated rerun for Xcode package/cache access: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Whitespace check passed: `git diff --check`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 202 tests.
+- Known risk or unresolved issue:
+  - Manual macOS microphone testing was not part of this automated build slice.
+  - RunPod live-ASR proof remains a separate acceptance step.
+- Next best step: manually launch the macOS app, grant microphone permission, and test local backend recording against `/ws/recitation`.
+
+
 ### Session 075
 
 - Date: 2026-05-25

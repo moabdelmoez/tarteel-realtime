@@ -47,6 +47,15 @@ Before treating a future slice as passing:
 ## Quality Log
 
 
+### 2026-05-25 - Native macOS Prototype
+
+- Added a native macOS SwiftUI developer prototype target beside the existing iPhone target in the same Xcode project, without moving the Apple client tree out of `ios/`.
+- The macOS app reuses the shared `RecitationViewModel`, shared WebSocket transport, shared preferences, and existing FluidAudio/CoreML Silero VAD path while injecting a macOS `AVAudioEngine` microphone streamer.
+- The macOS target uses a separate macOS plist, macOS 14 deployment, native Settings scene, desktop status console, and no App Sandbox entitlements for this developer prototype slice.
+- Local confidence is build-level: Swift client core passed with 36 tests total, focused Apple guardrails passed with 16 tests, iPhone and macOS app targets both built, JSON validation and whitespace checks passed, and the full deterministic Python suite passed with 202 tests.
+- Release posture: good for a developer prototype and shared-client architecture proof. Manual macOS microphone and live RunPod ASR testing remain next-slice acceptance work.
+
+
 ### 2026-05-25 - Shared Recording Orchestration
 
 - `RecitationViewModel` moved from the iPhone app target into `TarteelClientCore` so future native clients can reuse the same recording, socket, VAD, reducer, selected-scope, and preference orchestration.
