@@ -107,6 +107,31 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(socket.sentPayloads.map(\.pcm), [Data([0x01]), Data([0x02])])
     }
 
+    func testStaleQueuedAudioSendFailureAfterRestartDoesNotStopNewSession() async throws {
+        let socket = FailingSuspendedSendSocket()
+        let firstAudio = FakeAudioStreamer()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: firstAudio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        await viewModel.startRecording()
+        await firstAudio.emit(pcm: Data([0x01]), sampleRate: 16_000)
+        await socket.waitForSendCount(1)
+        await viewModel.stopRecording()
+        await viewModel.startRecording()
+
+        await socket.failSuspendedSends()
+        await drainScheduledTasks()
+
+        XCTAssertTrue(viewModel.isRecording)
+        XCTAssertEqual(viewModel.connectionStatus, "Streaming")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(socket.disconnectCount, 1)
+    }
+
     func testSocketEventsReduceRecitationSessionState() async throws {
         let socket = FakeSocket()
         let viewModel = RecitationViewModel(
@@ -140,6 +165,42 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.state.currentAyahText, "قُلْ هُوَ اللَّهُ أَحَدٌ")
         XCTAssertEqual(viewModel.state.lastEventType, .locked)
         XCTAssertEqual(viewModel.connectionStatus, "Receiving events")
+    }
+
+    func testStaleSocketEventAfterStopDoesNotMutateStoppedState() async throws {
+        let socket = ConnectionCapturingSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        await viewModel.startRecording()
+        await viewModel.stopRecording()
+        await socket.emit(
+            event: RecitationEvent(
+                type: .locked,
+                transcript: "old transcript",
+                confidence: 0.9,
+                chunkSequence: 7,
+                reason: "stale",
+                candidateRefs: [],
+                ayahText: "old ayah",
+                ayahRef: "2:1",
+                startRef: "2:1:1",
+                nextExpectedRef: nil,
+                consumedWords: 2,
+                expectedRef: nil,
+                expectedWord: nil,
+                recognizedWord: nil
+            ),
+            connectionIndex: 0
+        )
+
+        XCTAssertEqual(viewModel.state.phase, .stopped)
+        XCTAssertNil(viewModel.state.currentAyahRef)
+        XCTAssertEqual(viewModel.connectionStatus, "Stopped")
     }
 
     func testStopDisconnectsAndResetsVAD() async throws {
@@ -212,6 +273,73 @@ private final class FakeAudioStreamer: AudioStreaming, @unchecked Sendable {
 
     func emit(pcm: Data, sampleRate: Int) async {
         onChunk?(pcm, sampleRate)
+        await drainScheduledTasks()
+    }
+}
+
+@MainActor
+private final class FailingSuspendedSendSocket: BackendSocketing {
+    private(set) var disconnectCount = 0
+    private var sendCount = 0
+    private var sendWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var suspendedSends: [CheckedContinuation<Void, Error>] = []
+
+    func connect(
+        url: URL,
+        authorizationToken: String?,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async throws {}
+
+    func send(_ payload: AudioChunkPayload) async throws {
+        sendCount += 1
+        resumeSatisfiedWaiters()
+        try await withCheckedThrowingContinuation { continuation in
+            suspendedSends.append(continuation)
+        }
+    }
+
+    func disconnect() {
+        disconnectCount += 1
+    }
+
+    func waitForSendCount(_ count: Int) async {
+        guard sendCount < count else { return }
+        await withCheckedContinuation { continuation in
+            sendWaiters.append((count, continuation))
+        }
+    }
+
+    func failSuspendedSends() async {
+        let continuations = suspendedSends
+        suspendedSends.removeAll()
+        continuations.forEach { $0.resume(throwing: TestSocketError.sendFailed) }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        let ready = sendWaiters.filter { sendCount >= $0.0 }
+        sendWaiters.removeAll { sendCount >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+}
+
+@MainActor
+private final class ConnectionCapturingSocket: BackendSocketing {
+    private var onEvents: [@Sendable (RecitationEvent) -> Void] = []
+
+    func connect(
+        url: URL,
+        authorizationToken: String?,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async throws {
+        onEvents.append(onEvent)
+    }
+
+    func send(_ payload: AudioChunkPayload) async throws {}
+
+    func disconnect() {}
+
+    func emit(event: RecitationEvent, connectionIndex: Int) async {
+        onEvents[connectionIndex](event)
         await drainScheduledTasks()
     }
 }
@@ -342,5 +470,13 @@ private struct FakePreferencesStore: RecitationPreferencesStoring {
         self.customBackendURLText = customBackendURLText
         self.recitationMode = recitationMode
         self.selectedSurahID = selectedSurahID
+    }
+}
+
+private enum TestSocketError: LocalizedError {
+    case sendFailed
+
+    var errorDescription: String? {
+        "send failed"
     }
 }

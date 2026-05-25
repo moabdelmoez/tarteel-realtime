@@ -217,7 +217,7 @@
             "verification": [
                 "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore.",
                 "Run xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build.",
-                "Run uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_former-room-transport_vad -v for app source guardrails.",
+                "Run uv run python -B -m unittest tests.test_ios_websocket_client tests.test_ios_status_panel tests.test_ios_audio_streamer tests.test_ios_websocket_vad -v for app source guardrails.",
                 "Launch the app in Simulator and verify the initial mic screen renders.",
                 "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend.",
                 "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v for selected-recitation UI source guardrails.",
@@ -338,7 +338,7 @@
                 "Document the RunPod/backend URL flow needed for the iPhone app to reach the real ASR backend.",
                 "Run Swift client core tests after any iOS event-state change.",
                 "Run uv run python -B -m unittest discover locally after backend/client contract changes.",
-                "Run uv run python -B -m unittest tests.test_ios_former-room-transport_vad -v after iOS VAD or former room transport source changes.",
+                "Run uv run python -B -m unittest tests.test_ios_websocket_vad -v after iOS VAD source changes.",
                 "Manually verify the simulator can connect to the former room transport Cloud real ASR path and surface waiting_for_audio_buffer plus locked events."
             ],
             "evidence": [

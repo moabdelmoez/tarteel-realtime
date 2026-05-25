@@ -14,6 +14,7 @@
 - `BackendWebSocketClient` remains the default socket, but it is created inside the initializer body to avoid `@MainActor` default-argument isolation problems.
 - Duplicate start attempts while the first connection is still in flight are ignored through an `isStartingRecording` guard.
 - Audio chunks are queued through a chained `audioSendTask`; sequence numbers are assigned synchronously in capture order before VAD, and queued sends are canceled/invalidated on stop.
+- Delayed audio send failures and stale socket events are generation-gated so old work cannot mutate stopped or restarted session UI.
 - The iPhone app injects `MicrophoneAudioStreamer()` and `VoiceActivityDetector()` from `TarteelPrototypeApp.swift`.
 - The iPhone target compiles shared `RecitationViewModel.swift`, `RecitationMode.swift`, and `RecitationPreferencesStore.swift` through project file references.
 - The iOS clean home/settings UI remains unchanged from the user-facing perspective.
@@ -27,6 +28,9 @@
 - Review regression tests first failed before the fix:
   - duplicate `toggleRecording()` while connect was suspended called `socket.connect` twice
   - the second audio chunk reached VAD/send before the first suspended VAD call completed
+- Stale-generation regressions first failed before the fix:
+  - delayed old audio send failure stopped the restarted session and set a stale error
+  - old socket callback after stop moved the UI out of stopped state
 - Focused iOS source guardrails passed:
   - `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
 - Additional touched iOS source guardrails passed:

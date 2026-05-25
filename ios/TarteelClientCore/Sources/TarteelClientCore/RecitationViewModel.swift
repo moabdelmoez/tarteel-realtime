@@ -140,12 +140,14 @@ public final class RecitationViewModel: ObservableObject {
                 throw RecitationViewModelError.invalidBackendURL
             }
 
+            let generation = audioQueueGeneration
             try await socketClient.connect(
                 url: backendURL,
                 authorizationToken: runPodAuthorizationToken
             ) { [weak self] event in
                 Task { @MainActor in
                     guard let self else { return }
+                    guard self.isAudioQueueActive(generation: generation) else { return }
                     let currentState = self.state
                     let nextState = currentState.applying(event)
                     if nextState != currentState {
@@ -217,6 +219,7 @@ public final class RecitationViewModel: ObservableObject {
         do {
             try await socketClient.send(payload)
         } catch {
+            guard isAudioQueueActive(generation: generation) else { return }
             await stopRecording()
             errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"
