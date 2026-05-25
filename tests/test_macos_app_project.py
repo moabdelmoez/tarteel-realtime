@@ -1,5 +1,6 @@
 from pathlib import Path
 import plistlib
+import re
 import unittest
 
 
@@ -44,9 +45,21 @@ class MacOSAppProjectTests(unittest.TestCase):
 
     def test_project_includes_vad_model_resource_for_iphone_and_macos(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
+        resource_phase_section = re.search(
+            r"/\* Begin PBXResourcesBuildPhase section \*/(.*?)/\* End PBXResourcesBuildPhase section \*/",
+            project,
+            flags=re.DOTALL,
+        )
+        resource_phase_bodies = re.findall(
+            r"isa = PBXResourcesBuildPhase;.*?files = \((.*?)\);",
+            resource_phase_section.group(1) if resource_phase_section else "",
+            flags=re.DOTALL,
+        )
 
-        self.assertGreaterEqual(project.count(f"{MODEL_NAME} in Resources"), 2)
-        self.assertIn(MODEL_NAME, project)
+        self.assertGreaterEqual(
+            sum(1 for phase_body in resource_phase_bodies if MODEL_NAME in phase_body),
+            2,
+        )
 
     def test_macos_info_plist_is_not_ios_plist(self) -> None:
         with MAC_PLIST_PATH.open("rb") as file:
