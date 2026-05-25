@@ -13,6 +13,31 @@ MODEL_NAME = "silero-vad-unified-256ms-v6.0.0.mlmodelc"
 
 
 class MacOSAppProjectTests(unittest.TestCase):
+    def _target_block(self, project: str, target_name: str) -> str:
+        match = re.search(
+            rf"\n\t\t[A-Fa-f0-9]+ /\* {re.escape(target_name)} \*/ = \{{(?P<body>\n\t\t\tisa = PBXNativeTarget;.*?)\n\t\t\}};",
+            project,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match, f"Missing PBXNativeTarget block for {target_name}")
+        return match.group("body")
+
+    def _target_phase_body(self, project: str, target_name: str, phase_name: str) -> str:
+        target_body = self._target_block(project, target_name)
+        phase_id_match = re.search(
+            rf"([A-Fa-f0-9]+) /\* {re.escape(phase_name)} \*/",
+            target_body,
+        )
+        self.assertIsNotNone(phase_id_match, f"Missing {phase_name} phase for {target_name}")
+        phase_id = phase_id_match.group(1)
+        phase_match = re.search(
+            rf"\n\t\t{re.escape(phase_id)} /\* {re.escape(phase_name)} \*/ = \{{(?P<body>.*?)\n\t\t\}};",
+            project,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(phase_match, f"Missing {phase_name} phase body for {target_name}")
+        return phase_match.group("body")
+
     def test_project_declares_native_macos_target(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
 
@@ -26,6 +51,8 @@ class MacOSAppProjectTests(unittest.TestCase):
 
     def test_project_includes_shared_core_files_in_both_app_targets(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
+        iphone_sources = self._target_phase_body(project, "TarteelPrototype", "Sources")
+        mac_sources = self._target_phase_body(project, "TarteelPrototypeMac", "Sources")
 
         for filename in [
             "AudioChunkPayload.swift",
@@ -41,25 +68,16 @@ class MacOSAppProjectTests(unittest.TestCase):
             "SurahCatalog.swift",
             "VoiceActivityPayload.swift",
         ]:
-            self.assertIn(filename, project)
+            self.assertIn(filename, iphone_sources)
+            self.assertIn(filename, mac_sources)
 
     def test_project_includes_vad_model_resource_for_iphone_and_macos(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
-        resource_phase_section = re.search(
-            r"/\* Begin PBXResourcesBuildPhase section \*/(.*?)/\* End PBXResourcesBuildPhase section \*/",
-            project,
-            flags=re.DOTALL,
-        )
-        resource_phase_bodies = re.findall(
-            r"isa = PBXResourcesBuildPhase;.*?files = \((.*?)\);",
-            resource_phase_section.group(1) if resource_phase_section else "",
-            flags=re.DOTALL,
-        )
+        iphone_resources = self._target_phase_body(project, "TarteelPrototype", "Resources")
+        mac_resources = self._target_phase_body(project, "TarteelPrototypeMac", "Resources")
 
-        self.assertGreaterEqual(
-            sum(1 for phase_body in resource_phase_bodies if MODEL_NAME in phase_body),
-            2,
-        )
+        self.assertIn(MODEL_NAME, iphone_resources)
+        self.assertIn(MODEL_NAME, mac_resources)
 
     def test_macos_info_plist_is_not_ios_plist(self) -> None:
         with MAC_PLIST_PATH.open("rb") as file:
