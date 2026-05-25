@@ -108,7 +108,7 @@ public final class RecitationViewModel: ObservableObject {
         }
     }
 
-    func startRecording() async {
+    public func startRecording() async {
         guard !isStartingRecording, !isRecording else { return }
         isStartingRecording = true
         defer {
@@ -230,7 +230,7 @@ public final class RecitationViewModel: ObservableObject {
         generation == audioQueueGeneration && (isRecording || isStartingRecording)
     }
 
-    func stopRecording() async {
+    public func stopRecording() async {
         audioStreamer.stop()
         audioQueueGeneration += 1
         audioSendTask?.cancel()
