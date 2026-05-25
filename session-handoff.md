@@ -2,53 +2,58 @@
 
 ## Verified Now
 
-- Active slice: RunPod Serverless prototype path, isolated in `.worktrees/runpod-serverless-prototype` on branch `codex/runpod-serverless-prototype`.
-- Base: `main` commit `5d0edd9` (`Add iOS selected-recitation UI`).
+- Latest slice: iOS clean home/settings UI, completed on 2026-05-25.
 - WebSocket `/ws/recitation` remains the only recitation transport.
-- Backend now exposes both `/health` and `/ping`; `/ping` is for RunPod Load Balancer health checks.
-- Serverless packaging files:
-  - `Dockerfile.runpod-serverless`
-  - `.dockerignore`
-  - `scripts/runpod_serverless_start.sh`
-  - `docs/runpod-serverless.md`
-- The serverless start script defaults to:
-  - `TARTEEL_WHISPER_BACKEND=faster-whisper`
-  - `TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran`
-  - `TARTEEL_WHISPER_DEVICE=cuda:0`
-  - `TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16`
-  - `TARTEEL_HF_CACHE_ROOT=/runpod-volume/huggingface-cache/hub`
-  - `TARTEEL_ASR_BUFFERING_PROFILE=low-latency`
-- `settings_from_env(...)` resolves cached RunPod Hugging Face snapshots under `TARTEEL_HF_CACHE_ROOT` when present, and falls back to the model ID locally.
-- iOS Custom endpoint handling now accepts bare serverless hosts like `<endpoint-id>.api.runpod.ai`, normalizes them to `wss://.../ws/recitation`, and keeps selected-recitation `scope` query behavior.
-- iOS direct RunPod access is prototype-only: a local `RunPod API key` field sends `Authorization: Bearer <token>` on Custom WebSocket connections. Do not commit or document real keys.
+- The iOS home screen is now a light recitation surface:
+  - top-right gear button
+  - status and ayah panel
+  - Ready/listening state text
+  - Auto/Surah segmented control
+  - Surah picker when Surah mode is active
+  - voice activity indicator
+  - mic button
+- Backend technical controls now live in the gear settings sheet:
+  - backend preset
+  - custom WebSocket URL
+  - prototype-only RunPod API key
+- The app still sends selected-recitation `scope` through `BackendEndpointPreset.recordingURLText(currentURLText:recitationScope:)`.
+- Direct RunPod access remains prototype-only because the RunPod API key is entered into the app and sent from the client.
 
 ## Verification
 
-- Red tests failed first for missing `/ping`, missing serverless Docker/start files, missing `.api.runpod.ai` normalization, missing iOS bearer-token support, and missing cached Hugging Face snapshot resolution.
-- Focused serverless/backend/iOS checks passed:
-  - `uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v` with 28 tests.
-  - `uv run python -B -m unittest tests.test_asr_runtime tests.test_asr_app -v` with 14 tests.
-  - `bash -n scripts/runpod_serverless_start.sh`.
-  - `uv run python -m compileall -q tarteel_realtime tests`.
-  - Swift client core: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
-- Full deterministic Python suite passed after final harness updates with 197 tests.
-- `uv run python -B -m json.tool feature_list.json` passed.
-- `git diff --check` passed.
+- Red source tests failed first for the old layout:
+  - missing `Image(systemName: "gearshape.fill")`
+  - missing `private struct SettingsSheet`
+- Focused iOS source checks passed:
+  - `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
+- Swift client core passed:
+  - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
 - iOS app build:
-  - First attempt using `/private/tmp/tarteel-xcode-derived` failed due stale `FluidAudio` package checkout/CoreSimulator access.
-  - Rerun with escalated permissions and fresh derived data `/private/tmp/tarteel-xcode-derived-serverless` succeeded.
+  - First sandboxed attempt failed because CoreSimulator access and the FluidAudio GitHub fetch were blocked.
+  - Approved rerun passed:
+    `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-clean-home CODE_SIGNING_ALLOWED=NO build`
+- Simulator visual sanity check passed:
+  - Installed and launched `dev.mostafa.TarteelPrototype` in the booted iPhone 17 Pro simulator.
+  - Screenshot captured at `/private/tmp/tarteel-clean-home.png`.
+- Final harness checks passed:
+  - `uv run python -B -m json.tool feature_list.json`
+  - `git diff --check`
+  - `uv run python -B -m unittest discover -s tests -v` with 197 tests.
 
 ## Current Risks
 
-- No RunPod Serverless endpoint has been deployed yet.
-- Docker image build/push has not been run.
-- No real endpoint cold-start, worker runtime, scale-to-zero, billing, or scoped fixture replay evidence exists yet.
-- Direct iOS-to-RunPod is not production-safe because the RunPod API key lives in the client during prototype testing.
-- The Docker build expects `data/tanzil/quran-simple-clean.txt` to be hydrated locally before build. Keep R2 keys local and out of iOS/runtime docs.
+- Settings sheet interaction was compile/source verified but not manually tapped through in the simulator during this slice.
+- No live backend or microphone behavior changed; this does not prove live ASR quality.
+- RunPod Serverless endpoint deployment is still outstanding:
+  - no Docker image build/push
+  - no endpoint creation
+  - no cold-start, worker runtime, scale-to-zero, billing, or scoped fixture replay evidence
 
 ## Next Best Step
 
-Build and push the serverless image, create a RunPod Load Balancer endpoint with `Active workers = 0`, `Max workers = 1`, GPU `L4/A5000/3090`, and cached model `OdyAsh/faster-whisper-base-ar-quran`, then replay:
+Manually open the iOS gear settings sheet in Simulator and verify backend fields are editable while idle and disabled while recording, then resume the RunPod Serverless proof:
 
-- `108001`, `108002`, `108003` with `?scope=108`
-- `004001`, `004002`, `004003` with `?scope=4:1-3`
+- build and push the serverless image
+- create a RunPod Load Balancer endpoint with `Active workers = 0`, `Max workers = 1`
+- replay `108001`, `108002`, `108003` with `?scope=108`
+- replay `004001`, `004002`, `004003` with `?scope=4:1-3`

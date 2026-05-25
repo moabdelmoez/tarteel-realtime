@@ -36,6 +36,10 @@ For a RunPod real-ASR backend, enter the exposed WSS URL in `Custom`:
 wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 ```
 
+## Backend Settings
+
+The home screen keeps recitation controls visible and moves backend setup behind the gear button. Open settings to choose the `Simulator` or `Custom` backend preset, edit the custom WebSocket URL, or enter the prototype-only RunPod API key for direct RunPod testing.
+
 ## Recitation Scope
 
 The app starts in `Auto` mode, which leaves Quran location detection global. Switch to `Surah` and choose a surah from the menu when the user already knows what they will recite. In `Surah` mode, the app appends `scope=<surah-id>` to the WebSocket URL before recording starts, for example:

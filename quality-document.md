@@ -4,7 +4,7 @@ Rolling quality record for the Tarteel real-time Quran recitation MVP.
 
 ## Current Baseline
 
-- Date: 2026-05-24
+- Date: 2026-05-25
 - Overall status: good enough MVP, not production-grade
 - Initial quality score: 8.0 / 10
 - Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build, WebSocket simulator verification, RunPod real-ASR proof paths, and documented R2/GitHub bootstrap flow.
@@ -45,6 +45,15 @@ Before treating a future slice as passing:
 - Keep `feature_list.json` with at most one `in_progress` feature.
 
 ## Quality Log
+
+
+### 2026-05-25 - iOS Clean Home And Settings Sheet
+
+- The iOS prototype home screen now uses a white, readable recitation-focused layout instead of exposing backend controls inline.
+- Backend preset, custom WebSocket URL, and prototype-only RunPod API key moved behind a gear settings sheet; Auto/Surah and Surah picker remain on the home screen because they are recitation controls.
+- Local confidence is good for this UI organization slice: source guardrails first failed on the old layout, then focused iOS source checks passed with 11 tests, Swift client core passed with 24 tests, the iOS app target built successfully after approved CoreSimulator/package access, and final harness checks passed with feature JSON validation, whitespace check, and 197 deterministic Python tests.
+- A simulator visual sanity check installed and launched the rebuilt app in the booted iPhone 17 Pro simulator and captured `/private/tmp/tarteel-clean-home.png`.
+- Release posture: ready for manual settings-sheet interaction testing. This slice does not change or prove live ASR behavior.
 
 
 ### 2026-05-24 - RunPod Serverless Prototype Path

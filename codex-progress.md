@@ -13,12 +13,36 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
+- Current iOS UI direction: the home screen is a light recitation surface. Backend preset, custom WebSocket URL, and RunPod API key live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
 - Current highest-priority unfinished feature: deploy the RunPod Serverless Load Balancer prototype, measure cold start/scale-to-zero, then run scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
 - Current blocker: the serverless worker packaging and direct iOS prototype auth path are locally verified, but no RunPod Serverless endpoint has been deployed yet; live endpoint latency, billing, and real-ASR quality remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 074
+
+- Date: 2026-05-25
+- Goal: Modernize the iOS prototype home screen, move technical backend controls behind a settings gear, and switch the screen to a readable white visual style.
+- Completed:
+  - Added a short design spec at `docs/superpowers/specs/2026-05-25-ios-clean-home-settings-design.md` and implementation plan at `docs/superpowers/plans/2026-05-25-ios-clean-home-settings.md`.
+  - Updated iOS source guardrails so the home screen must expose the gear/settings entry point while keeping Auto/Surah and the Surah menu on the home surface.
+  - Refactored `ContentView.swift` into a white recitation home with dark/slate text, teal accents, a top-right gear icon, the existing status/ayah panel, Auto/Surah controls, voice activity indicator, and mic button.
+  - Moved backend preset selection, backend URL, and prototype-only RunPod API key into `SettingsSheet`.
+  - Installed and launched the rebuilt app in the booted iPhone 17 Pro simulator; screenshot captured at `/private/tmp/tarteel-clean-home.png`.
+- Verification run:
+  - Red source tests first failed for missing `gearshape.fill` and missing `SettingsSheet`, confirming the new guardrails caught the old layout.
+  - Focused iOS source checks passed: `uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 11 tests.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 24 tests.
+  - iOS app build initially failed in the sandbox because CoreSimulator access and the FluidAudio GitHub fetch were blocked; the approved rerun passed with fresh derived data at `/private/tmp/tarteel-xcode-derived-ios-clean-home`.
+  - Simulator install/launch/screenshot passed with `xcrun simctl`.
+  - Final harness checks passed: `uv run python -B -m json.tool feature_list.json`, `git diff --check`, and `uv run python -B -m unittest discover -s tests -v` with 197 tests.
+- Known risk or unresolved issue:
+  - This is a visual/UI organization slice only. No live backend, mic, or RunPod ASR behavior changed.
+  - The settings sheet was compile/source verified, but not manually interacted with in the simulator during this slice.
+- Next best step: manually open the gear sheet in Simulator, verify backend fields are editable when idle and disabled while recording, then continue with the RunPod Serverless deployment proof.
 
 
 ### Session 073

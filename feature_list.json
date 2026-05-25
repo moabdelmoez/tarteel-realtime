@@ -1,6 +1,6 @@
 {
     "project": "tarteel-realtime",
-    "last_updated": "2026-05-24",
+    "last_updated": "2026-05-25",
     "rules": {
         "single_active_feature": true,
         "passing_requires_evidence": true,
@@ -221,7 +221,8 @@
                 "Launch the app in Simulator and verify the initial mic screen renders.",
                 "Manually tap the mic and verify locked/progress/wrong events using fake recognizer backend.",
                 "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui -v for selected-recitation UI source guardrails.",
-                "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore after scope URL or catalog changes."
+                "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore after scope URL or catalog changes.",
+                "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after home-screen or settings UI changes."
             ],
             "evidence": [
                 "Added ios/TarteelClientCore Swift package with tested backend event decoding, audio chunk JSON encoding, and mobile session-state reduction.",
@@ -242,7 +243,11 @@
                 "BackendEndpointPreset.recordingURLText(currentURLText:recitationScope:) appends or replaces scope=<surah-id> for selected Surah mode, removes app-managed scope for Auto mode, and preserves unrelated query parameters.",
                 "Selected-recitation UI checks passed: Swift client core 23 tests, tests.test_ios_recitation_scope_ui with 3 tests, and iOS app target build using fresh derived data at /private/tmp/tarteel-xcode-derived-ios-scope.",
                 "Selected-recitation UI final local verification passed: full Python suite with 190 tests, compile check, feature_list.json validation, quran-metadata JSON validation, and git diff --check.",
-                "Prototype direct RunPod Serverless support adds Custom URL normalization for .api.runpod.ai hosts and a local RunPod API key field that sends Authorization: Bearer on the WebSocket request."
+                "Prototype direct RunPod Serverless support adds Custom URL normalization for .api.runpod.ai hosts and a local RunPod API key field that sends Authorization: Bearer on the WebSocket request.",
+                "iOS clean-home UI moved backend preset, custom WebSocket URL, and RunPod API key into a gear settings sheet while keeping status/ayah info, Auto/Surah, Surah picker, voice indicator, and mic on the white home screen.",
+                "Clean-home UI verification passed: focused iOS source guardrails with 11 tests, Swift client core with 24 tests, and iOS app target build with fresh derived data at /private/tmp/tarteel-xcode-derived-ios-clean-home after approved CoreSimulator/package access.",
+                "Clean-home simulator visual sanity check passed: installed and launched dev.mostafa.TarteelPrototype in the booted iPhone 17 Pro simulator and captured /private/tmp/tarteel-clean-home.png.",
+                "Clean-home final harness checks passed: feature_list.json validation, git diff --check, and full deterministic Python suite with 197 tests."
             ],
             "notes": "Passing for the native WebSocket prototype plus selected-recitation UI and direct RunPod prototype auth wiring. Manual Simulator/physical-device testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },

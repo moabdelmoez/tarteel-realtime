@@ -33,9 +33,10 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         self.assertIn("private var runPodAuthorizationToken", source)
         self.assertIn("authorizationToken: runPodAuthorizationToken", source)
 
-    def test_content_view_exposes_prototype_only_runpod_key_field(self) -> None:
+    def test_content_view_exposes_prototype_only_runpod_key_field_in_settings(self) -> None:
         source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
 
+        self.assertIn("private struct SettingsSheet", source)
         self.assertIn('SecureField("RunPod API key"', source)
         self.assertIn("prototype-only direct RunPod", source)
 

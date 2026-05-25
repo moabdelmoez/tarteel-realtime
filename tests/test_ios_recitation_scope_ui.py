@@ -25,7 +25,7 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn("private var recitationScopeSelection", source)
         self.assertIn("recitationScope: recitationScopeSelection", source)
 
-    def test_content_view_exposes_auto_and_selected_surah_controls(self) -> None:
+    def test_content_view_keeps_recitation_controls_on_home_screen(self) -> None:
         source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
 
         self.assertIn("Picker(\"Recitation\"", source)
@@ -35,6 +35,8 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn("Picker(\"Surah\"", source)
         self.assertIn("ForEach(SurahCatalog.all)", source)
         self.assertIn(".pickerStyle(.menu)", source)
+        self.assertIn("Image(systemName: \"gearshape.fill\")", source)
+        self.assertIn("SettingsSheet(", source)
 
 
 if __name__ == "__main__":
