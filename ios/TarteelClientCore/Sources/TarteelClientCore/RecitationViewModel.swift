@@ -121,7 +121,9 @@ public final class RecitationViewModel: ObservableObject {
         audioSendTask?.cancel()
         audioSendTask = nil
         audioQueueGeneration += 1
+        let generation = audioQueueGeneration
         await voiceActivityDetector.reset()
+        guard isAudioQueueActive(generation: generation) else { return }
         state = RecitationSessionState(
             phase: .connecting,
             headline: "Connecting",
@@ -140,7 +142,6 @@ public final class RecitationViewModel: ObservableObject {
                 throw RecitationViewModelError.invalidBackendURL
             }
 
-            let generation = audioQueueGeneration
             try await socketClient.connect(
                 url: backendURL,
                 authorizationToken: runPodAuthorizationToken
@@ -158,12 +159,21 @@ public final class RecitationViewModel: ObservableObject {
                     }
                 }
             }
+            guard isAudioQueueActive(generation: generation) else {
+                socketClient.disconnect()
+                return
+            }
             connectionStatus = "Connected"
 
             try await audioStreamer.start { [weak self] pcm, sampleRate in
                 Task { @MainActor in
                     self?.enqueueAudioChunk(pcm: pcm, sampleRate: sampleRate)
                 }
+            }
+            guard isAudioQueueActive(generation: generation) else {
+                audioStreamer.stop()
+                socketClient.disconnect()
+                return
             }
 
             isRecording = true
@@ -174,6 +184,7 @@ public final class RecitationViewModel: ObservableObject {
                 detail: "Start reciting"
             )
         } catch {
+            guard isAudioQueueActive(generation: generation) else { return }
             await stopRecording()
             errorMessage = errorMessage(for: error, backendPreset: backendPreset)
             connectionStatus = "Error"

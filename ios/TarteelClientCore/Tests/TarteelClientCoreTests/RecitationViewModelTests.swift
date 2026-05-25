@@ -54,6 +54,31 @@ final class RecitationViewModelTests: XCTestCase {
         await drainScheduledTasks()
     }
 
+    func testStopWhileConnectIsSuspendedKeepsSessionStopped() async throws {
+        let socket = SuspendedConnectSocket()
+        let audio = FakeAudioStreamer()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        let startTask = Task {
+            await viewModel.startRecording()
+        }
+        await socket.waitForConnectCount(1)
+        await viewModel.stopRecording()
+        await socket.releaseAllConnections()
+        await startTask.value
+        await drainScheduledTasks()
+
+        XCTAssertFalse(audio.didStart)
+        XCTAssertFalse(viewModel.isRecording)
+        XCTAssertEqual(viewModel.connectionStatus, "Stopped")
+        XCTAssertEqual(viewModel.state.phase, .stopped)
+    }
+
     func testAudioChunksIncludeVADPayloadAndIncrementSequence() async throws {
         let socket = FakeSocket()
         let audio = FakeAudioStreamer()
