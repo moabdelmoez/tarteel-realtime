@@ -13,6 +13,16 @@ MODEL_NAME = "silero-vad-unified-256ms-v6.0.0.mlmodelc"
 
 
 class MacOSAppProjectTests(unittest.TestCase):
+    def _object_block(self, project: str, object_id: str, comment: str | None = None) -> str:
+        comment_pattern = rf" /\* {re.escape(comment)} \*/" if comment else r"(?: /\* .*? \*/)?"
+        match = re.search(
+            rf"\n\t\t{re.escape(object_id)}{comment_pattern} = \{{(?P<body>.*?)\n\t\t\}};",
+            project,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match, f"Missing object block {object_id} {comment or ''}")
+        return match.group("body")
+
     def _target_block(self, project: str, target_name: str) -> str:
         match = re.search(
             rf"\n\t\t[A-Fa-f0-9]+ /\* {re.escape(target_name)} \*/ = \{{(?P<body>\n\t\t\tisa = PBXNativeTarget;.*?)\n\t\t\}};",
@@ -38,21 +48,48 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIsNotNone(phase_match, f"Missing {phase_name} phase body for {target_name}")
         return phase_match.group("body")
 
+    def _target_build_configuration_bodies(self, project: str, target_name: str) -> list[str]:
+        target_body = self._target_block(project, target_name)
+        config_list_match = re.search(
+            r"buildConfigurationList = ([A-Fa-f0-9]+) /\* Build configuration list for PBXNativeTarget",
+            target_body,
+        )
+        self.assertIsNotNone(config_list_match, f"Missing build configuration list for {target_name}")
+        config_list_body = self._object_block(project, config_list_match.group(1))
+        config_ids = re.findall(r"([A-Fa-f0-9]+) /\* (?:Debug|Release) \*/", config_list_body)
+        self.assertGreaterEqual(len(config_ids), 2, f"Expected Debug and Release configs for {target_name}")
+        return [self._object_block(project, config_id) for config_id in config_ids]
+
+    def _target_source_paths(self, project: str, target_name: str) -> set[str]:
+        sources_body = self._target_phase_body(project, target_name, "Sources")
+        build_file_ids = re.findall(r"([A-Fa-f0-9]+) /\* .*? in Sources \*/", sources_body)
+        paths: set[str] = set()
+        for build_file_id in build_file_ids:
+            build_file_body = self._object_block(project, build_file_id)
+            file_ref_match = re.search(r"fileRef = ([A-Fa-f0-9]+) /\* .*? \*/;", build_file_body)
+            self.assertIsNotNone(file_ref_match, f"Missing fileRef for source build file {build_file_id}")
+            file_ref_body = self._object_block(project, file_ref_match.group(1))
+            path_match = re.search(r"path = ([^;]+);", file_ref_body)
+            self.assertIsNotNone(path_match, f"Missing path for source fileRef {file_ref_match.group(1)}")
+            paths.add(path_match.group(1).strip('"'))
+        return paths
+
     def test_project_declares_native_macos_target(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
+        mac_target = self._target_block(project, "TarteelPrototypeMac")
 
-        self.assertIn("TarteelPrototypeMac", project)
-        self.assertIn("TarteelPrototypeMac.app", project)
-        self.assertIn("SDKROOT = macosx;", project)
-        self.assertIn("MACOSX_DEPLOYMENT_TARGET = 14.0;", project)
-        self.assertIn("PRODUCT_BUNDLE_IDENTIFIER = dev.mostafa.TarteelPrototypeMac;", project)
-        self.assertIn('SUPPORTED_PLATFORMS = "macosx";', project)
-        self.assertIn('productType = "com.apple.product-type.application";', project)
+        self.assertIn("productName = TarteelPrototypeMac;", mac_target)
+        self.assertIn('productType = "com.apple.product-type.application";', mac_target)
+        for config_body in self._target_build_configuration_bodies(project, "TarteelPrototypeMac"):
+            self.assertIn("SDKROOT = macosx;", config_body)
+            self.assertIn("MACOSX_DEPLOYMENT_TARGET = 14.0;", config_body)
+            self.assertIn("PRODUCT_BUNDLE_IDENTIFIER = dev.mostafa.TarteelPrototypeMac;", config_body)
+            self.assertIn('SUPPORTED_PLATFORMS = "macosx";', config_body)
 
     def test_project_includes_shared_core_files_in_both_app_targets(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
-        iphone_sources = self._target_phase_body(project, "TarteelPrototype", "Sources")
-        mac_sources = self._target_phase_body(project, "TarteelPrototypeMac", "Sources")
+        iphone_paths = self._target_source_paths(project, "TarteelPrototype")
+        mac_paths = self._target_source_paths(project, "TarteelPrototypeMac")
 
         for filename in [
             "AudioChunkPayload.swift",
@@ -68,8 +105,9 @@ class MacOSAppProjectTests(unittest.TestCase):
             "SurahCatalog.swift",
             "VoiceActivityPayload.swift",
         ]:
-            self.assertIn(filename, iphone_sources)
-            self.assertIn(filename, mac_sources)
+            expected_path = f"../TarteelClientCore/Sources/TarteelClientCore/{filename}"
+            self.assertIn(expected_path, iphone_paths)
+            self.assertIn(expected_path, mac_paths)
 
     def test_project_includes_vad_model_resource_for_iphone_and_macos(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
