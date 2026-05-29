@@ -4,6 +4,7 @@ import json
 import unittest
 
 from tarteel_realtime.ws_client import (
+    authorization_headers,
     build_chunk_payload,
     collect_audio_events,
     collect_events,
@@ -108,6 +109,27 @@ class WebSocketClientTests(unittest.TestCase):
             {"ping_interval": None, "ping_timeout": None},
         )
         self.assertEqual(websocket_connect_kwargs(disable_ping=False), {})
+
+    def test_builds_optional_bearer_authorization_headers(self):
+        self.assertEqual(
+            authorization_headers(authorization_token="  secret-token  "),
+            {"Authorization": "Bearer secret-token"},
+        )
+        self.assertEqual(authorization_headers(authorization_token="  "), {})
+        self.assertEqual(authorization_headers(authorization_token=None), {})
+
+    def test_websocket_connect_kwargs_can_include_bearer_token(self):
+        self.assertEqual(
+            websocket_connect_kwargs(
+                disable_ping=True,
+                authorization_token="secret-token",
+            ),
+            {
+                "ping_interval": None,
+                "ping_timeout": None,
+                "additional_headers": {"Authorization": "Bearer secret-token"},
+            },
+        )
 
 
 if __name__ == "__main__":

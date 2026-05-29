@@ -3,6 +3,7 @@ import struct
 import unittest
 
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from tarteel_realtime.api import create_app
 from tarteel_realtime.quran import QuranCorpus
@@ -126,6 +127,58 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(event["type"], "locked")
         self.assertEqual(event["ayah_ref"], "114:1")
         self.assertEqual(event["start_ref"], "114:1:1")
+
+    def test_websocket_accepts_matching_bearer_token_when_configured(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+            websocket_bearer_token="test-token",
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect(
+            "/ws/recitation",
+            headers={"Authorization": "Bearer test-token"},
+        ) as websocket:
+            websocket.send_json(chunk_payload(0))
+            event = websocket.receive_json()
+
+        self.assertEqual(event["type"], "locked")
+        self.assertEqual(event["start_ref"], "114:2:1")
+
+    def test_websocket_rejects_missing_bearer_token_when_configured(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+            websocket_bearer_token="test-token",
+        )
+        client = TestClient(app)
+
+        with self.assertRaises(WebSocketDisconnect) as context:
+            with client.websocket_connect("/ws/recitation"):
+                pass
+
+        self.assertEqual(context.exception.code, 1008)
+
+    def test_websocket_rejects_wrong_bearer_token_when_configured(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+            websocket_bearer_token="test-token",
+        )
+        client = TestClient(app)
+
+        with self.assertRaises(WebSocketDisconnect) as context:
+            with client.websocket_connect(
+                "/ws/recitation",
+                headers={"Authorization": "Bearer wrong-token"},
+            ):
+                pass
+
+        self.assertEqual(context.exception.code, 1008)
 
     def test_websocket_returns_wrong_event(self):
         app = create_app(

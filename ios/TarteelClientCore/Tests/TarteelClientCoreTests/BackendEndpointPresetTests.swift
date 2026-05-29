@@ -74,6 +74,31 @@ struct BackendEndpointPresetTests {
         )
     }
 
+    @Test func selectedSurahScopeNormalizesBareModalHostBeforeAppendingScope() {
+        let modalHost = "workspace--tarteel-realtime-asr-fastapi-app.modal.run"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: modalHost,
+                recitationScope: .selectedSurah(id: 108),
+                provider: .modal
+            )
+                == "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108"
+        )
+    }
+
+    @Test func genericCustomProviderDoesNotAddProviderSpecificPathToBareHost() {
+        let host = "example.test"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: host,
+                provider: .generic
+            )
+                == host
+        )
+    }
+
     @Test func customPresetAddsWSSSchemeAndRecitationPathToRunPodHost() {
         let runpodHost = "0qudx1ctbmw1xc-8000.proxy.runpod.net"
 

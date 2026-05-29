@@ -4,7 +4,7 @@ Rolling quality record for the Tarteel real-time Quran recitation MVP.
 
 ## Current Baseline
 
-- Date: 2026-05-25
+- Date: 2026-05-28
 - Overall status: good enough MVP, not production-grade
 - Initial quality score: 8.0 / 10
 - Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build, WebSocket simulator verification, RunPod real-ASR proof paths, and documented R2/GitHub bootstrap flow.
@@ -20,7 +20,7 @@ The MVP has strong harness discipline and a working real-ASR mobile path, but it
 | Architecture and boundaries | Good | Fake backend, WebSocket transport, ASR adapters, and iOS state reducer are separated. Heavy dependencies remain optional. |
 | Mobile UX readiness | MVP | Simulator path works and exposes ayah/ayah text status. Physical iPhone, latency, and guidance copy need more work. |
 | ASR/model maturity | Experimental | `tarteel-ai/whisper-base-ar-quran` and `basharalrfooh/whisper-small-quran` have been compared on targeted cases, but neither is production-validated. |
-| Ops reproducibility | Good | Public GitHub plus R2 hydration and RunPod bootstrap reduce manual copying. GPU pods still need explicit user coordination. |
+| Ops reproducibility | Good | Public GitHub plus R2 hydration, RunPod packaging, and Modal provider-comparison scaffolding reduce manual copying. Live GPU endpoints still need explicit user coordination and measured evidence. |
 | Documentation and handoff | Good | Harness files capture progress, feature state, clean-state checks, and session context. This document and rubric add quality tracking. |
 | Privacy and secrets | Good | Raw audio and credentials are not committed. R2 and RunPod secrets stay local. Continue checking this during every artifact change. |
 
@@ -32,6 +32,7 @@ The MVP has strong harness discipline and a working real-ASR mobile path, but it
 - Ordered-progression guidance exists in backend behavior but still needs polished user-facing copy.
 - Real ASR can hallucinate or clip phrases; canonical ayah display mitigates UI truth, but correction confidence still needs more evidence.
 - Production privacy design for live microphone audio is not complete.
+- Modal and RunPod serverless paths are locally contract-verified but still need live endpoint timing, cost, idle shutdown, and real-ASR replay proof.
 
 ## Quality Gates
 
@@ -45,6 +46,16 @@ Before treating a future slice as passing:
 - Keep `feature_list.json` with at most one `in_progress` feature.
 
 ## Quality Log
+
+
+### 2026-05-28 - Modal Serverless Provider Comparison Scaffold
+
+- Modal was added as a same-repo provider adapter around the existing ASR FastAPI app, not as a new transport or separate deployment repo.
+- `TARTEEL_WS_BEARER_TOKEN` now protects `WS /ws/recitation` when configured while keeping `/health` and `/ping` public for provider probes.
+- `tarteel_realtime.replay_probe` gives RunPod and Modal the same evidence surface: connect timing, first non-wait event timing, event counts, first lock/progress refs, optional raw events, scope, and bearer-token handling.
+- The Apple settings gear now has a Custom provider picker for Generic, RunPod, and Modal, with memory-only bearer-token entry shared by iPhone and macOS.
+- Local confidence is good for contracts and builds: focused Modal/replay/backend/Apple checks passed with 64 tests, compileall passed for `deploy`, `tarteel_realtime`, and `tests`, Swift client core passed with 39 tests, iPhone and macOS app targets built, and the full deterministic Python suite passed with 218 tests.
+- Release posture: ready for Modal prewarm/deploy and provider comparison replay. It is not yet live Modal evidence and should not be treated as a RunPod replacement decision.
 
 
 ### 2026-05-25 - Native macOS Prototype

@@ -8,6 +8,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         let store = UserDefaultsRecitationPreferencesStore(defaults: defaults)
 
         XCTAssertEqual(store.backendPreset, .simulator)
+        XCTAssertEqual(store.customBackendProvider, .runPod)
         XCTAssertEqual(store.customBackendURLText, "")
         XCTAssertEqual(store.recitationMode, .autoDetect)
         XCTAssertEqual(store.selectedSurahID, 108)
@@ -19,12 +20,14 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         var store = UserDefaultsRecitationPreferencesStore(defaults: defaults)
 
         store.backendPreset = .custom
+        store.customBackendProvider = .modal
         store.customBackendURLText = "wss://example.test/ws/recitation"
         store.recitationMode = .selectedSurah
         store.selectedSurahID = 4
 
         let reloaded = UserDefaultsRecitationPreferencesStore(defaults: defaults)
         XCTAssertEqual(reloaded.backendPreset, .custom)
+        XCTAssertEqual(reloaded.customBackendProvider, .modal)
         XCTAssertEqual(reloaded.customBackendURLText, "wss://example.test/ws/recitation")
         XCTAssertEqual(reloaded.recitationMode, .selectedSurah)
         XCTAssertEqual(reloaded.selectedSurahID, 4)
@@ -35,6 +38,6 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         defaults.removePersistentDomain(forName: "RecitationPreferencesStoreTests.noSecret")
         let store = UserDefaultsRecitationPreferencesStore(defaults: defaults)
 
-        XCTAssertFalse(Mirror(reflecting: store).children.contains { $0.label == "runPodAPIKeyText" })
+        XCTAssertFalse(Mirror(reflecting: store).children.contains { $0.label == "backendBearerTokenText" })
     }
 }

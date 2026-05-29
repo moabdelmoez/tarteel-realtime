@@ -182,6 +182,14 @@ uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitat
 
 For real ASR windows that may exceed WebSocket keepalive timeouts during model load or long inference, add `--disable-ping` to the replay command.
 
+If `TARTEEL_WS_BEARER_TOKEN` is set, `WS /ws/recitation` requires:
+
+```http
+Authorization: Bearer <token>
+```
+
+`/health` and `/ping` remain public for provider health checks.
+
 If the app knows the intended recitation range, append `scope` to the WebSocket URL so matching stays inside that range before the first lock and during ordered progression. Supported forms are a whole surah like `?scope=108`, a single ayah like `?scope=108:2`, or an inclusive range like `?scope=4:1-3`.
 
 ```bash
@@ -247,7 +255,32 @@ For the prototype RunPod Serverless path, use a Load Balancer endpoint and paste
 wss://<endpoint-id>.api.runpod.ai/ws/recitation
 ```
 
-Direct iOS-to-RunPod serverless testing is prototype-only because the app sends `Authorization: Bearer <RUNPOD_API_KEY>` on the WebSocket request. Enter that key in the local iOS `RunPod API key` field; do not commit it or put it in docs. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for RunPod health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
+The app Settings sheet keeps `Simulator` and `Custom` backend modes. In `Custom`,
+choose a provider from `Generic`, `RunPod`, or `Modal`; provider selection controls
+URL normalization and token labeling while the WebSocket contract stays the same.
+
+Direct iOS-to-RunPod serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key in the local bearer-token field; do not commit it or put it in docs. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for RunPod health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
+
+For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights:
+
+```bash
+modal run deploy/modal_asr_app.py::prewarm
+modal deploy deploy/modal_asr_app.py
+```
+
+Then replay the same scoped fixtures with the provider-neutral probe:
+
+```bash
+uv run --with websockets python -m tarteel_realtime.replay_probe \
+  --url 'wss://<modal-app>.modal.run/ws/recitation' \
+  --scope 108 \
+  --audio-path fixtures/local_audio/108001.wav \
+  --chunk-ms 1000 \
+  --bearer-token '<token>' \
+  --disable-ping
+```
+
+See `docs/modal-serverless.md` for Modal setup, prewarm, deployment, auth, and evidence capture.
 
 The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.
 

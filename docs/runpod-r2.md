@@ -77,8 +77,8 @@ uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-si
 docker build -f Dockerfile.runpod-serverless -t <registry>/tarteel-runpod-serverless:latest .
 ```
 
-Do not put R2 keys in iOS. The direct iOS prototype only needs the restricted
-RunPod API key for the WebSocket `Authorization` header.
+Do not put R2 keys in iOS. The direct iOS prototype only needs a restricted
+provider bearer token for the WebSocket `Authorization` header.
 
 ## Private GitHub Repos On RunPod
 

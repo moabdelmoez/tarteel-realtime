@@ -25,6 +25,7 @@ def create_app(
     recognizer_factory: Callable[[], SpeechRecognizer],
     minimum_lock_words: int = 3,
     log_transcripts: bool = False,
+    websocket_bearer_token: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Tarteel Realtime MVP")
 
@@ -38,6 +39,13 @@ def create_app(
 
     @app.websocket("/ws/recitation")
     async def recitation_socket(websocket: WebSocket) -> None:
+        if not _is_authorized_websocket(
+            websocket,
+            expected_bearer_token=websocket_bearer_token,
+        ):
+            await websocket.close(code=1008, reason="missing or invalid bearer token")
+            return
+
         try:
             recitation_scope = parse_recitation_scope(
                 websocket.query_params.get("scope"),
@@ -98,4 +106,22 @@ def _voice_activity_from_payload(payload: Any) -> VoiceActivity | None:
             else bool(payload["is_speech_active"])
         ),
         event=payload.get("event"),
+    )
+
+
+def _is_authorized_websocket(
+    websocket: WebSocket,
+    *,
+    expected_bearer_token: str | None,
+) -> bool:
+    if not expected_bearer_token:
+        return True
+
+    authorization = websocket.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    expected_token = expected_bearer_token.strip()
+    return (
+        scheme.lower() == "bearer"
+        and bool(expected_token)
+        and token.strip() == expected_token
     )

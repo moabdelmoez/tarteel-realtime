@@ -10,6 +10,7 @@ final class RecitationViewModelTests: XCTestCase {
         let vad = FakeVoiceActivityDetector()
         let preferences = FakePreferencesStore(
             backendPreset: .custom,
+            customBackendProvider: .runPod,
             customBackendURLText: "https://abc123.api.runpod.ai/ws/recitation?existing=1",
             recitationMode: .selectedSurah,
             selectedSurahID: 108
@@ -20,7 +21,7 @@ final class RecitationViewModelTests: XCTestCase {
             voiceActivityDetector: vad,
             preferencesStore: preferences
         )
-        viewModel.runPodAPIKeyText = "  test-token  "
+        viewModel.backendBearerTokenText = "  test-token  "
 
         await viewModel.startRecording()
 
@@ -32,6 +33,35 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(audio.didStart)
         XCTAssertEqual(viewModel.connectionStatus, "Streaming")
         XCTAssertTrue(viewModel.isRecording)
+    }
+
+    func testStartingRecordingConnectsToScopedModalURLAndBearerToken() async throws {
+        let socket = FakeSocket()
+        let audio = FakeAudioStreamer()
+        let vad = FakeVoiceActivityDetector()
+        let preferences = FakePreferencesStore(
+            backendPreset: .custom,
+            customBackendProvider: .modal,
+            customBackendURLText: "workspace--tarteel-realtime-asr-fastapi-app.modal.run",
+            recitationMode: .selectedSurah,
+            selectedSurahID: 108
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: vad,
+            preferencesStore: preferences
+        )
+        viewModel.backendBearerTokenText = " modal-token "
+
+        await viewModel.startRecording()
+
+        XCTAssertEqual(
+            socket.connectedURL?.absoluteString,
+            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108"
+        )
+        XCTAssertEqual(socket.authorizationToken, "modal-token")
+        XCTAssertTrue(audio.didStart)
     }
 
     func testDuplicateToggleWhileConnectingOnlyStartsOneSocketConnection() async throws {
@@ -481,17 +511,20 @@ private func drainScheduledTasks() async {
 
 private struct FakePreferencesStore: RecitationPreferencesStoring {
     var backendPreset: BackendEndpointPreset
+    var customBackendProvider: BackendProvider
     var customBackendURLText: String
     var recitationMode: RecitationMode
     var selectedSurahID: Int
 
     init(
         backendPreset: BackendEndpointPreset = .simulator,
+        customBackendProvider: BackendProvider = .runPod,
         customBackendURLText: String = "",
         recitationMode: RecitationMode = .autoDetect,
         selectedSurahID: Int = 108
     ) {
         self.backendPreset = backendPreset
+        self.customBackendProvider = customBackendProvider
         self.customBackendURLText = customBackendURLText
         self.recitationMode = recitationMode
         self.selectedSurahID = selectedSurahID

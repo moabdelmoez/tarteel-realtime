@@ -16,6 +16,7 @@ class AppSettings:
     tanzil_path: Path
     minimum_lock_words: int = 3
     log_transcripts: bool = False
+    websocket_bearer_token: str | None = None
 
 
 def create_configured_app(
@@ -28,4 +29,5 @@ def create_configured_app(
         recognizer_factory=recognizer_factory,
         minimum_lock_words=settings.minimum_lock_words,
         log_transcripts=settings.log_transcripts,
+        websocket_bearer_token=settings.websocket_bearer_token,
     )

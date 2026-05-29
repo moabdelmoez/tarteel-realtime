@@ -2,6 +2,7 @@ import Foundation
 
 public protocol RecitationPreferencesStoring {
     var backendPreset: BackendEndpointPreset { get set }
+    var customBackendProvider: BackendProvider { get set }
     var customBackendURLText: String { get set }
     var recitationMode: RecitationMode { get set }
     var selectedSurahID: Int { get set }
@@ -10,6 +11,7 @@ public protocol RecitationPreferencesStoring {
 public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStoring {
     private enum Key {
         static let backendPreset = "tarteel.backendPreset"
+        static let customBackendProvider = "tarteel.customBackendProvider"
         static let customBackendURLText = "tarteel.customBackendURLText"
         static let recitationMode = "tarteel.recitationMode"
         static let selectedSurahID = "tarteel.selectedSurahID"
@@ -31,6 +33,19 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
         }
         set {
             defaults.set(newValue.rawValue, forKey: Key.backendPreset)
+        }
+    }
+
+    public var customBackendProvider: BackendProvider {
+        get {
+            guard let rawValue = defaults.string(forKey: Key.customBackendProvider),
+                  let provider = BackendProvider(rawValue: rawValue) else {
+                return .runPod
+            }
+            return provider
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Key.customBackendProvider)
         }
     }
 

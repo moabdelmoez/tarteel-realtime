@@ -38,7 +38,15 @@ wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 
 ## Backend Settings
 
-The home screen keeps recitation controls visible and moves backend setup behind the gear button. Open settings to choose the `Simulator` or `Custom` backend preset, edit the custom WebSocket URL, or enter the prototype-only RunPod API key for direct RunPod testing.
+The home screen keeps recitation controls visible and moves backend setup behind the gear button. Open settings to choose the `Simulator` or `Custom` backend preset and edit the custom WebSocket URL.
+
+When `Custom` is selected, choose a provider:
+
+- `Generic`: leaves custom URLs alone except for `http` to `ws` and `https` to `wss` conversion.
+- `RunPod`: normalizes bare `.proxy.runpod.net` and `.api.runpod.ai` hosts to `wss://.../ws/recitation`.
+- `Modal`: normalizes bare `.modal.run` hosts to `wss://.../ws/recitation`.
+
+The bearer-token field is memory-only and is not saved. Use it only for prototype direct RunPod or Modal testing.
 
 ## Recitation Scope
 
@@ -72,7 +80,7 @@ The macOS app defaults to:
 ws://127.0.0.1:8000/ws/recitation
 ```
 
-It uses a native Settings window for backend preset, custom URL, and the prototype-only RunPod API key. Non-secret settings persist between launches. The RunPod API key is memory-only unless a later Keychain slice adds secure storage.
+It uses a native Settings window for backend preset, Custom provider, custom URL, and memory-only bearer token. Non-secret settings persist between launches. The bearer token is memory-only unless a later Keychain slice adds secure storage.
 
 The macOS app captures microphone input, converts it to mono 16 kHz PCM16, runs the bundled FluidAudio/CoreML Silero VAD when available, and sends the same `AudioChunkPayload` shape as the iPhone app.
 

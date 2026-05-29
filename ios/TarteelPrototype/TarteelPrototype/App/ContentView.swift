@@ -159,13 +159,24 @@ private struct SettingsSheet: View {
                         .disabled(viewModel.isRecording || !viewModel.backendPreset.allowsURLTextEditing)
 
                     if viewModel.backendPreset == .custom {
-                        SecureField("RunPod API key", text: $viewModel.runPodAPIKeyText)
+                        Picker("Provider", selection: Binding(
+                            get: { viewModel.customBackendProvider },
+                            set: { viewModel.selectCustomBackendProvider($0) }
+                        )) {
+                            ForEach(BackendProvider.allCases) { provider in
+                                Text(provider.label).tag(provider)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(viewModel.isRecording)
+
+                        SecureField(viewModel.customBackendProvider.tokenFieldLabel, text: $viewModel.backendBearerTokenText)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.footnote.monospaced())
                             .disabled(viewModel.isRecording)
 
-                        Text("prototype-only direct RunPod")
+                        Text(viewModel.customBackendProvider.tokenHelpText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

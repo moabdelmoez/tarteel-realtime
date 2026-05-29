@@ -8,7 +8,7 @@ iOS -> wss://<endpoint-id>.api.runpod.ai/ws/recitation?scope=<surah>
 ```
 
 Do not use this direct iOS-to-RunPod path for public users. It requires a
-RunPod API key in the prototype app so the key can be copied out of the client.
+bearer token in the prototype app so the token can be copied out of the client.
 Move to a small CPU gateway before public or shared-user testing.
 
 ## Endpoint Shape
@@ -103,9 +103,10 @@ In the iOS prototype:
    ```text
    wss://<endpoint-id>.api.runpod.ai/ws/recitation
    ```
-3. Paste the prototype RunPod API key into the app's `RunPod API key` field.
-4. Select the recitation scope, for example Surah 108.
-5. Tap the mic.
+3. Choose provider `RunPod`.
+4. Paste the prototype bearer token into the token field.
+5. Select the recitation scope, for example Surah 108.
+6. Tap the mic.
 
 The app adds:
 
@@ -140,20 +141,26 @@ cd ios/TarteelClientCore
 env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test
 ```
 
-After deploy, replay the known audio fixtures against the serverless endpoint:
+After deploy, replay the known audio fixtures against the serverless endpoint.
+Use the provider-neutral replay probe so RunPod and Modal evidence have the
+same timing fields:
 
 ```bash
-uv run --with websockets python -m tarteel_realtime.ws_client \
+uv run --with websockets python -m tarteel_realtime.replay_probe \
   --url 'wss://<endpoint-id>.api.runpod.ai/ws/recitation?scope=108' \
   --audio-path fixtures/local_audio/108001.wav \
   --chunk-ms 1000 \
-  --disable-ping
+  --bearer-token '<token>' \
+  --disable-ping \
+  --include-events
 
-uv run --with websockets python -m tarteel_realtime.ws_client \
+uv run --with websockets python -m tarteel_realtime.replay_probe \
   --url 'wss://<endpoint-id>.api.runpod.ai/ws/recitation?scope=4:1-3' \
   --audio-path fixtures/local_audio/004001.wav \
   --chunk-ms 1000 \
-  --disable-ping
+  --bearer-token '<token>' \
+  --disable-ping \
+  --include-events
 ```
 
 Record cold-start time, first non-wait event latency, lock/progress behavior,

@@ -1,6 +1,6 @@
 {
     "project": "tarteel-realtime",
-    "last_updated": "2026-05-25",
+    "last_updated": "2026-05-29",
     "rules": {
         "single_active_feature": true,
         "passing_requires_evidence": true,
@@ -253,9 +253,11 @@
                 "Recording orchestration moved into TarteelClientCore as a public @MainActor RecitationViewModel with protocol-injected BackendSocketing, AudioStreaming, VoiceActivityDetecting, and RecitationPreferencesStoring; the iPhone app injects MicrophoneAudioStreamer and VoiceActivityDetector.",
                 "Shared recording orchestration red test first failed because RecitationViewModel was missing from the core package; follow-up review regression tests then failed before the fix for duplicate connect while starting, out-of-order audio chunk handling, stale startup completion, stale send failure, and stale socket callback behavior. After implementation, Swift client core passed with 36 tests total (12 XCTest-style tests plus 24 Swift Testing tests), focused iOS source guardrails passed with 11 tests, touched VAD/audio source guardrails passed with 7 tests, and the iOS app target built at /private/tmp/tarteel-xcode-derived after clearing stale derived-data caches.",
                 "Native macOS prototype target TarteelPrototypeMac was added in the existing Xcode project with bundle id dev.mostafa.TarteelPrototypeMac, macOS 14 deployment, separate macOS Info.plist, native Settings scene, desktop status console, AVAudioEngine microphone capture, shared RecitationViewModel orchestration, FluidAudio/CoreML Silero VAD, and no App Sandbox entitlements.",
-                "Native macOS final verification passed: uv run python -B -m json.tool feature_list.json; uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v with 16 tests; Swift client core with 36 tests total; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode package/cache access was blocked; git diff --check; and uv run python -B -m unittest discover -s tests -v with 202 tests."
+                "Native macOS final verification passed: uv run python -B -m json.tool feature_list.json; uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v with 16 tests; Swift client core with 36 tests total; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode package/cache access was blocked; git diff --check; and uv run python -B -m unittest discover -s tests -v with 202 tests.",
+                "Custom backend settings now include a provider picker for Generic, RunPod, and Modal. RunPod and Modal provider choices normalize their provider hosts to /ws/recitation and use a memory-only bearer-token field shared by iPhone and macOS.",
+                "Provider picker verification passed: Swift client core with 39 tests total; focused Modal/replay/backend/Apple source checks with 64 tests; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode/SwiftPM cache access was blocked; full deterministic Python suite with 218 tests."
             ],
-            "notes": "Passing for native iPhone and macOS WebSocket prototypes plus selected-recitation UI and direct RunPod prototype auth wiring. Manual Simulator/physical-device/macOS microphone testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
+            "notes": "Passing for native iPhone and macOS WebSocket prototypes plus selected-recitation UI, provider-aware Custom settings, and memory-only direct provider bearer auth. Modal scoped backend replay is live, but manual iOS/macOS microphone testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },
         {
             "id": "backend-002",
@@ -271,7 +273,9 @@
                 "Run uv run python -B -m unittest discover locally.",
                 "On RunPod GPU, run the real ASR WebSocket backend with optional dependencies and verify at least one Surah 114 audio sample produces a locked event over WS.",
                 "On RunPod GPU, run the real ASR WebSocket backend with TARTEEL_WHISPER_BACKEND=faster-whisper and replay short plus long local_audio WAV fixtures with disabled WebSocket pings.",
-                "Run uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_runtime tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v after RunPod serverless packaging or direct-iOS prototype auth changes."
+                "Run uv run python -B -m unittest tests.test_runpod_serverless tests.test_asr_runtime tests.test_asr_app tests.test_api tests.test_ios_websocket_client -v after RunPod serverless packaging or direct-iOS prototype auth changes.",
+                "Run uv run python -B -m unittest tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_api -v after Modal deployment adapter, bearer auth, or provider-neutral replay probe changes.",
+                "Run uv run python -m compileall -q deploy tarteel_realtime tests after Modal deployment module changes."
             ],
             "evidence": [
                 "Added tarteel_realtime/asr_app.py with env-driven ASR backend settings, lazy Whisper recognizer construction, and injected-recognizer test seams.",
@@ -291,9 +295,15 @@
                 "Point 3 RunPod faster-whisper replay with low-latency profile improved short fixtures: 108001 locked 108:1 at sequence 5 and 108003 locked 108:3 at sequence 5; 108002 still did not lock.",
                 "RunPod Serverless Load Balancer prototype packaging adds /ping, Dockerfile.runpod-serverless, scripts/runpod_serverless_start.sh, faster-whisper low-latency defaults for L4/A5000/3090, and cached Hugging Face snapshot resolution under /runpod-volume/huggingface-cache/hub.",
                 "RunPod serverless focused local verification passed with 28 backend/iOS/serverless Python tests, 14 ASR runtime/app tests including cached snapshot resolution, bash syntax validation for scripts/runpod_serverless_start.sh, compileall, 24 Swift client tests, and an iOS app build at /private/tmp/tarteel-xcode-derived-serverless.",
-                "RunPod serverless final local verification passed with the full deterministic Python suite at 197 tests, feature_list.json validation, and git diff --check."
+                "RunPod serverless final local verification passed with the full deterministic Python suite at 197 tests, feature_list.json validation, and git diff --check.",
+                "Modal provider comparison scaffold adds deploy/modal_asr_app.py as a Modal ASGI adapter around the existing ASR app, L4/min-zero/max-one/scaledown-window defaults, Modal Volume model-cache prewarm, and provider-neutral TARTEEL_WS_BEARER_TOKEN WebSocket auth.",
+                "Provider-neutral replay proof now lives in tarteel_realtime.replay_probe and records connect time, first non-wait event time, event counts, first lock/progress refs, optional raw events, scope handling, and bearer-token headers for RunPod/Modal comparisons.",
+                "Modal/serverless local verification passed with focused Modal/replay/backend/Apple checks: uv run python -B -m unittest tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_api tests.test_asr_runtime tests.test_asr_app tests.test_ios_websocket_client tests.test_ios_recitation_scope_ui tests.test_ios_status_panel tests.test_macos_app_project -v with 64 tests; compileall for deploy/tarteel_realtime/tests; Swift client core with 39 tests; iPhone xcodebuild; macOS xcodebuild after escalated rerun; full deterministic Python suite with 218 tests; feature_list.json validation; active-feature sanity returned []; and git diff --check.",
+                "Modal live setup fixes replaced uv_sync with explicit image dependency installation, switched the ASGI adapter to nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 after live logs showed libcublas.so.12 missing, and redeployed https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run.",
+                "Post-deploy Modal /ping returned {\"status\":\"ok\"}, post-deploy logs had no libcublas matches, and scoped replay against wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108 completed with connect_ms 9772, event_count 9, first_non_wait_event_ms 17161, and lock_candidate events for 108:1 without ASR runtime errors.",
+                "Latest focused pre-commit verification passed: uv run python -B -m unittest tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_api tests.test_asr_runtime tests.test_asr_app -v with 49 tests; feature_list.json validation; git diff --check."
             ],
-            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU plus local serverless packaging contracts. The RunPod Serverless endpoint has not yet been deployed or fixture-replayed, so cold-start, billing, and live ASR quality still need endpoint proof."
+            "notes": "Passing for opt-in real ASR WebSocket proof using faster-whisper on GPU plus RunPod and Modal serverless packaging contracts. Modal is deployed and scoped Surah 108 replay proves live WebSocket/GPU ASR transport after the CUDA image fix, but it produced lock_candidate rather than a full lock; RunPod serverless endpoint proof, Modal idle shutdown/cost evidence, and live ASR quality tuning remain."
         },
         {
             "id": "backend-003",

@@ -48,6 +48,7 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.minimum_speech_rms, 400)
         self.assertEqual(settings.minimum_frame_rms, 150)
         self.assertFalse(settings.log_transcripts)
+        self.assertIsNone(settings.websocket_bearer_token)
 
     def test_settings_from_env_accepts_backend_overrides(self):
         settings = settings_from_env({
@@ -64,6 +65,7 @@ class AsrAppTests(unittest.TestCase):
             "TARTEEL_ASR_MIN_SPEECH_RMS": "550",
             "TARTEEL_ASR_MIN_FRAME_RMS": "125",
             "TARTEEL_LOG_TRANSCRIPTS": "1",
+            "TARTEEL_WS_BEARER_TOKEN": "secret-token",
         })
 
         self.assertEqual(settings.tanzil_path, Path("/tmp/quran.txt"))
@@ -79,6 +81,7 @@ class AsrAppTests(unittest.TestCase):
         self.assertEqual(settings.minimum_speech_rms, 550)
         self.assertEqual(settings.minimum_frame_rms, 125)
         self.assertTrue(settings.log_transcripts)
+        self.assertEqual(settings.websocket_bearer_token, "secret-token")
 
     def test_settings_from_env_applies_low_latency_buffering_profile(self):
         settings = settings_from_env({

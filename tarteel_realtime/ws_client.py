@@ -83,10 +83,28 @@ def format_event(event: dict[str, Any]) -> str:
     return json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def websocket_connect_kwargs(*, disable_ping: bool) -> dict[str, Any]:
-    if not disable_ping:
+def authorization_headers(*, authorization_token: str | None) -> dict[str, str]:
+    if authorization_token is None:
         return {}
-    return {"ping_interval": None, "ping_timeout": None}
+    token = authorization_token.strip()
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
+def websocket_connect_kwargs(
+    *,
+    disable_ping: bool,
+    authorization_token: str | None = None,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if disable_ping:
+        kwargs["ping_interval"] = None
+        kwargs["ping_timeout"] = None
+    headers = authorization_headers(authorization_token=authorization_token)
+    if headers:
+        kwargs["additional_headers"] = headers
+    return kwargs
 
 
 async def run_client(
@@ -97,12 +115,16 @@ async def run_client(
     audio: SmokeAudio | None = None,
     chunk_duration_ms: int | None = None,
     disable_ping: bool = False,
+    authorization_token: str | None = None,
 ) -> list[dict[str, Any]]:
     import websockets
 
     async with websockets.connect(
         url,
-        **websocket_connect_kwargs(disable_ping=disable_ping),
+        **websocket_connect_kwargs(
+            disable_ping=disable_ping,
+            authorization_token=authorization_token,
+        ),
     ) as websocket:
         if audio is not None:
             return await collect_audio_events(
@@ -125,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audio-path", type=Path, default=None, help="Optional PCM16LE or mono PCM16 WAV file to send.")
     parser.add_argument("--chunk-ms", type=int, default=None, help="Optional chunk size in milliseconds. Defaults to one whole-file chunk for --audio-path.")
     parser.add_argument("--disable-ping", action="store_true", help="Disable WebSocket keepalive pings for long ASR inference windows.")
+    parser.add_argument("--bearer-token", default=None, help="Optional WebSocket Authorization bearer token.")
     args = parser.parse_args(argv)
 
     audio = None
@@ -138,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         audio=audio,
         chunk_duration_ms=args.chunk_ms,
         disable_ping=args.disable_ping,
+        authorization_token=args.bearer_token,
     ))
     for event in events:
         print(format_event(event))

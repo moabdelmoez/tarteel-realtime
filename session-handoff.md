@@ -2,60 +2,125 @@
 
 ## Verified Now
 
-- Latest slice: native macOS SwiftUI prototype, completed on 2026-05-25.
+- Latest slice: Modal CUDA image fix, deployed on 2026-05-29.
+- Modal logs for deployed app `ap-y0XxuwnT0t7dEPT8FaWe2W` / `tarteel-realtime-asr` showed repeated recitation failures:
+  - `RuntimeError: Library libcublas.so.12 is not found or cannot be loaded`
+  - The traceback originates in faster-whisper/CTranslate2 during `self.model.encode(...)`.
+- `deploy/modal_asr_app.py` now uses `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` through `modal.Image.from_registry(..., add_python="3.13")`.
+  - This replaces the old `debian_slim` base image, which did not include CUDA user-space libraries.
+  - The app was redeployed and Modal reported URL `https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run`.
+- Previous slice: Modal replay fixture fix, completed locally on 2026-05-29.
+- `tarteel_realtime.replay_probe` now loads PCM16 WAV evidence fixtures through `load_replay_audio_file`.
+  - Multi-channel PCM16 WAV files are downmixed to mono for WebSocket replay.
+  - `asr_smoke` remains strict and still rejects stereo WAV input.
+  - This fixes the documented `fixtures/local_audio/108001.wav` replay command, because that fixture is stereo 44.1 kHz PCM16.
+- Previous slice: Modal prewarm failure fix, completed locally on 2026-05-29.
+- `deploy/modal_asr_app.py` no longer uses `.uv_sync()`.
+  - The image installs backend runtime dependencies explicitly through `.uv_pip_install(*PROJECT_RUNTIME_DEPENDENCIES, *MODAL_ASR_DEPENDENCIES)`.
+  - This avoids Modal legacy image builder failures that require `modal` in `pyproject.toml`.
+  - `modal` and `faster-whisper` remain out of default project dependencies.
+- Previous slice: Modal GPU serverless provider comparison, completed locally on 2026-05-28.
 - WebSocket `/ws/recitation` remains the only recitation transport.
-- The existing iPhone target remains `TarteelPrototype`.
-- The new native macOS target is `TarteelPrototypeMac` in `ios/TarteelPrototype/TarteelPrototype.xcodeproj`.
-- The macOS bundle id is `dev.mostafa.TarteelPrototypeMac`.
-- The macOS deployment target is 14.0.
-- App Sandbox remains disabled for this developer prototype slice.
-- `RecitationViewModel` lives in shared core at `ios/TarteelClientCore/Sources/TarteelClientCore/RecitationViewModel.swift`.
-- The shared view model is a public `@MainActor ObservableObject` with injected:
-  - `BackendSocketing`
-  - `AudioStreaming`
-  - `VoiceActivityDetecting`
-  - `RecitationPreferencesStoring`
-- The iPhone app injects `MicrophoneAudioStreamer()` and `VoiceActivityDetector()`.
-- The macOS app injects `MacMicrophoneAudioStreamer()` and `VoiceActivityDetector()`.
-- `BackendWebSocketClient` is shared by both app targets.
-- The macOS app includes a separate macOS `Info.plist`, native Settings scene, desktop recitation surface, status console, Auto/Surah controls, Command-R recording command, and Settings toolbar entry.
-- The macOS microphone path uses `AVAudioEngine` plus `AVCaptureDevice.requestAccess(for: .audio)`, converts to mono 16 kHz PCM16, and avoids `AVAudioSession`.
-- The bundled `silero-vad-unified-256ms-v6.0.0.mlmodelc` resource is included in both app targets.
-- The iOS clean home/settings UI remains unchanged from the user-facing perspective.
+- `deploy/modal_asr_app.py` is the Modal deployment adapter:
+  - returns the existing `tarteel_realtime.asr_app:create_app_from_env` FastAPI app
+  - uses `gpu="L4"`, `min_containers=0`, `max_containers=1`, `scaledown_window=60`
+  - uses Modal Volume `tarteel-asr-model-cache` at `/models/huggingface-cache/hub`
+  - exposes local entrypoint `prewarm` for model cache hydration
+- `TARTEEL_WS_BEARER_TOKEN` enables provider-neutral WebSocket bearer auth.
+  - `/health` and `/ping` remain public.
+  - `WS /ws/recitation` rejects missing or wrong bearer tokens when configured.
+- `tarteel_realtime.replay_probe` is the provider-neutral RunPod/Modal evidence tool.
+  - It supports `--scope`, `--bearer-token`, `--disable-ping`, and `--include-events`.
+  - It reports connect time, total time, first non-wait event timing, event counts, and first lock/progress refs.
+- Apple settings now keep `Simulator` and `Custom`.
+  - Under `Custom`, provider picker options are `Generic`, `RunPod`, and `Modal`.
+  - RunPod normalizes bare `.proxy.runpod.net` and `.api.runpod.ai` hosts.
+  - Modal normalizes bare `.modal.run` hosts.
+  - Bearer token remains memory-only.
 
 ## Verification
 
+- Focused Modal CUDA-image checks passed:
+  - `uv run python -B -m unittest tests.test_modal_serverless -v`
+  - Result: 5 tests.
+  - `uv run python -m compileall -q deploy tests/test_modal_serverless.py`
+  - `git diff --check`
+- Post-deploy remote checks passed:
+  - `curl -sS https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ping` returned `{"status":"ok"}`.
+  - Modal logs since `2026-05-29T16:00:38` show `GET /ping -> 200 OK`.
+  - Searching post-deploy logs for `libcublas` returned no results.
+- Focused replay fixture checks passed:
+  - `uv run python -B -m unittest tests.test_replay_probe tests.test_ws_client tests.test_asr_smoke -v`
+  - Result: 22 tests.
+- Local fixture load proof passed:
+  - `load_replay_audio_file(Path("fixtures/local_audio/108001.wav"), raw_sample_rate_hz=16000)` returned 44.1 kHz mono PCM, 787,968 bytes, about 8.934 seconds.
+- Original command shape now passes audio loading:
+  - A dummy `ws://127.0.0.1:9/ws/recitation` URL reaches connection setup and fails with connection refused instead of `AudioInputError`.
+- Focused Modal prewarm-fix checks passed:
+  - `uv run python -B -m unittest tests.test_modal_serverless -v`
+  - Result: 5 tests.
+- Syntax and whitespace checks passed:
+  - `uv run python -m compileall -q deploy tests/test_modal_serverless.py`
+  - `git diff --check`
+- Focused Modal/replay/backend/Apple source checks passed:
+  - `uv run python -B -m unittest tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_api tests.test_asr_runtime tests.test_asr_app tests.test_ios_websocket_client tests.test_ios_recitation_scope_ui tests.test_ios_status_panel tests.test_macos_app_project -v`
+  - Result: 64 tests.
+- Compile check passed:
+  - `uv run python -m compileall -q deploy tarteel_realtime tests`
 - Swift client core passed:
   - `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
-  - Result: 36 tests total, 12 XCTest-style plus 24 Swift Testing.
-- Focused Apple source/project guardrails passed:
-  - `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
-  - Result: 16 tests.
+  - Result: 39 tests total.
 - iPhone target build passed:
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
-- macOS target build passed after escalated rerun because sandboxed Xcode package/cache access was blocked:
+- macOS target build passed after escalated rerun because sandboxed Xcode/SwiftPM cache access was blocked:
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`
 - Full deterministic Python suite passed:
   - `uv run python -B -m unittest discover -s tests -v`
-  - Result: 202 tests.
-- JSON validation and whitespace checks passed:
-  - `uv run python -B -m json.tool feature_list.json`
+  - Result: 218 tests.
+- JSON/active-feature/whitespace checks passed:
+  - `uv run python -B -m json.tool feature_list.json` after escalated rerun for uv cache access
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"` returned `[]`
   - `git diff --check`
 
 ## Current Risks
 
-- This was an automated build and source-guardrail slice, not manual macOS microphone proof.
-- RunPod Serverless endpoint deployment is still outstanding:
-  - no Docker image build/push
-  - no endpoint creation
-  - no cold-start, worker runtime, scale-to-zero, billing, or scoped fixture replay evidence
-- RunPod live-ASR quality remains separate from the Apple client build proof.
+- Modal is deployed, but no fresh post-deploy ASR replay/recitation proof has been captured after the CUDA image fix.
+- Modal still needs scoped replay proof, idle shutdown evidence, and cost evidence.
+- `prewarm` may need rerun after the CUDA image deployment if the model cache Volume is not already hydrated.
+- RunPod Serverless remains locally packaged but not live endpoint verified.
+- The Apple provider picker was source/build verified, not manually exercised on iPhone or macOS.
+- Real ASR quality remains model/audio dependent; this slice only adds provider comparison infrastructure.
 
 ## Next Best Step
 
-Manually launch the macOS app, grant microphone permission, and test local backend recording against `/ws/recitation`. The RunPod Serverless proof remains a separate outstanding path:
+Run a fresh post-deploy Modal replay or recitation, then check logs after the
+test window. Replay command:
 
-- build and push the serverless image
-- create a RunPod Load Balancer endpoint with `Active workers = 0`, `Max workers = 1`
-- replay `108001`, `108002`, `108003` with `?scope=108`
-- replay `004001`, `004002`, `004003` with `?scope=4:1-3`
+```bash
+uv run --with websockets python -m tarteel_realtime.replay_probe \
+  --url 'wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation' \
+  --scope 108 \
+  --audio-path fixtures/local_audio/108001.wav \
+  --chunk-ms 1000 \
+  --bearer-token '<token>' \
+  --disable-ping \
+  --include-events
+
+uv run --with websockets python -m tarteel_realtime.replay_probe \
+  --url 'wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation' \
+  --scope '4:1-3' \
+  --audio-path fixtures/local_audio/004001.wav \
+  --chunk-ms 1000 \
+  --bearer-token '<token>' \
+  --disable-ping \
+  --include-events
+```
+
+If the first post-deploy request has to hydrate model cache again, rerun:
+
+```bash
+uvx modal run deploy/modal_asr_app.py::prewarm
+```
+
+Repeat the same replay probe against RunPod once Modal is clean so the provider
+comparison uses the same evidence shape.

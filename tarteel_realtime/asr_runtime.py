@@ -38,6 +38,7 @@ class AsrRuntimeSettings:
     minimum_speech_rms: int = 400
     minimum_frame_rms: int = 150
     log_transcripts: bool = False
+    websocket_bearer_token: str | None = None
 
 
 class LazyRecognizer:
@@ -78,6 +79,7 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrRuntimeSetting
         minimum_speech_rms=int(values.get("TARTEEL_ASR_MIN_SPEECH_RMS", str(profile_config.minimum_speech_rms))),
         minimum_frame_rms=int(values.get("TARTEEL_ASR_MIN_FRAME_RMS", str(profile_config.minimum_frame_rms))),
         log_transcripts=_env_bool(values, "TARTEEL_LOG_TRANSCRIPTS"),
+        websocket_bearer_token=_optional_env(values, "TARTEEL_WS_BEARER_TOKEN"),
     )
 
 

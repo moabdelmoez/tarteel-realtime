@@ -13,13 +13,97 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
-- Current iOS UI direction: the home screen is a light recitation surface. Backend preset, custom WebSocket URL, and RunPod API key live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
+- Current iOS UI direction: the home screen is a light recitation surface. Backend preset, Custom provider, custom WebSocket URL, and memory-only bearer token live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: deploy the RunPod Serverless Load Balancer prototype, measure cold start/scale-to-zero, then run scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
-- Current blocker: the serverless worker packaging and direct iOS prototype auth path are locally verified, but no RunPod Serverless endpoint has been deployed yet; live endpoint latency, billing, and real-ASR quality remain unverified.
+- Current highest-priority unfinished feature: deploy provider-comparison GPU serverless endpoints, starting with Modal and RunPod, then measure cold start/scale-to-zero and scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
+- Current blocker: RunPod and Modal serverless packaging are locally verified, but no live endpoint has been deployed or fixture-replayed yet; endpoint latency, billing, idle shutdown, and real-ASR quality remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 080
+
+- Date: 2026-05-29
+- Goal: Diagnose Modal recitation errors from live logs and fix the deployed image.
+- Completed:
+  - Pulled Modal logs for deployed app `ap-y0XxuwnT0t7dEPT8FaWe2W` / `tarteel-realtime-asr`.
+  - Identified repeated ASR failures during recitation: `RuntimeError: Library libcublas.so.12 is not found or cannot be loaded` from faster-whisper/CTranslate2 while encoding segments.
+  - Replaced the Modal base image with `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` via `modal.Image.from_registry(..., add_python="3.13")` and kept explicit runtime dependency install.
+  - Documented the CUDA library failure mode in `docs/modal-serverless.md`.
+  - Redeployed Modal app with the CUDA/cuDNN base image; Modal reported the Web Function URL `https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run`.
+- Verification run:
+  - Focused Modal static tests passed: `uv run python -B -m unittest tests.test_modal_serverless -v` with 5 tests.
+  - Syntax check passed: `uv run python -m compileall -q deploy tests/test_modal_serverless.py`.
+  - Whitespace check passed: `git diff --check`.
+  - Post-deploy `/ping` returned `{"status":"ok"}`.
+  - Post-deploy Modal logs since `2026-05-29T16:00:38` show `GET /ping -> 200 OK`; searching the same post-deploy window for `libcublas` returned no results.
+- Known risk or unresolved issue:
+  - No fresh post-deploy recitation/replay with bearer token was run by the agent, so ASR success still needs one live proof against the redeployed image.
+- Next best step: rerun the replay probe or recite Surah 108 again, then fetch post-deploy logs for any new ASR errors.
+
+
+### Session 079
+
+- Date: 2026-05-29
+- Goal: Fix replay probe failure on the documented `fixtures/local_audio/108001.wav` Modal smoke command.
+- Completed:
+  - Reproduced the error: `fixtures/local_audio/108001.wav` is PCM16 stereo at 44.1 kHz, while the shared ASR smoke loader accepts only mono PCM16 WAV.
+  - Added `load_replay_audio_file` in `tarteel_realtime.replay_probe` so replay evidence can downmix multi-channel PCM16 WAV fixtures to mono before WebSocket streaming.
+  - Preserved `asr_smoke` strictness; it still rejects stereo WAV input.
+  - Documented the replay-probe downmix behavior in `docs/modal-serverless.md`.
+- Verification run:
+  - Focused replay/ws/asr smoke tests passed: `uv run python -B -m unittest tests.test_replay_probe tests.test_ws_client tests.test_asr_smoke -v` with 22 tests.
+  - Local fixture load proof passed: `load_replay_audio_file(Path("fixtures/local_audio/108001.wav"), raw_sample_rate_hz=16000)` returned 44.1 kHz mono PCM, 787,968 bytes, about 8.934 seconds.
+  - Original command shape now passes audio loading; a dummy `ws://127.0.0.1:9/ws/recitation` URL reaches connection setup and fails with connection refused instead of `AudioInputError`.
+  - Whitespace check passed: `git diff --check`.
+- Known risk or unresolved issue:
+  - The actual Modal replay command still needs to be rerun against the deployed Modal URL and bearer token.
+- Next best step: rerun the same `uv run --with websockets python -m tarteel_realtime.replay_probe ...` command against `$MODAL_WS_URL`.
+
+
+### Session 078
+
+- Date: 2026-05-29
+- Goal: Fix Modal prewarm failure reported during live setup.
+- Completed:
+  - Replaced the Modal image's `.uv_sync()` step with explicit `.uv_pip_install(*PROJECT_RUNTIME_DEPENDENCIES, *MODAL_ASR_DEPENDENCIES)` so Modal's legacy image builder no longer expects `modal` to be listed in `pyproject.toml`.
+  - Kept `modal` and `faster-whisper` out of default project dependencies; Modal runtime dependencies remain owned by `deploy/modal_asr_app.py`.
+  - Added troubleshooting notes to `docs/modal-serverless.md` for the `Image builder version <= 2024.10 requires modal...` failure.
+- Verification run:
+  - Focused Modal static tests passed: `uv run python -B -m unittest tests.test_modal_serverless -v` with 5 tests.
+  - Syntax check passed: `uv run python -m compileall -q deploy tests/test_modal_serverless.py`.
+  - Whitespace check passed: `git diff --check`.
+- Known risk or unresolved issue:
+  - The user still needs to rerun `uvx modal run deploy/modal_asr_app.py::prewarm`; this fix was locally verified by static/syntax checks, not by a live Modal prewarm.
+- Next best step: rerun Modal prewarm, then deploy and run `tarteel_realtime.replay_probe` against the deployed WebSocket URL.
+
+
+### Session 077
+
+- Date: 2026-05-28
+- Goal: Implement Modal as a same-repo GPU serverless provider comparison option while preserving WebSocket-only transport.
+- Completed:
+  - Added `deploy/modal_asr_app.py`, a Modal ASGI deployment adapter that returns the existing `tarteel_realtime.asr_app:create_app_from_env` app, uses L4 GPU defaults, `min_containers=0`, `max_containers=1`, `scaledown_window=60`, a Modal Volume for Hugging Face model cache, and a local `prewarm` entrypoint.
+  - Added provider-neutral WebSocket bearer auth: `TARTEEL_WS_BEARER_TOKEN` is parsed through ASR runtime settings, `/health` and `/ping` remain public, and `WS /ws/recitation` rejects missing or wrong bearer tokens when configured.
+  - Added `tarteel_realtime.replay_probe`, a provider-neutral fixture replay CLI that records connect time, first non-wait event time, event counts, first lock/progress refs, optional raw events, scope query handling, and bearer-token headers.
+  - Added Apple Custom provider selection in the shared client core and both iOS/macOS settings surfaces: `Generic`, `RunPod`, and `Modal`; Modal normalizes bare `.modal.run` hosts to `wss://.../ws/recitation`; bearer tokens remain memory-only.
+  - Added `docs/modal-serverless.md` and updated README, iOS README, RunPod serverless docs, clean-state checklist, quality document, feature list, and handoff.
+- Verification run:
+  - Focused Modal/replay/backend/Apple source checks passed: `uv run python -B -m unittest tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_api tests.test_asr_runtime tests.test_asr_app tests.test_ios_websocket_client tests.test_ios_recitation_scope_ui tests.test_ios_status_panel tests.test_macos_app_project -v` with 64 tests.
+  - Compile check passed: `uv run python -m compileall -q deploy tarteel_realtime tests`.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` from `ios/TarteelClientCore` with 39 tests total.
+  - iPhone app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - macOS app build first failed in sandbox because Xcode/SwiftPM cache access was blocked, then passed with escalated permissions: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 218 tests.
+  - JSON validation passed after escalated rerun for uv cache access: `uv run python -B -m json.tool feature_list.json`.
+  - Active-feature sanity passed: `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"` returned `[]`.
+  - Whitespace check passed: `git diff --check`.
+- Known risk or unresolved issue:
+  - Modal was not deployed during this slice; Modal Volume prewarm, Modal deploy, `/ping`, scoped replay, idle shutdown, and cost evidence remain outstanding.
+  - RunPod Serverless remains locally packaged but not live endpoint verified.
+  - Apple provider picker was build/source verified, not manually exercised in the UI.
+- Next best step: create the Modal secret, prewarm the Modal Volume, deploy `deploy/modal_asr_app.py`, then run `tarteel_realtime.replay_probe` against `108001` scoped to `108` and `004001` scoped to `4:1-3`; repeat the same probe against RunPod for comparable evidence.
 
 
 ### Session 076

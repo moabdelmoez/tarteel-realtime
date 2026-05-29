@@ -29,6 +29,7 @@ class AsrRuntimeTests(unittest.TestCase):
         self.assertEqual(settings.minimum_speech_rms, 400)
         self.assertEqual(settings.minimum_frame_rms, 150)
         self.assertFalse(settings.log_transcripts)
+        self.assertIsNone(settings.websocket_bearer_token)
 
     def test_settings_from_env_applies_low_latency_buffering_profile(self):
         settings = settings_from_env({

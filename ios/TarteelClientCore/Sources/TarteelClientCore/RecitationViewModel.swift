@@ -7,6 +7,7 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var isRecording = false
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var backendPreset = BackendEndpointPreset.simulator
+    @Published public private(set) var customBackendProvider = BackendProvider.runPod
     @Published public private(set) var recitationMode = RecitationMode.autoDetect
     @Published public private(set) var connectionStatus = "Idle"
     @Published public var backendURLText = BackendEndpointPreset.simulator.defaultURLText {
@@ -21,7 +22,7 @@ public final class RecitationViewModel: ObservableObject {
             preferencesStore.selectedSurahID = selectedSurahID
         }
     }
-    @Published public var runPodAPIKeyText = ""
+    @Published public var backendBearerTokenText = ""
 
     private let socketClient: BackendSocketing
     private let audioStreamer: AudioStreaming
@@ -45,8 +46,10 @@ public final class RecitationViewModel: ObservableObject {
         self.preferencesStore = preferencesStore
 
         let storedPreset = preferencesStore.backendPreset
+        let storedProvider = preferencesStore.customBackendProvider
         let storedCustomURLText = preferencesStore.customBackendURLText
         backendPreset = storedPreset
+        customBackendProvider = storedProvider
         customBackendURLText = storedCustomURLText
         recitationMode = preferencesStore.recitationMode
         selectedSurahID = preferencesStore.selectedSurahID
@@ -56,6 +59,12 @@ public final class RecitationViewModel: ObservableObject {
         case .custom:
             backendURLText = storedCustomURLText
         }
+    }
+
+    @available(*, deprecated, renamed: "backendBearerTokenText")
+    public var runPodAPIKeyText: String {
+        get { backendBearerTokenText }
+        set { backendBearerTokenText = newValue }
     }
 
     public func selectBackendPreset(_ preset: BackendEndpointPreset) {
@@ -74,6 +83,11 @@ public final class RecitationViewModel: ObservableObject {
         }
     }
 
+    public func selectCustomBackendProvider(_ provider: BackendProvider) {
+        customBackendProvider = provider
+        preferencesStore.customBackendProvider = provider
+    }
+
     public func selectRecitationMode(_ mode: RecitationMode) {
         recitationMode = mode
         preferencesStore.recitationMode = mode
@@ -88,9 +102,9 @@ public final class RecitationViewModel: ObservableObject {
         }
     }
 
-    private var runPodAuthorizationToken: String? {
+    private var backendAuthorizationToken: String? {
         guard backendPreset == .custom else { return nil }
-        let token = runPodAPIKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
         return token.isEmpty ? nil : token
     }
 
@@ -133,7 +147,8 @@ public final class RecitationViewModel: ObservableObject {
         do {
             let urlText = backendPreset.recordingURLText(
                 currentURLText: backendURLText,
-                recitationScope: recitationScopeSelection
+                recitationScope: recitationScopeSelection,
+                provider: customBackendProvider
             )
             if urlText != backendURLText {
                 backendURLText = urlText
@@ -144,7 +159,7 @@ public final class RecitationViewModel: ObservableObject {
 
             try await socketClient.connect(
                 url: backendURL,
-                authorizationToken: runPodAuthorizationToken
+                authorizationToken: backendAuthorizationToken
             ) { [weak self] event in
                 Task { @MainActor in
                     guard let self else { return }
