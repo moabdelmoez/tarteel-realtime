@@ -57,6 +57,18 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.selectedSurahID, 4)
     }
 
+    func testInvalidPersistedSelectedSurahIDFallsBackToConfiguredDefault() {
+        let defaults = UserDefaults(suiteName: "RecitationPreferencesStoreTests.invalidPersistedSurah")!
+        defaults.removePersistentDomain(forName: "RecitationPreferencesStoreTests.invalidPersistedSurah")
+        defaults.set(0, forKey: "tarteel.selectedSurahID")
+        let store = UserDefaultsRecitationPreferencesStore(
+            defaults: defaults,
+            fallbackValues: RecitationPreferencesDefaults(selectedSurahID: 4)
+        )
+
+        XCTAssertEqual(store.selectedSurahID, 4)
+    }
+
     func testPersistsNonSecretSettings() {
         let defaults = UserDefaults(suiteName: "RecitationPreferencesStoreTests.persist")!
         defaults.removePersistentDomain(forName: "RecitationPreferencesStoreTests.persist")

@@ -109,7 +109,8 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
             guard defaults.object(forKey: Key.selectedSurahID) != nil else {
                 return fallbackValues.selectedSurahID
             }
-            return defaults.integer(forKey: Key.selectedSurahID)
+            let value = defaults.integer(forKey: Key.selectedSurahID)
+            return value == 0 ? fallbackValues.selectedSurahID : value
         }
         set {
             defaults.set(newValue, forKey: Key.selectedSurahID)
