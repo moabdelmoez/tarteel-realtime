@@ -11,12 +11,23 @@ struct TarteelPrototypeMacApp: App {
         WindowGroup {
             MacContentView(viewModel: viewModel)
         }
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
-            CommandGroup(after: .appSettings) {
-                Button(viewModel.isRecording ? "Stop Recitation" : "Start Recitation") {
+            CommandMenu("Recitation") {
+                Button(viewModel.recordingActionTitle) {
                     viewModel.toggleRecording()
                 }
+                .disabled(!viewModel.canStartRecording && !viewModel.isRecording)
                 .keyboardShortcut("r", modifiers: [.command])
+
+                Button("Search Surahs") {
+                    NotificationCenter.default.post(name: .focusMacSurahSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command])
+            }
+
+            CommandGroup(after: .appSettings) {
+                EmptyView()
             }
         }
 
