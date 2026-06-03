@@ -256,6 +256,8 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("tokenHelpText", settings_source)
         self.assertIn("Saved securely in macOS Keychain", settings_source)
         self.assertIn("backendBearerTokenPersistenceMessage", settings_source)
+        self.assertNotIn("memory-only", settings_source)
+        self.assertNotIn("not saved", settings_source)
         self.assertIn("if let tokenMessage = viewModel.backendBearerTokenPersistenceMessage", settings_source)
         self.assertIsNotNone(re.search(
             r"if let tokenMessage = viewModel\.backendBearerTokenPersistenceMessage \{"

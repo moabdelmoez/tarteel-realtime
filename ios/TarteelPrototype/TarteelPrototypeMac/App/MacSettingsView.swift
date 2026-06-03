@@ -51,7 +51,7 @@ struct MacSettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
                         .disabled(viewModel.isRecording)
-                        .help("Optional memory-only bearer token for the next Custom backend connection")
+                        .help(tokenHelpText)
 
                     if let tokenMessage = viewModel.backendBearerTokenPersistenceMessage {
                         Label(tokenMessage, systemImage: "key.horizontal")
