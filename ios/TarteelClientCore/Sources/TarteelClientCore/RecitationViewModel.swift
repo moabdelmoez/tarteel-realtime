@@ -19,6 +19,18 @@ public struct RecitationEventHistoryItem: Equatable, Identifiable, Sendable {
     }
 }
 
+public struct BackendDropFeedback: Equatable, Sendable {
+    public let message: String
+    public let detailText: String?
+    public let isError: Bool
+
+    public init(message: String, detailText: String? = nil, isError: Bool) {
+        self.message = message
+        self.detailText = detailText
+        self.isError = isError
+    }
+}
+
 @MainActor
 public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var state = RecitationSessionState()
@@ -30,6 +42,7 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var connectionStatus = "Idle"
     @Published public private(set) var recentEventHistory: [RecitationEventHistoryItem] = []
     @Published public private(set) var backendURLValidationMessage: String?
+    @Published public private(set) var backendDropFeedback: BackendDropFeedback?
     @Published public var backendURLText = BackendEndpointPreset.simulator.defaultURLText {
         didSet {
             if backendPreset == .custom {
@@ -384,6 +397,10 @@ public final class RecitationViewModel: ObservableObject {
         )
         guard Self.isValidWebSocketURLText(normalized) else {
             backendURLValidationMessage = "Drop a ws://, wss://, Modal, or RunPod backend URL."
+            backendDropFeedback = BackendDropFeedback(
+                message: "Drop a ws://, wss://, Modal, or RunPod backend URL.",
+                isError: true
+            )
             return nil
         }
 
@@ -391,6 +408,11 @@ public final class RecitationViewModel: ObservableObject {
         selectCustomBackendProvider(provider)
         backendURLText = normalized
         validateBackendURLText()
+        backendDropFeedback = BackendDropFeedback(
+            message: "Backend set to \(provider.label)",
+            detailText: normalized,
+            isError: false
+        )
         return normalized
     }
 

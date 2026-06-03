@@ -164,19 +164,66 @@ class MacOSAppProjectTests(unittest.TestCase):
 
     def test_macos_ui_exposes_search_drag_drop_onboarding_and_transitions(self) -> None:
         content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
+        surah_catalog_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / "SurahCatalog.swift"
+        ).read_text(encoding="utf-8")
+        view_model_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / "RecitationViewModel.swift"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("@FocusState", content_source)
         self.assertNotIn(".searchable(text:", content_source)
         self.assertNotIn(".searchFocused($isSearchFocused)", content_source)
         self.assertIn('TextField("Search surahs"', content_source)
         self.assertIn(".focused($isSearchFocused)", content_source)
+        self.assertIn("SurahCatalog.matchingSurahs(for: searchText)", content_source)
+        self.assertIn(".onChange(of: searchText)", content_source)
+        self.assertIn("SurahCatalog.selectionID(for: query)", content_source)
+        self.assertIn("selectSurah", content_source)
+        self.assertIn("viewModel.selectRecitationMode(.selectedSurah)", content_source)
+        search_selection_match = re.search(
+            r"private func applySearchSelection\(_ query: String\) \{(?P<body>.*?)\n    \}",
+            content_source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(search_selection_match)
+        search_selection_body = search_selection_match.group("body")
+        self.assertIsNotNone(re.search(
+            r"guard let selectionID = SurahCatalog\.selectionID\(for: query\) else \{ return \}"
+            r".*viewModel\.selectedSurahID = selectionID"
+            r".*viewModel\.selectRecitationMode\(\.selectedSurah\)",
+            search_selection_body,
+            flags=re.DOTALL,
+        ))
+        self.assertIsNone(re.search(
+            r"viewModel\.selectRecitationMode\(\.selectedSurah\).*"
+            r"guard let selectionID = SurahCatalog\.selectionID\(for: query\)",
+            search_selection_body,
+            flags=re.DOTALL,
+        ))
+        self.assertIn("if isShowingSearchResults && !filteredSurahs.isEmpty", content_source)
         self.assertIn("filteredSurahs", content_source)
         self.assertIn("ForEach(filteredSurahs)", content_source)
         self.assertNotIn("ForEach(SurahCatalog.all)", content_source)
         self.assertIn("No matching surah", content_source)
+        self.assertIn("matchingSurahs(for query: String)", surah_catalog_source)
+        self.assertIn("selectionID(for query: String)", surah_catalog_source)
         self.assertIn(".onDrop(of:", content_source)
         self.assertIn("UTType.url.identifier", content_source)
         self.assertIn("UTType.plainText.identifier", content_source)
+        self.assertIn("DropFeedbackBanner", content_source)
+        self.assertIn("backendDropFeedback", content_source)
+        self.assertIn("BackendDropFeedback", view_model_source)
         self.assertIn(".draggable(viewModel.shareableSessionSummary)", content_source)
         self.assertIn("NativeOnboardingSheet", content_source)
         self.assertIn("NativeOnboardingSheet(hasSeenNativeOnboarding: $hasSeenNativeOnboarding)", content_source)

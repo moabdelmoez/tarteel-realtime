@@ -20,4 +20,18 @@ struct SurahCatalogTests {
         #expect(alKawthar.versesCount == 3)
         #expect(alKawthar.displayName == "108. الكوثر - Al-Kawthar")
     }
+
+    @Test func searchMatchesSurahNamesAndExactSelections() {
+        #expect(SurahCatalog.matchingSurahs(for: "kawthar").map(\.id) == [108])
+        #expect(SurahCatalog.matchingSurahs(for: "الكوثر").map(\.id) == [108])
+        #expect(SurahCatalog.matchingSurahs(for: "108").map(\.id) == [108])
+        #expect(SurahCatalog.matchingSurahs(for: "missing").isEmpty)
+
+        #expect(SurahCatalog.exactSelectionID(for: "108") == 108)
+        #expect(SurahCatalog.exactSelectionID(for: "Al-Kawthar") == 108)
+        #expect(SurahCatalog.exactSelectionID(for: "الكوثر") == 108)
+        #expect(SurahCatalog.exactSelectionID(for: "Al") == nil)
+        #expect(SurahCatalog.selectionID(for: "kawthar") == 108)
+        #expect(SurahCatalog.selectionID(for: "Al") == nil)
+    }
 }

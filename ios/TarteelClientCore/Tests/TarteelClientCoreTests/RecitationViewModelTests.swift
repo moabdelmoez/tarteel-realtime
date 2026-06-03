@@ -362,6 +362,31 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.backendURLText, normalizedURL)
         XCTAssertNil(viewModel.backendURLValidationMessage)
     }
+
+    func testDroppedBackendTextPublishesMainSurfaceFeedback() {
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        XCTAssertNil(viewModel.applyDroppedBackendText("not a websocket url"))
+        XCTAssertEqual(viewModel.backendDropFeedback?.message, "Drop a ws://, wss://, Modal, or RunPod backend URL.")
+        XCTAssertTrue(viewModel.backendDropFeedback?.isError == true)
+
+        let normalizedURL = viewModel.applyDroppedBackendText(
+            "https://workspace--tarteel-realtime-asr-fastapi-app.modal.run"
+        )
+
+        XCTAssertEqual(
+            normalizedURL,
+            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation"
+        )
+        XCTAssertEqual(viewModel.backendDropFeedback?.message, "Backend set to Modal")
+        XCTAssertEqual(viewModel.backendDropFeedback?.detailText, normalizedURL)
+        XCTAssertFalse(viewModel.backendDropFeedback?.isError == true)
+    }
 }
 
 @MainActor

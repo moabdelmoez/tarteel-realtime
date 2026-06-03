@@ -10,24 +10,23 @@ struct MacContentView: View {
     @State private var isShowingOnboarding = false
 
     private var filteredSurahs: [SurahMetadata] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return SurahCatalog.all }
-
-        let exactID = Int(query)
-        return SurahCatalog.all.filter { surah in
-            if let exactID, surah.id == exactID {
-                return true
-            }
-            return surah.nameSimple.localizedCaseInsensitiveContains(query)
-                || surah.nameArabic.localizedCaseInsensitiveContains(query)
-        }
+        SurahCatalog.matchingSurahs(for: searchText)
     }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 22) {
+                if let feedback = viewModel.backendDropFeedback {
+                    DropFeedbackBanner(feedback: feedback)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 RecitationHeader(viewModel: viewModel)
-                MacRecitationControls(viewModel: viewModel, filteredSurahs: filteredSurahs)
+                MacRecitationControls(
+                    viewModel: viewModel,
+                    searchText: searchText,
+                    filteredSurahs: filteredSurahs,
+                    selectSurah: selectSurah
+                )
                 MacVoiceActivityIndicator(isActive: viewModel.isRecording)
                 MacMicButton(viewModel: viewModel)
                 Spacer(minLength: 0)
@@ -63,6 +62,7 @@ struct MacContentView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($isSearchFocused)
                     .frame(width: 220)
+                    .disabled(viewModel.isRecording)
                     .help("Search for a surah")
 
                 SettingsLink {
@@ -81,11 +81,31 @@ struct MacContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusMacSurahSearch)) { _ in
             isSearchFocused = true
         }
+        .onChange(of: searchText) { _, newValue in
+            applySearchSelection(newValue)
+        }
         .onDrop(of: [UTType.url.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)
         }
         .animation(.snappy(duration: 0.2), value: viewModel.state.phase)
         .animation(.snappy(duration: 0.2), value: viewModel.recentEventHistory)
+        .animation(.snappy(duration: 0.2), value: viewModel.backendDropFeedback)
+    }
+
+    private func applySearchSelection(_ query: String) {
+        guard !viewModel.isRecording else { return }
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let selectionID = SurahCatalog.selectionID(for: query) else { return }
+
+        viewModel.selectedSurahID = selectionID
+        viewModel.selectRecitationMode(.selectedSurah)
+    }
+
+    private func selectSurah(_ surah: SurahMetadata) {
+        guard !viewModel.isRecording else { return }
+        viewModel.selectedSurahID = surah.id
+        viewModel.selectRecitationMode(.selectedSurah)
+        searchText = surah.nameSimple
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -150,7 +170,13 @@ private struct RecitationHeader: View {
 
 private struct MacRecitationControls: View {
     @ObservedObject var viewModel: RecitationViewModel
+    let searchText: String
     let filteredSurahs: [SurahMetadata]
+    let selectSurah: (SurahMetadata) -> Void
+
+    private var isShowingSearchResults: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -182,7 +208,63 @@ private struct MacRecitationControls: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+
+            if isShowingSearchResults && !filteredSurahs.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(filteredSurahs.prefix(5)) { surah in
+                        Button {
+                            selectSurah(surah)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(surah.displayName)
+                                    .lineLimit(1)
+                                Spacer()
+                                if surah.id == viewModel.selectedSurahID {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(MacTheme.teal)
+                                }
+                            }
+                            .font(.caption)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isRecording)
+                    }
+                }
+                .padding(8)
+                .frame(width: 320)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+    }
+}
+
+private struct DropFeedbackBanner: View {
+    let feedback: BackendDropFeedback
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: feedback.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(feedback.isError ? MacTheme.warning : MacTheme.teal)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(feedback.message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MacTheme.ink)
+                if let detailText = feedback.detailText {
+                    Text(detailText)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(MacTheme.muted)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

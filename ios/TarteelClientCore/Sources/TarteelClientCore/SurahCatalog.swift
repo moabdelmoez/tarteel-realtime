@@ -139,4 +139,49 @@ public enum SurahCatalog {
     public static func surah(id: Int) -> SurahMetadata? {
         all.first { $0.id == id }
     }
+
+    public static func matchingSurahs(for query: String) -> [SurahMetadata] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return all }
+
+        if let id = Int(normalizedQuery) {
+            return all.filter { $0.id == id }
+        }
+
+        return all.filter { surah in
+            surah.nameSimple.localizedCaseInsensitiveContains(normalizedQuery)
+                || surah.nameArabic.localizedCaseInsensitiveContains(normalizedQuery)
+        }
+    }
+
+    public static func exactSelectionID(for query: String) -> Int? {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return nil }
+
+        if let id = Int(normalizedQuery), surah(id: id) != nil {
+            return id
+        }
+
+        let exactMatches = all.filter { surah in
+            surah.nameSimple.compare(
+                normalizedQuery,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) == .orderedSame
+                || surah.nameArabic == normalizedQuery
+                || surah.displayName.compare(
+                    normalizedQuery,
+                    options: [.caseInsensitive, .diacriticInsensitive]
+                ) == .orderedSame
+        }
+        return exactMatches.count == 1 ? exactMatches[0].id : nil
+    }
+
+    public static func selectionID(for query: String) -> Int? {
+        if let exactSelectionID = exactSelectionID(for: query) {
+            return exactSelectionID
+        }
+
+        let matches = matchingSurahs(for: query)
+        return matches.count == 1 ? matches[0].id : nil
+    }
 }

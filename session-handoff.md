@@ -5,8 +5,8 @@
 - Latest slice: macOS native UI polish, completed locally on 2026-06-03.
 - The macOS prototype now uses a unified compact toolbar for recording, Surah search, and Settings, with source/build-verified native shell behavior.
 - Keyboard commands are wired for `Space`/`Command-R` recording and `Command-F` Surah search focus.
-- The macOS recitation surface now includes macOS 14-compatible Surah filtering, first-run onboarding, event history, empty states, URL/text drop-in for backend setup, diagnostic drag-out text, adaptive system colors/materials, and Settings validation feedback.
-- Shared `RecitationViewModel` presentation state now exposes recent event history, backend URL validation, recording action metadata, shareable diagnostic summary text, and dropped backend text handling.
+- The macOS recitation surface now includes macOS 14-compatible Surah filtering/selection, first-run onboarding, event history, empty states, URL/text drop-in for backend setup with visible feedback, diagnostic drag-out text, adaptive system colors/materials, and Settings validation feedback.
+- Shared `RecitationViewModel` presentation state now exposes recent event history, backend URL validation, recording action metadata, shareable diagnostic summary text, and dropped backend feedback.
 - Previous slice: Modal CUDA image fix, deployed on 2026-05-29.
 - Modal logs for deployed app `ap-y0XxuwnT0t7dEPT8FaWe2W` / `tarteel-realtime-asr` showed repeated recitation failures:
   - `RuntimeError: Library libcublas.so.12 is not found or cannot be loaded`
@@ -47,7 +47,7 @@
 
 - macOS native UI polish checks passed:
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
-  - Result: 42 checks.
+  - Result: 44 checks.
   - `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
   - Result: 20 tests.
   - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`

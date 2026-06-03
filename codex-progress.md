@@ -34,8 +34,9 @@
   - Polished the macOS recitation window with a unified compact toolbar, toolbar recording button, macOS 14-compatible Surah search focus, Settings toolbar entry, URL/text drop-in for Custom backend setup, diagnostic drag-out text, event history, empty states, adaptive system colors/materials, and first-run onboarding.
   - Added macOS app commands for `Space`/`Command-R` recording and `Command-F` Surah search focus.
   - Added visible Settings validation feedback and locked-while-recording copy in the native macOS Settings window.
+  - Fixed final code-review findings by adding main-window drop feedback for valid/invalid backend drops and making Surah search select scope for exact or single-result matches.
 - Verification run:
-  - Swift client core passed: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 42 checks.
+  - Swift client core passed: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 44 checks.
   - Focused Apple source guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 20 tests.
   - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
   - iPhone app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.

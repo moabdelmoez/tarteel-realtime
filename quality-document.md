@@ -27,7 +27,7 @@ The MVP has strong harness discipline and a working real-ASR mobile path, but it
 ## Known Quality Debt
 
 - Physical-device WebSocket testing is still outstanding.
-- macOS native UI polish is source/build verified, but manual light/dark visual QA, keyboard focus, drag/drop, diagnostic drag-out, Settings validation layout, microphone permission, and live backend recording are still outstanding.
+- macOS native UI polish is source/build verified, including drop feedback and search-driven scope selection, but manual light/dark visual QA, keyboard focus, drag/drop, diagnostic drag-out, Settings validation layout, microphone permission, and live backend recording are still outstanding.
 - Longer-surah and longer-session recitation behavior needs evaluation beyond targeted Surah 102 and Surah 114 paths.
 - Latency and chunking are tuned for MVP stability, not final user experience.
 - Ordered-progression guidance exists in backend behavior but still needs polished user-facing copy.
@@ -51,9 +51,10 @@ Before treating a future slice as passing:
 
 ### 2026-06-03 - macOS Native UI Polish
 
-- The macOS prototype moved closer to native utility-app behavior with a unified compact toolbar, integrated recording/search/settings controls, keyboard commands, URL/text drop-in, diagnostic drag-out, first-run onboarding, empty states, event history, adaptive colors/materials, and Settings validation feedback.
+- The macOS prototype moved closer to native utility-app behavior with a unified compact toolbar, integrated recording/search/settings controls, keyboard commands, URL/text drop-in with visible feedback, diagnostic drag-out, first-run onboarding, empty states, event history, adaptive colors/materials, and Settings validation feedback.
 - Shared presentation state lives in `TarteelClientCore`, keeping macOS UI behavior tied to the same recording state machine instead of app-local string handling.
-- Local confidence is good for contracts and builds: Swift client core passed with 42 checks, focused Apple source guardrails passed with 20 tests, the macOS and iPhone app targets built, the full deterministic Python suite passed with 223 tests, and compileall passed for `tarteel_realtime` and `tests`.
+- Search-driven Surah selection and visible drop feedback were added after final code review, with shared tests covering Surah matching/selection and backend drop feedback state.
+- Local confidence is good for contracts and builds: Swift client core passed with 44 checks, focused Apple source guardrails passed with 20 tests, the macOS and iPhone app targets built, the full deterministic Python suite passed with 223 tests, and compileall passed for `tarteel_realtime` and `tests`.
 - Release posture: ready for manual macOS visual and interaction QA. It is not yet proof of microphone permission flow, live recording ergonomics, or real ASR quality.
 
 
