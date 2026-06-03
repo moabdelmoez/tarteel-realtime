@@ -16,11 +16,24 @@ struct MacSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .disabled(viewModel.isRecording)
+                .help("Choose the backend preset used for the next recitation session")
 
                 TextField("Backend URL", text: $viewModel.backendURLText)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .disabled(viewModel.isRecording || !viewModel.backendPreset.allowsURLTextEditing)
+
+                if let message = viewModel.backendURLValidationMessage {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                if viewModel.isRecording {
+                    Text("Settings controls are locked while recording.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 if viewModel.backendPreset == .custom {
                     Picker("Provider", selection: Binding(
@@ -38,6 +51,7 @@ struct MacSettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
                         .disabled(viewModel.isRecording)
+                        .help("Optional memory-only bearer token for the next Custom backend connection")
 
                     Text(viewModel.customBackendProvider.tokenHelpText)
                         .font(.caption)
