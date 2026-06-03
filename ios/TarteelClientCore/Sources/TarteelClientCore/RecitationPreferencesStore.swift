@@ -1,5 +1,37 @@
 import Foundation
 
+public struct RecitationPreferencesDefaults: Equatable, Sendable {
+    public let backendPreset: BackendEndpointPreset
+    public let customBackendProvider: BackendProvider
+    public let customBackendURLText: String
+    public let recitationMode: RecitationMode
+    public let selectedSurahID: Int
+
+    public init(
+        backendPreset: BackendEndpointPreset = .simulator,
+        customBackendProvider: BackendProvider = .runPod,
+        customBackendURLText: String = "",
+        recitationMode: RecitationMode = .autoDetect,
+        selectedSurahID: Int = 108
+    ) {
+        self.backendPreset = backendPreset
+        self.customBackendProvider = customBackendProvider
+        self.customBackendURLText = customBackendURLText
+        self.recitationMode = recitationMode
+        self.selectedSurahID = selectedSurahID
+    }
+
+    public static let simulator = RecitationPreferencesDefaults()
+
+    public static let modalPrimary = RecitationPreferencesDefaults(
+        backendPreset: .custom,
+        customBackendProvider: .modal,
+        customBackendURLText: "wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation",
+        recitationMode: .autoDetect,
+        selectedSurahID: 108
+    )
+}
+
 public protocol RecitationPreferencesStoring {
     var backendPreset: BackendEndpointPreset { get set }
     var customBackendProvider: BackendProvider { get set }
@@ -18,16 +50,21 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
     }
 
     private let defaults: UserDefaults
+    private let fallbackValues: RecitationPreferencesDefaults
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(
+        defaults: UserDefaults = .standard,
+        fallbackValues: RecitationPreferencesDefaults = .simulator
+    ) {
         self.defaults = defaults
+        self.fallbackValues = fallbackValues
     }
 
     public var backendPreset: BackendEndpointPreset {
         get {
             guard let rawValue = defaults.string(forKey: Key.backendPreset),
                   let preset = BackendEndpointPreset(rawValue: rawValue) else {
-                return .simulator
+                return fallbackValues.backendPreset
             }
             return preset
         }
@@ -40,7 +77,7 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
         get {
             guard let rawValue = defaults.string(forKey: Key.customBackendProvider),
                   let provider = BackendProvider(rawValue: rawValue) else {
-                return .runPod
+                return fallbackValues.customBackendProvider
             }
             return provider
         }
@@ -50,7 +87,7 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
     }
 
     public var customBackendURLText: String {
-        get { defaults.string(forKey: Key.customBackendURLText) ?? "" }
+        get { defaults.string(forKey: Key.customBackendURLText) ?? fallbackValues.customBackendURLText }
         set { defaults.set(newValue, forKey: Key.customBackendURLText) }
     }
 
@@ -58,7 +95,7 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
         get {
             guard let rawValue = defaults.string(forKey: Key.recitationMode),
                   let mode = RecitationMode(rawValue: rawValue) else {
-                return .autoDetect
+                return fallbackValues.recitationMode
             }
             return mode
         }
@@ -69,8 +106,10 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
 
     public var selectedSurahID: Int {
         get {
-            let value = defaults.integer(forKey: Key.selectedSurahID)
-            return value == 0 ? 108 : value
+            guard defaults.object(forKey: Key.selectedSurahID) != nil else {
+                return fallbackValues.selectedSurahID
+            }
+            return defaults.integer(forKey: Key.selectedSurahID)
         }
         set {
             defaults.set(newValue, forKey: Key.selectedSurahID)
