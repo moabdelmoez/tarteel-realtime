@@ -42,6 +42,7 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var connectionStatus = "Idle"
     @Published public private(set) var recentEventHistory: [RecitationEventHistoryItem] = []
     @Published public private(set) var backendURLValidationMessage: String?
+    @Published public private(set) var backendBearerTokenPersistenceMessage: String?
     @Published public private(set) var backendDropFeedback: BackendDropFeedback?
     @Published public var backendURLText = BackendEndpointPreset.simulator.defaultURLText {
         didSet {
@@ -57,12 +58,18 @@ public final class RecitationViewModel: ObservableObject {
             preferencesStore.selectedSurahID = selectedSurahID
         }
     }
-    @Published public var backendBearerTokenText = ""
+    @Published public var backendBearerTokenText = "" {
+        didSet {
+            persistBackendBearerTokenIfNeeded()
+        }
+    }
 
     private let socketClient: BackendSocketing
     private let audioStreamer: AudioStreaming
     private let voiceActivityDetector: VoiceActivityDetecting
     private var preferencesStore: RecitationPreferencesStoring
+    private let backendBearerTokenStore: BackendBearerTokenStoring
+    private var isLoadingBackendBearerToken = false
     private var sequenceNumber = 0
     private var customBackendURLText = ""
     private var isStartingRecording = false
@@ -74,12 +81,14 @@ public final class RecitationViewModel: ObservableObject {
         socketClient: BackendSocketing? = nil,
         audioStreamer: AudioStreaming,
         voiceActivityDetector: VoiceActivityDetecting,
-        preferencesStore: RecitationPreferencesStoring = UserDefaultsRecitationPreferencesStore()
+        preferencesStore: RecitationPreferencesStoring = UserDefaultsRecitationPreferencesStore(),
+        backendBearerTokenStore: BackendBearerTokenStoring = VolatileBackendBearerTokenStore()
     ) {
         self.socketClient = socketClient ?? BackendWebSocketClient()
         self.audioStreamer = audioStreamer
         self.voiceActivityDetector = voiceActivityDetector
         self.preferencesStore = preferencesStore
+        self.backendBearerTokenStore = backendBearerTokenStore
 
         let storedPreset = preferencesStore.backendPreset
         let storedProvider = preferencesStore.customBackendProvider
@@ -96,6 +105,7 @@ public final class RecitationViewModel: ObservableObject {
             backendURLText = storedCustomURLText
         }
         validateBackendURLText()
+        loadBackendBearerToken(for: customBackendProvider)
     }
 
     @available(*, deprecated, renamed: "backendBearerTokenText")
@@ -117,6 +127,7 @@ public final class RecitationViewModel: ObservableObject {
             backendURLText = preset.defaultURLText
         case .custom:
             backendURLText = customBackendURLText
+            loadBackendBearerToken(for: customBackendProvider)
         }
         validateBackendURLText()
     }
@@ -124,6 +135,7 @@ public final class RecitationViewModel: ObservableObject {
     public func selectCustomBackendProvider(_ provider: BackendProvider) {
         customBackendProvider = provider
         preferencesStore.customBackendProvider = provider
+        loadBackendBearerToken(for: provider)
         validateBackendURLText()
     }
 
@@ -145,6 +157,34 @@ public final class RecitationViewModel: ObservableObject {
         guard backendPreset == .custom else { return nil }
         let token = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
         return token.isEmpty ? nil : token
+    }
+
+    private func loadBackendBearerToken(for provider: BackendProvider) {
+        isLoadingBackendBearerToken = true
+        defer {
+            isLoadingBackendBearerToken = false
+        }
+
+        do {
+            backendBearerTokenText = try backendBearerTokenStore.token(for: provider) ?? ""
+            backendBearerTokenPersistenceMessage = nil
+        } catch {
+            backendBearerTokenText = ""
+            backendBearerTokenPersistenceMessage = "Could not read saved backend token. Paste it again before recording."
+        }
+    }
+
+    private func persistBackendBearerTokenIfNeeded() {
+        guard !isLoadingBackendBearerToken, backendPreset == .custom else { return }
+
+        let trimmedToken = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tokenToStore = trimmedToken.isEmpty ? nil : trimmedToken
+        do {
+            try backendBearerTokenStore.setToken(tokenToStore, for: customBackendProvider)
+            backendBearerTokenPersistenceMessage = nil
+        } catch {
+            backendBearerTokenPersistenceMessage = "Token will be used for this session only. Keychain update failed."
+        }
     }
 
     public var canStartRecording: Bool {

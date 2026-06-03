@@ -64,6 +64,112 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(audio.didStart)
     }
 
+    func testLoadsStoredBearerTokenForInitialCustomProvider() {
+        let tokenStore = FakeBearerTokenStore(tokens: [.modal: "stored-modal-token"])
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        XCTAssertEqual(viewModel.backendBearerTokenText, "stored-modal-token")
+        XCTAssertNil(viewModel.backendBearerTokenPersistenceMessage)
+    }
+
+    func testSwitchingCustomProviderLoadsProviderSpecificStoredToken() {
+        let tokenStore = FakeBearerTokenStore(tokens: [
+            .runPod: "stored-runpod-token",
+            .modal: "stored-modal-token",
+        ])
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .runPod,
+                customBackendURLText: "wss://example.test/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        XCTAssertEqual(viewModel.backendBearerTokenText, "stored-runpod-token")
+
+        viewModel.selectCustomBackendProvider(.modal)
+
+        XCTAssertEqual(viewModel.backendBearerTokenText, "stored-modal-token")
+        XCTAssertEqual(viewModel.customBackendProvider, .modal)
+    }
+
+    func testEditingBearerTokenPersistsTrimmedTokenForCurrentProvider() {
+        let tokenStore = FakeBearerTokenStore()
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        viewModel.backendBearerTokenText = "  new-modal-token  "
+
+        XCTAssertEqual(tokenStore.tokens[.modal], "new-modal-token")
+        XCTAssertNil(viewModel.backendBearerTokenPersistenceMessage)
+    }
+
+    func testClearingBearerTokenDeletesStoredTokenForCurrentProvider() {
+        let tokenStore = FakeBearerTokenStore(tokens: [.modal: "stored-modal-token"])
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        viewModel.backendBearerTokenText = " "
+
+        XCTAssertNil(tokenStore.tokens[.modal])
+        XCTAssertNil(viewModel.backendBearerTokenPersistenceMessage)
+    }
+
+    func testTokenStorageWriteFailureKeepsTypedTokenForCurrentSession() {
+        let tokenStore = ThrowingBearerTokenStore()
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        viewModel.backendBearerTokenText = "modal-token"
+
+        XCTAssertEqual(viewModel.backendBearerTokenText, "modal-token")
+        XCTAssertEqual(
+            viewModel.backendBearerTokenPersistenceMessage,
+            "Token will be used for this session only. Keychain update failed."
+        )
+    }
+
     func testDuplicateToggleWhileConnectingOnlyStartsOneSocketConnection() async throws {
         let socket = SuspendedConnectSocket()
         let viewModel = RecitationViewModel(
@@ -638,6 +744,41 @@ private struct FakePreferencesStore: RecitationPreferencesStoring {
         self.recitationMode = recitationMode
         self.selectedSurahID = selectedSurahID
     }
+}
+
+private final class FakeBearerTokenStore: BackendBearerTokenStoring {
+    private(set) var tokens: [BackendProvider: String]
+
+    init(tokens: [BackendProvider: String] = [:]) {
+        self.tokens = tokens
+    }
+
+    func token(for provider: BackendProvider) throws -> String? {
+        tokens[provider]
+    }
+
+    func setToken(_ token: String?, for provider: BackendProvider) throws {
+        let trimmedToken = token?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedToken.isEmpty {
+            tokens.removeValue(forKey: provider)
+        } else {
+            tokens[provider] = trimmedToken
+        }
+    }
+}
+
+private final class ThrowingBearerTokenStore: BackendBearerTokenStoring {
+    func token(for provider: BackendProvider) throws -> String? {
+        nil
+    }
+
+    func setToken(_ token: String?, for provider: BackendProvider) throws {
+        throw TestTokenStoreError.writeFailed
+    }
+}
+
+private enum TestTokenStoreError: Error {
+    case writeFailed
 }
 
 private enum TestSocketError: LocalizedError {
