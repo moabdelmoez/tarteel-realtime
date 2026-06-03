@@ -54,7 +54,10 @@ Append these tests to `MacOSAppProjectTests` in `tests/test_macos_app_project.py
         content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
 
         self.assertIn("@FocusState", content_source)
-        self.assertIn(".searchable(text:", content_source)
+        self.assertNotIn(".searchable(text:", content_source)
+        self.assertNotIn(".searchFocused($isSearchFocused)", content_source)
+        self.assertIn('TextField("Search surahs"', content_source)
+        self.assertIn(".focused($isSearchFocused)", content_source)
         self.assertIn("filteredSurahs", content_source)
         self.assertIn(".onDrop(of:", content_source)
         self.assertIn("UTType.url.identifier", content_source)
@@ -84,7 +87,7 @@ Run:
 uv run python -B -m unittest tests.test_macos_app_project -v
 ```
 
-Expected: FAIL. The current app still has fixed `Color.white`, no toolbar record action, no searchable surface, no drag/drop, no onboarding sheet, and no settings URL validation message.
+Expected: FAIL. The current app still has fixed `Color.white`, no toolbar record action, no toolbar search field, no drag/drop, no onboarding sheet, and no settings URL validation message.
 
 - [ ] **Step 3: Commit the red guardrails**
 
@@ -437,8 +440,6 @@ Update `MacContentView.body` so the root uses:
 
 ```swift
         .background(Color(nsColor: .windowBackgroundColor))
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search surahs")
-        .searchFocused($isSearchFocused)
         .onAppear {
             if !hasSeenNativeOnboarding {
                 isShowingOnboarding = true
@@ -473,10 +474,11 @@ Replace the current toolbar with:
                 .keyboardShortcut(.space, modifiers: [])
                 .help(viewModel.recordingActionHelp)
 
-                Button(action: { isSearchFocused = true }) {
-                    Label("Search", systemImage: "magnifyingglass")
-                }
-                .help("Search for a surah")
+                TextField("Search surahs", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isSearchFocused)
+                    .frame(width: 220)
+                    .help("Search for a surah")
 
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")

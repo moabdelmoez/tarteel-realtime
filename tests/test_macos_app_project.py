@@ -166,9 +166,10 @@ class MacOSAppProjectTests(unittest.TestCase):
         content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
 
         self.assertIn("@FocusState", content_source)
-        self.assertIn(".searchable(text:", content_source)
-        self.assertIn(".searchFocused($isSearchFocused)", content_source)
-        self.assertNotIn(".focused($isSearchFocused)", content_source)
+        self.assertNotIn(".searchable(text:", content_source)
+        self.assertNotIn(".searchFocused($isSearchFocused)", content_source)
+        self.assertIn('TextField("Search surahs"', content_source)
+        self.assertIn(".focused($isSearchFocused)", content_source)
         self.assertIn("filteredSurahs", content_source)
         self.assertIn(".onDrop(of:", content_source)
         self.assertIn("UTType.url.identifier", content_source)

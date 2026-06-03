@@ -24,55 +24,6 @@ struct MacContentView: View {
     }
 
     var body: some View {
-        searchableContent
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button(action: { viewModel.toggleRecording() }) {
-                        Label(viewModel.recordingActionTitle, systemImage: viewModel.recordingActionSystemImage)
-                    }
-                    .disabled(!viewModel.canStartRecording && !viewModel.isRecording)
-                    .keyboardShortcut(.space, modifiers: [])
-                    .help(viewModel.recordingActionHelp)
-
-                    Button(action: { isSearchFocused = true }) {
-                        Label("Search", systemImage: "magnifyingglass")
-                    }
-                    .help("Search for a surah")
-
-                    SettingsLink {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .help("Open Settings")
-                }
-            }
-            .onAppear {
-                guard !hasSeenNativeOnboarding else { return }
-                isShowingOnboarding = true
-                hasSeenNativeOnboarding = true
-            }
-            .sheet(isPresented: $isShowingOnboarding) {
-                NativeOnboardingSheet()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .focusMacSurahSearch)) { _ in
-                isSearchFocused = true
-            }
-            .onDrop(of: [UTType.url.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted) { providers in
-                handleDrop(providers)
-            }
-            .animation(.snappy(duration: 0.2), value: viewModel.state.phase)
-            .animation(.snappy(duration: 0.2), value: viewModel.recentEventHistory)
-    }
-
-    @ViewBuilder
-    private var searchableContent: some View {
-        if #available(macOS 15.0, *) {
-            content.searchFocused($isSearchFocused)
-        } else {
-            content
-        }
-    }
-
-    private var content: some View {
         HStack(spacing: 0) {
             VStack(spacing: 22) {
                 RecitationHeader(viewModel: viewModel)
@@ -99,12 +50,43 @@ struct MacContentView: View {
                     .transition(.opacity)
             }
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search surahs") {
-            ForEach(filteredSurahs.prefix(8)) { surah in
-                Text(surah.displayName)
-                    .searchCompletion(surah.nameSimple)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { viewModel.toggleRecording() }) {
+                    Label(viewModel.recordingActionTitle, systemImage: viewModel.recordingActionSystemImage)
+                }
+                .disabled(!viewModel.canStartRecording && !viewModel.isRecording)
+                .keyboardShortcut(.space, modifiers: [])
+                .help(viewModel.recordingActionHelp)
+
+                TextField("Search surahs", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isSearchFocused)
+                    .frame(width: 220)
+                    .help("Search for a surah")
+
+                SettingsLink {
+                    Label("Settings", systemImage: "gearshape")
+                }
+                .help("Open Settings")
             }
         }
+        .onAppear {
+            guard !hasSeenNativeOnboarding else { return }
+            isShowingOnboarding = true
+            hasSeenNativeOnboarding = true
+        }
+        .sheet(isPresented: $isShowingOnboarding) {
+            NativeOnboardingSheet()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .focusMacSurahSearch)) { _ in
+            isSearchFocused = true
+        }
+        .onDrop(of: [UTType.url.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers)
+        }
+        .animation(.snappy(duration: 0.2), value: viewModel.state.phase)
+        .animation(.snappy(duration: 0.2), value: viewModel.recentEventHistory)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
