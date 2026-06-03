@@ -25,10 +25,6 @@ struct TarteelPrototypeMacApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command])
             }
-
-            CommandGroup(after: .appSettings) {
-                EmptyView()
-            }
         }
 
         Settings {

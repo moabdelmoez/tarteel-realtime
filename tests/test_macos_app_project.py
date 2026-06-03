@@ -140,7 +140,7 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("@main", app_source)
         self.assertIn("Settings", app_source)
         self.assertIn("MacContentView", app_source)
-        self.assertIn("CommandGroup", app_source)
+        self.assertIn('CommandMenu("Recitation")', app_source)
         self.assertIn("MacSettingsView", settings_source)
         self.assertIn("EventHistoryPanel", content_source)
         self.assertIn("SettingsLink", content_source)
