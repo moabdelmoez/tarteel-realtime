@@ -253,6 +253,10 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("exclamationmark.triangle", settings_source)
         self.assertIn("Settings controls are locked while recording", settings_source)
         self.assertIn(".help(", settings_source)
+        self.assertIn("tokenHelpText", settings_source)
+        self.assertIn("Saved securely in macOS Keychain", settings_source)
+        self.assertIn("backendBearerTokenPersistenceMessage", settings_source)
+        self.assertNotIn("viewModel.customBackendProvider.tokenHelpText)", settings_source)
 
 
 if __name__ == "__main__":

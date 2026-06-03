@@ -53,14 +53,29 @@ struct MacSettingsView: View {
                         .disabled(viewModel.isRecording)
                         .help("Optional memory-only bearer token for the next Custom backend connection")
 
-                    Text(viewModel.customBackendProvider.tokenHelpText)
+                    Text(tokenHelpText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    if let tokenMessage = viewModel.backendBearerTokenPersistenceMessage {
+                        Label(tokenMessage, systemImage: "key.horizontal")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }
         .formStyle(.grouped)
         .padding(20)
         .frame(width: 520)
+    }
+
+    private var tokenHelpText: String {
+        switch viewModel.customBackendProvider {
+        case .modal:
+            return "Saved securely in macOS Keychain for this Mac user."
+        case .generic, .runPod:
+            return viewModel.customBackendProvider.tokenHelpText
+        }
     }
 }
