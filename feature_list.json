@@ -1,6 +1,6 @@
 {
     "project": "tarteel-realtime",
-    "last_updated": "2026-05-29",
+    "last_updated": "2026-06-03",
     "rules": {
         "single_active_feature": true,
         "passing_requires_evidence": true,
@@ -224,6 +224,7 @@
                 "Run env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test from ios/TarteelClientCore after scope URL or catalog changes.",
                 "Run uv run python -B -m unittest tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after home-screen or settings UI changes.",
                 "Run uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v after Apple client project/source changes.",
+                "Run uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v plus Swift client core tests after macOS native UI polish changes.",
                 "Run xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build after macOS app changes."
             ],
             "evidence": [
@@ -255,9 +256,11 @@
                 "Native macOS prototype target TarteelPrototypeMac was added in the existing Xcode project with bundle id dev.mostafa.TarteelPrototypeMac, macOS 14 deployment, separate macOS Info.plist, native Settings scene, desktop status console, AVAudioEngine microphone capture, shared RecitationViewModel orchestration, FluidAudio/CoreML Silero VAD, and no App Sandbox entitlements.",
                 "Native macOS final verification passed: uv run python -B -m json.tool feature_list.json; uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v with 16 tests; Swift client core with 36 tests total; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode package/cache access was blocked; git diff --check; and uv run python -B -m unittest discover -s tests -v with 202 tests.",
                 "Custom backend settings now include a provider picker for Generic, RunPod, and Modal. RunPod and Modal provider choices normalize their provider hosts to /ws/recitation and use a memory-only bearer-token field shared by iPhone and macOS.",
-                "Provider picker verification passed: Swift client core with 39 tests total; focused Modal/replay/backend/Apple source checks with 64 tests; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode/SwiftPM cache access was blocked; full deterministic Python suite with 218 tests."
+                "Provider picker verification passed: Swift client core with 39 tests total; focused Modal/replay/backend/Apple source checks with 64 tests; iPhone xcodebuild; macOS xcodebuild after escalated rerun because sandboxed Xcode/SwiftPM cache access was blocked; full deterministic Python suite with 218 tests.",
+                "macOS native UI polish adds a unified toolbar with recording, Surah search, and Settings; Space/Command-R and Command-F commands; macOS 14-compatible search focus; URL/text drop-in for backend setup; diagnostic drag-out text; first-run onboarding; recent event history; adaptive system colors/materials; and Settings validation feedback.",
+                "macOS native UI polish verification passed: Swift client core with 42 checks; focused Apple source guardrails with 20 tests; macOS and iPhone xcodebuild; full deterministic Python suite with 223 tests; compileall for tarteel_realtime/tests; and git diff --check."
             ],
-            "notes": "Passing for native iPhone and macOS WebSocket prototypes plus selected-recitation UI, provider-aware Custom settings, and memory-only direct provider bearer auth. Modal scoped backend replay is live, but manual iOS/macOS microphone testing and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
+            "notes": "Passing for native iPhone and macOS WebSocket prototypes plus selected-recitation UI, provider-aware Custom settings, memory-only direct provider bearer auth, and source/build-verified native macOS UI polish. Modal scoped backend replay is live, but manual iOS/macOS microphone testing, manual macOS visual/interaction QA, and scoped RunPod faster-whisper replay are still needed before claiming live ASR quality improvements from selected scope."
         },
         {
             "id": "backend-002",

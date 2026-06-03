@@ -82,6 +82,8 @@ ws://127.0.0.1:8000/ws/recitation
 
 It uses a native Settings window for backend preset, Custom provider, custom URL, and memory-only bearer token. Non-secret settings persist between launches. The bearer token is memory-only unless a later Keychain slice adds secure storage.
 
+The macOS recitation window uses a unified native toolbar for recording, Surah search, and Settings. Press `Space` or `Command-R` to start or stop recording, and `Command-F` to focus Surah search. The Surah picker filters in place, URL or text drops can populate the Custom backend URL, and the diagnostic summary can be dragged out as text for bug reports.
+
 The macOS app captures microphone input, converts it to mono 16 kHz PCM16, runs the bundled FluidAudio/CoreML Silero VAD when available, and sends the same `AudioChunkPayload` shape as the iPhone app.
 
 Or open:

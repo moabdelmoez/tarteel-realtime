@@ -2,7 +2,12 @@
 
 ## Verified Now
 
-- Latest slice: Modal CUDA image fix, deployed on 2026-05-29.
+- Latest slice: macOS native UI polish, completed locally on 2026-06-03.
+- The macOS prototype now uses a unified compact toolbar for recording, Surah search, and Settings, with source/build-verified native shell behavior.
+- Keyboard commands are wired for `Space`/`Command-R` recording and `Command-F` Surah search focus.
+- The macOS recitation surface now includes macOS 14-compatible Surah filtering, first-run onboarding, event history, empty states, URL/text drop-in for backend setup, diagnostic drag-out text, adaptive system colors/materials, and Settings validation feedback.
+- Shared `RecitationViewModel` presentation state now exposes recent event history, backend URL validation, recording action metadata, shareable diagnostic summary text, and dropped backend text handling.
+- Previous slice: Modal CUDA image fix, deployed on 2026-05-29.
 - Modal logs for deployed app `ap-y0XxuwnT0t7dEPT8FaWe2W` / `tarteel-realtime-asr` showed repeated recitation failures:
   - `RuntimeError: Library libcublas.so.12 is not found or cannot be loaded`
   - The traceback originates in faster-whisper/CTranslate2 during `self.model.encode(...)`.
@@ -40,6 +45,16 @@
 
 ## Verification
 
+- macOS native UI polish checks passed:
+  - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
+  - Result: 42 checks.
+  - `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
+  - Result: 20 tests.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
+  - `uv run python -B -m unittest discover -s tests -v`
+  - Result: 223 tests.
+  - `uv run python -m compileall -q tarteel_realtime tests`
 - Focused Modal CUDA-image checks passed:
   - `uv run python -B -m unittest tests.test_modal_serverless -v`
   - Result: 5 tests.
@@ -84,6 +99,7 @@
 
 ## Current Risks
 
+- The macOS UI polish is source/build verified, but manual visual QA and interaction testing are still outstanding for light/dark mode, drag/drop, diagnostic drag-out, keyboard focus, Settings validation layout, microphone permission, and live backend recording.
 - Modal is deployed, but no fresh post-deploy ASR replay/recitation proof has been captured after the CUDA image fix.
 - Modal still needs scoped replay proof, idle shutdown evidence, and cost evidence.
 - `prewarm` may need rerun after the CUDA image deployment if the model cache Volume is not already hydrated.
@@ -92,6 +108,8 @@
 - Real ASR quality remains model/audio dependent; this slice only adds provider comparison infrastructure.
 
 ## Next Best Step
+
+For the current UI branch, manually launch the macOS app and exercise light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, URL/text drop-in, diagnostic drag-out, Settings validation feedback, microphone permission, and a local `/ws/recitation` recording.
 
 Run a fresh post-deploy Modal replay or recitation, then check logs after the
 test window. Replay command:

@@ -14,12 +14,37 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current iOS UI direction: the home screen is a light recitation surface. Backend preset, Custom provider, custom WebSocket URL, and memory-only bearer token live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
+- Current macOS UI direction: the app uses a unified native toolbar with recording, Surah search, and Settings; supports Space/Command-R recording, Command-F search focus, URL/text backend drop-in, diagnostic drag-out, first-run onboarding, event history, adaptive system colors/materials, and Settings validation feedback.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
 - Current highest-priority unfinished feature: deploy provider-comparison GPU serverless endpoints, starting with Modal and RunPod, then measure cold start/scale-to-zero and scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
 - Current blocker: RunPod and Modal serverless packaging are locally verified, but no live endpoint has been deployed or fixture-replayed yet; endpoint latency, billing, idle shutdown, and real-ASR quality remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 081
+
+- Date: 2026-06-03
+- Goal: Polish the macOS prototype UI against native macOS app design guidance without changing backend transport behavior.
+- Completed:
+  - Added a written implementation plan at `docs/superpowers/plans/2026-06-03-macos-native-ui-polish.md`.
+  - Added macOS UI source guardrails first for native toolbar/chrome integration, keyboard commands, Surah search, drag/drop, empty states, onboarding, adaptive colors/materials, and Settings validation feedback.
+  - Extended shared `RecitationViewModel` presentation state with recent event history, backend URL validation, recording action metadata, shareable diagnostic summary text, and dropped backend text handling.
+  - Polished the macOS recitation window with a unified compact toolbar, toolbar recording button, macOS 14-compatible Surah search focus, Settings toolbar entry, URL/text drop-in for Custom backend setup, diagnostic drag-out text, event history, empty states, adaptive system colors/materials, and first-run onboarding.
+  - Added macOS app commands for `Space`/`Command-R` recording and `Command-F` Surah search focus.
+  - Added visible Settings validation feedback and locked-while-recording copy in the native macOS Settings window.
+- Verification run:
+  - Swift client core passed: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 42 checks.
+  - Focused Apple source guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 20 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iPhone app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 223 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- Known risk or unresolved issue:
+  - The macOS UI polish is source/build verified, but the agent did not manually launch the app for visual QA, drag/drop exercise, keyboard focus exercise, microphone permission, or live backend recording.
+  - Live Modal/RunPod ASR proof remains separate from this UI slice.
+- Next best step: manually launch the macOS app, check light and dark mode layout, exercise `Space`/`Command-R`, `Command-F`, URL/text drop-in, diagnostic drag-out, Settings validation, and local `/ws/recitation` recording.
 
 
 ### Session 080
