@@ -181,8 +181,8 @@ class MacOSAppProjectTests(unittest.TestCase):
     def test_macos_settings_show_validation_and_disabled_state_feedback(self) -> None:
         settings_source = (MAC_APP_SOURCE_ROOT / "MacSettingsView.swift").read_text(encoding="utf-8")
 
-        self.assertIn("viewModel.backendURLValidationMessage", settings_source)
-        self.assertIn("Label(viewModel.backendURLValidationMessage", settings_source)
+        self.assertIn("backendURLValidationMessage", settings_source)
+        self.assertIn("Label(message", settings_source)
         self.assertIn("exclamationmark.triangle", settings_source)
         self.assertIn("Settings controls are locked while recording", settings_source)
         self.assertIn(".help(", settings_source)
