@@ -41,7 +41,10 @@
   - Under `Custom`, provider picker options are `Generic`, `RunPod`, and `Modal`.
   - RunPod normalizes bare `.proxy.runpod.net` and `.api.runpod.ai` hosts.
   - Modal normalizes bare `.modal.run` hosts.
-  - Bearer token remains memory-only.
+  - iPhone bearer tokens remain memory-only.
+- Modal is the macOS first-launch `Custom` provider default.
+- macOS injects `UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)`, and persisted preferences override the fallback.
+- macOS stores the selected `Custom` provider bearer token in Keychain through `KeychainBackendBearerTokenStore`; iPhone remains memory-only.
 
 ## Verification
 
@@ -105,6 +108,7 @@
 - `prewarm` may need rerun after the CUDA image deployment if the model cache Volume is not already hydrated.
 - RunPod Serverless remains locally packaged but not live endpoint verified.
 - The Apple provider picker was source/build verified, not manually exercised on iPhone or macOS.
+- macOS Keychain token persistence needs a manual quit/reopen check with a real token before claiming end-to-end user workflow proof.
 - Real ASR quality remains model/audio dependent; this slice only adds provider comparison infrastructure.
 
 ## Next Best Step

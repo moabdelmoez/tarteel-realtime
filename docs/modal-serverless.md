@@ -91,7 +91,10 @@ https://<modal-app>.modal.run  ->  wss://<modal-app>.modal.run/ws/recitation
 ```
 
 The Apple prototypes can use this through Settings -> Custom -> Provider:
-Modal. The token field is memory-only.
+Modal. The iPhone prototype keeps bearer tokens memory-only. The macOS
+prototype uses Modal as the first-launch Custom default and stores selected
+Custom provider bearer tokens in macOS Keychain after the user enters them
+once.
 
 ## Replay Proof
 

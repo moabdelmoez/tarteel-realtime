@@ -259,7 +259,7 @@ The app Settings sheet keeps `Simulator` and `Custom` backend modes. In `Custom`
 choose a provider from `Generic`, `RunPod`, or `Modal`; provider selection controls
 URL normalization and token labeling while the WebSocket contract stays the same.
 
-Direct iOS-to-RunPod serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key in the local bearer-token field; do not commit it or put it in docs. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for RunPod health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
+Direct Apple-to-serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key locally; do not commit it or put it in docs. The iPhone prototype keeps bearer tokens memory-only. The macOS prototype stores the selected `Custom` provider bearer token in macOS Keychain so it survives relaunch without writing the secret to `UserDefaults`. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for provider health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
 
 For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights:
 
