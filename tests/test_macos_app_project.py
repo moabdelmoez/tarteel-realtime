@@ -167,6 +167,8 @@ class MacOSAppProjectTests(unittest.TestCase):
 
         self.assertIn("@FocusState", content_source)
         self.assertIn(".searchable(text:", content_source)
+        self.assertIn(".searchFocused($isSearchFocused)", content_source)
+        self.assertNotIn(".focused($isSearchFocused)", content_source)
         self.assertIn("filteredSurahs", content_source)
         self.assertIn(".onDrop(of:", content_source)
         self.assertIn("UTType.url.identifier", content_source)

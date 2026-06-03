@@ -438,7 +438,7 @@ Update `MacContentView.body` so the root uses:
 ```swift
         .background(Color(nsColor: .windowBackgroundColor))
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search surahs")
-        .focused($isSearchFocused)
+        .searchFocused($isSearchFocused)
         .onAppear {
             if !hasSeenNativeOnboarding {
                 isShowingOnboarding = true
