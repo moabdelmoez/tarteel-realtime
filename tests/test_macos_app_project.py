@@ -258,6 +258,8 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("backendBearerTokenPersistenceMessage", settings_source)
         self.assertNotIn("memory-only", settings_source)
         self.assertNotIn("not saved", settings_source)
+        self.assertIn(".help(viewModel.backendBearerTokenPersistenceMessage ?? tokenHelpText)", settings_source)
+        self.assertNotIn(".help(tokenHelpText)", settings_source)
         self.assertIn("if let tokenMessage = viewModel.backendBearerTokenPersistenceMessage", settings_source)
         self.assertIsNotNone(re.search(
             r"if let tokenMessage = viewModel\.backendBearerTokenPersistenceMessage \{"
