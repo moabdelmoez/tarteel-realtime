@@ -4,7 +4,9 @@ import SwiftUI
 struct TarteelPrototypeMacApp: App {
     @StateObject private var viewModel = RecitationViewModel(
         audioStreamer: MacMicrophoneAudioStreamer(),
-        voiceActivityDetector: VoiceActivityDetector()
+        voiceActivityDetector: VoiceActivityDetector(),
+        preferencesStore: UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary),
+        backendBearerTokenStore: KeychainBackendBearerTokenStore()
     )
 
     var body: some Scene {

@@ -109,6 +109,9 @@ class MacOSAppProjectTests(unittest.TestCase):
             self.assertIn(expected_path, iphone_paths)
             self.assertIn(expected_path, mac_paths)
 
+        self.assertIn("App/KeychainBackendBearerTokenStore.swift", mac_paths)
+        self.assertNotIn("App/KeychainBackendBearerTokenStore.swift", iphone_paths)
+
     def test_project_includes_vad_model_resource_for_iphone_and_macos(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
         iphone_resources = self._target_phase_body(project, "TarteelPrototype", "Resources")
@@ -136,17 +139,26 @@ class MacOSAppProjectTests(unittest.TestCase):
         content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
         settings_source = (MAC_APP_SOURCE_ROOT / "MacSettingsView.swift").read_text(encoding="utf-8")
         audio_source = (MAC_APP_SOURCE_ROOT / "MacMicrophoneAudioStreamer.swift").read_text(encoding="utf-8")
+        keychain_source = (MAC_APP_SOURCE_ROOT / "KeychainBackendBearerTokenStore.swift").read_text(encoding="utf-8")
 
         self.assertIn("@main", app_source)
         self.assertIn("Settings", app_source)
         self.assertIn("MacContentView", app_source)
         self.assertIn('CommandMenu("Recitation")', app_source)
+        self.assertIn("UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)", app_source)
+        self.assertIn("KeychainBackendBearerTokenStore()", app_source)
         self.assertIn("MacSettingsView", settings_source)
         self.assertIn("EventHistoryPanel", content_source)
         self.assertIn("SettingsLink", content_source)
         self.assertIn("AVCaptureDevice.requestAccess", audio_source)
         self.assertIn("AVAudioEngine", audio_source)
         self.assertNotIn("AVAudioSession", audio_source)
+        self.assertIn("import Security", keychain_source)
+        self.assertIn("SecItemCopyMatching", keychain_source)
+        self.assertIn("SecItemAdd", keychain_source)
+        self.assertIn("SecItemUpdate", keychain_source)
+        self.assertIn("SecItemDelete", keychain_source)
+        self.assertIn("dev.mostafa.TarteelPrototypeMac.backend-token", keychain_source)
 
     def test_macos_ui_uses_native_visual_system_and_toolbar_actions(self) -> None:
         content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")

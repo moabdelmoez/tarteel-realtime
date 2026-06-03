@@ -44,6 +44,7 @@
 		200000000000000000000017 /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* VoiceActivityDetector.swift */; };
 		200000000000000000000018 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 		200000000000000000000019 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
+		200000000000000000000021 /* KeychainBackendBearerTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000106 /* KeychainBackendBearerTokenStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +73,7 @@
 		200000000000000000000103 /* MacSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacSettingsView.swift; sourceTree = "<group>"; };
 		200000000000000000000104 /* MacMicrophoneAudioStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacMicrophoneAudioStreamer.swift; sourceTree = "<group>"; };
 		200000000000000000000105 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		200000000000000000000106 /* KeychainBackendBearerTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/KeychainBackendBearerTokenStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -152,6 +154,7 @@
 				200000000000000000000102 /* MacContentView.swift */,
 				200000000000000000000103 /* MacSettingsView.swift */,
 				200000000000000000000104 /* MacMicrophoneAudioStreamer.swift */,
+				200000000000000000000106 /* KeychainBackendBearerTokenStore.swift */,
 				200000000000000000000105 /* Info.plist */,
 			);
 			path = TarteelPrototypeMac;
@@ -304,6 +307,7 @@
 				200000000000000000000015 /* SurahCatalog.swift in Sources */,
 				200000000000000000000016 /* VoiceActivityPayload.swift in Sources */,
 				200000000000000000000017 /* VoiceActivityDetector.swift in Sources */,
+				200000000000000000000021 /* KeychainBackendBearerTokenStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
