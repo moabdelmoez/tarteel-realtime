@@ -2,7 +2,11 @@
 
 ## Verified Now
 
-- Latest slice: Modal macOS default and Keychain token persistence, completed locally on 2026-06-03.
+- Latest slice: macOS live-recitation timeline UX, completed locally on 2026-06-03.
+- The macOS right panel now shows a curated `Timeline` instead of raw `Recent Events` copy.
+- `RecitationViewModel` collapses adjacent repeated event signatures into one history row with `repeatCount` / `repeatBadgeText`; repeated rows keep the latest transcript and chunk sequence.
+- Repeated `uncertain` / `waiting_for_audio_buffer` and repeated same-ayah `progress` events no longer flood the visible timeline; new-ayah progress remains separate.
+- Previous slice: Modal macOS default and Keychain token persistence, completed locally on 2026-06-03.
 - Modal is the macOS first-launch `Custom` provider default, including the deployed WSS URL `wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation`.
 - macOS injects `UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)`, and persisted preferences override the fallback.
 - macOS stores the selected `Custom` provider bearer token in Keychain through `KeychainBackendBearerTokenStore`; iPhone remains memory-only.
@@ -51,6 +55,21 @@
 
 ## Verification
 
+- macOS live-recitation timeline UX checks passed:
+  - Red check first failed as expected: `swift test --filter RecitationViewModelTests` failed because repeated `uncertain` and repeated same-ayah `progress` events still created multiple rows.
+  - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
+  - Result: 28 XCTest tests plus 27 Swift Testing tests.
+  - `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
+  - Result: 20 tests.
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `git diff --check`
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
+  - `uv run python -B -m unittest discover -s tests -v`
+  - Result: 223 tests.
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"`
+  - Result: `[]`.
 - Modal macOS default and Keychain token persistence checks passed:
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
   - Result: 25 XCTest tests plus 27 Swift Testing tests.
@@ -119,6 +138,7 @@
 
 ## Current Risks
 
+- The curated timeline is source/build/test verified, but the running macOS app still needs a visual/live Modal recheck to confirm repeated rows collapse as expected during real ASR streaming.
 - The macOS UI polish is source/build verified, but manual visual QA and interaction testing are still outstanding for light/dark mode, drag/drop, diagnostic drag-out, keyboard focus, Settings validation layout, microphone permission, and live backend recording.
 - Modal post-deploy `/ping` and scoped Surah 108 replay evidence exists after the CUDA image fix, but the replay produced `lock_candidate` for 108:1 rather than a full lock.
 - Modal still needs additional scoped replay, especially the 4:1-3 fixture, plus idle shutdown evidence, cost evidence, and live ASR quality tuning.
@@ -130,7 +150,7 @@
 
 ## Next Best Step
 
-Manually launch the macOS app, confirm first-launch Custom/Modal defaults, enter the Modal bearer token once, quit/reopen, confirm the token reloads from Keychain, then exercise light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, Settings validation feedback, microphone permission, and a local or Modal `/ws/recitation` recording.
+Reopen the rebuilt macOS app, record against Modal again, and confirm the right panel says `Timeline` and repeated `uncertain` / same-ayah `progress` rows collapse into one row with an `xN` badge. Also confirm first-launch Custom/Modal defaults, Keychain token reload, light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, Settings validation feedback, microphone permission, and a local or Modal `/ws/recitation` recording.
 
 Run the remaining Modal replay or recitation proof, especially scope 4:1-3,
 then check logs after the test window. Replay command:

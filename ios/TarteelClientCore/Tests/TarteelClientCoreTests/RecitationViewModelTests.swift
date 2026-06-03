@@ -387,6 +387,117 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.shareableSessionSummary.contains("transcript 6"))
     }
 
+    func testRecentEventHistoryCollapsesRepeatedUncertainEvents() async throws {
+        let socket = FakeSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+        await viewModel.startRecording()
+
+        for sequence in 0..<8 {
+            await socket.emit(
+                RecitationEvent(
+                    type: .uncertain,
+                    transcript: "",
+                    confidence: 0.0,
+                    chunkSequence: sequence,
+                    reason: "waiting_for_audio_buffer",
+                    candidateRefs: [],
+                    ayahRef: nil,
+                    startRef: nil,
+                    nextExpectedRef: nil,
+                    consumedWords: 0,
+                    expectedRef: nil,
+                    expectedWord: nil,
+                    recognizedWord: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(viewModel.recentEventHistory.count, 1)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.typeText, "uncertain")
+        XCTAssertEqual(viewModel.recentEventHistory.first?.repeatCount, 8)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.chunkSequence, 7)
+    }
+
+    func testRecentEventHistoryCollapsesRepeatedProgressForSameAyah() async throws {
+        let socket = FakeSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+        await viewModel.startRecording()
+
+        for sequence in 0..<4 {
+            await socket.emit(
+                RecitationEvent(
+                    type: .progress,
+                    transcript: "progress transcript \(sequence)",
+                    confidence: 0.7,
+                    chunkSequence: sequence,
+                    reason: "tolerant_progression",
+                    candidateRefs: [],
+                    ayahText: "ayah one",
+                    ayahRef: "60:1",
+                    startRef: "60:1:1",
+                    nextExpectedRef: nil,
+                    consumedWords: 1,
+                    expectedRef: nil,
+                    expectedWord: nil,
+                    recognizedWord: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(viewModel.recentEventHistory.count, 1)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.typeText, "progress")
+        XCTAssertEqual(viewModel.recentEventHistory.first?.ayahRef, "60:1")
+        XCTAssertEqual(viewModel.recentEventHistory.first?.repeatCount, 4)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.chunkSequence, 3)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.transcript, "progress transcript 3")
+    }
+
+    func testRecentEventHistoryKeepsNewAyahProgressAsSeparateRows() async throws {
+        let socket = FakeSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+        await viewModel.startRecording()
+
+        for sequence in 0..<3 {
+            await socket.emit(
+                RecitationEvent(
+                    type: .progress,
+                    transcript: "progress transcript \(sequence)",
+                    confidence: 0.8,
+                    chunkSequence: sequence,
+                    reason: "tolerant_progression",
+                    candidateRefs: [],
+                    ayahText: "ayah \(sequence)",
+                    ayahRef: "60:\(sequence + 1)",
+                    startRef: "60:\(sequence + 1):1",
+                    nextExpectedRef: nil,
+                    consumedWords: 1,
+                    expectedRef: nil,
+                    expectedWord: nil,
+                    recognizedWord: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(viewModel.recentEventHistory.count, 3)
+        XCTAssertEqual(viewModel.recentEventHistory.map(\.ayahRef), ["60:3", "60:2", "60:1"])
+        XCTAssertEqual(viewModel.recentEventHistory.map(\.repeatCount), [1, 1, 1])
+    }
+
     func testStaleSocketEventAfterStopDoesNotMutateStoppedState() async throws {
         let socket = ConnectionCapturingSocket()
         let viewModel = RecitationViewModel(

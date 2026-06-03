@@ -342,15 +342,15 @@ private struct EventHistoryPanel: View {
 
             Divider()
 
-            Text("Recent Events")
+            Text("Timeline")
                 .font(.headline)
                 .foregroundStyle(MacTheme.ink)
 
             if viewModel.recentEventHistory.isEmpty {
                 ContentUnavailableView(
-                    "No Recent Events",
+                    "No Timeline Yet",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Start recording to see backend events.")
+                    description: Text("Start recording to see recitation milestones.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -381,6 +381,14 @@ private struct EventHistoryRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(MacTheme.ink)
                 Spacer(minLength: 8)
+                if let repeatBadgeText = item.repeatBadgeText {
+                    Text(repeatBadgeText)
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(MacTheme.teal)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(MacTheme.teal.opacity(0.12), in: Capsule())
+                }
                 if let chunkSequence = item.chunkSequence {
                     Text("#\(chunkSequence)")
                         .font(.caption2.monospacedDigit())

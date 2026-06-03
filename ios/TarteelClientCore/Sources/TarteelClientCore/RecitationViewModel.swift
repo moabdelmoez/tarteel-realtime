@@ -8,15 +8,60 @@ public struct RecitationEventHistoryItem: Equatable, Identifiable, Sendable {
     public let ayahRef: String?
     public let transcript: String
     public let chunkSequence: Int?
+    public let repeatCount: Int
+    private let collapseKey: RecitationEventHistoryCollapseKey
 
-    public init(event: RecitationEvent, id: Int) {
+    public init(event: RecitationEvent, id: Int, repeatCount: Int = 1) {
         self.id = id
         self.typeText = event.type.rawValue
         self.detailText = event.reason ?? event.type.rawValue
         self.ayahRef = event.ayahRef ?? event.startRef
         self.transcript = event.transcript
         self.chunkSequence = event.chunkSequence
+        self.repeatCount = repeatCount
+        self.collapseKey = Self.collapseKey(for: event)
     }
+
+    public var repeatBadgeText: String? {
+        repeatCount > 1 ? "x\(repeatCount)" : nil
+    }
+
+    fileprivate func canCollapse(with event: RecitationEvent) -> Bool {
+        collapseKey == Self.collapseKey(for: event)
+    }
+
+    fileprivate func repeated(with event: RecitationEvent) -> RecitationEventHistoryItem {
+        RecitationEventHistoryItem(event: event, id: id, repeatCount: repeatCount + 1)
+    }
+
+    private static func collapseKey(for event: RecitationEvent) -> RecitationEventHistoryCollapseKey {
+        switch event.type {
+        case .wrong:
+            return RecitationEventHistoryCollapseKey(
+                type: event.type,
+                reason: event.reason,
+                ayahRef: event.ayahRef ?? event.startRef,
+                expectedRef: event.expectedRef,
+                recognizedWord: event.recognizedWord
+            )
+        case .progress, .locked, .lockCandidate, .locating, .uncertain:
+            return RecitationEventHistoryCollapseKey(
+                type: event.type,
+                reason: event.reason,
+                ayahRef: event.ayahRef ?? event.startRef,
+                expectedRef: nil,
+                recognizedWord: nil
+            )
+        }
+    }
+}
+
+private struct RecitationEventHistoryCollapseKey: Equatable, Sendable {
+    let type: RecitationEventType
+    let reason: String?
+    let ayahRef: String?
+    let expectedRef: String?
+    let recognizedWord: String?
 }
 
 public struct BackendDropFeedback: Equatable, Sendable {
@@ -218,7 +263,8 @@ public final class RecitationViewModel: ObservableObject {
     public var shareableSessionSummary: String {
         let events = recentEventHistory.map { item in
             let ref = item.ayahRef ?? "none"
-            return "- \(item.typeText) \(ref): \(item.transcript)"
+            let repeatText = item.repeatBadgeText.map { " \($0)" } ?? ""
+            return "- \(item.typeText)\(repeatText) \(ref): \(item.transcript)"
         }.joined(separator: "\n")
 
         return """
@@ -457,6 +503,11 @@ public final class RecitationViewModel: ObservableObject {
     }
 
     private func recordHistoryItem(for event: RecitationEvent) {
+        if let first = recentEventHistory.first, first.canCollapse(with: event) {
+            recentEventHistory[0] = first.repeated(with: event)
+            return
+        }
+
         eventHistoryID += 1
         let item = RecitationEventHistoryItem(event: event, id: eventHistoryID)
         recentEventHistory.insert(item, at: 0)
