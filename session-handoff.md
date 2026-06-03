@@ -103,8 +103,8 @@
 ## Current Risks
 
 - The macOS UI polish is source/build verified, but manual visual QA and interaction testing are still outstanding for light/dark mode, drag/drop, diagnostic drag-out, keyboard focus, Settings validation layout, microphone permission, and live backend recording.
-- Modal is deployed, but no fresh post-deploy ASR replay/recitation proof has been captured after the CUDA image fix.
-- Modal still needs scoped replay proof, idle shutdown evidence, and cost evidence.
+- Modal post-deploy `/ping` and scoped Surah 108 replay evidence exists after the CUDA image fix, but the replay produced `lock_candidate` for 108:1 rather than a full lock.
+- Modal still needs additional scoped replay, especially the 4:1-3 fixture, plus idle shutdown evidence, cost evidence, and live ASR quality tuning.
 - `prewarm` may need rerun after the CUDA image deployment if the model cache Volume is not already hydrated.
 - RunPod Serverless remains locally packaged but not live endpoint verified.
 - The Apple provider picker was source/build verified, not manually exercised on iPhone or macOS.
@@ -115,8 +115,8 @@
 
 For the current UI branch, manually launch the macOS app and exercise light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, URL/text drop-in, diagnostic drag-out, Settings validation feedback, microphone permission, and a local `/ws/recitation` recording.
 
-Run a fresh post-deploy Modal replay or recitation, then check logs after the
-test window. Replay command:
+Run the remaining Modal replay or recitation proof, especially scope 4:1-3,
+then check logs after the test window. Replay command:
 
 ```bash
 uv run --with websockets python -m tarteel_realtime.replay_probe \
