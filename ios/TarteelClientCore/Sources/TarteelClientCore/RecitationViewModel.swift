@@ -1,6 +1,24 @@
 import Combine
 import Foundation
 
+public struct RecitationEventHistoryItem: Equatable, Identifiable, Sendable {
+    public let id: Int
+    public let typeText: String
+    public let detailText: String
+    public let ayahRef: String?
+    public let transcript: String
+    public let chunkSequence: Int?
+
+    public init(event: RecitationEvent, id: Int) {
+        self.id = id
+        self.typeText = event.type.rawValue
+        self.detailText = event.reason ?? event.type.rawValue
+        self.ayahRef = event.ayahRef ?? event.startRef
+        self.transcript = event.transcript
+        self.chunkSequence = event.chunkSequence
+    }
+}
+
 @MainActor
 public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var state = RecitationSessionState()
@@ -10,11 +28,15 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var customBackendProvider = BackendProvider.runPod
     @Published public private(set) var recitationMode = RecitationMode.autoDetect
     @Published public private(set) var connectionStatus = "Idle"
+    @Published public private(set) var recentEventHistory: [RecitationEventHistoryItem] = []
+    @Published public private(set) var backendURLValidationMessage: String?
     @Published public var backendURLText = BackendEndpointPreset.simulator.defaultURLText {
         didSet {
-            guard backendPreset == .custom else { return }
-            customBackendURLText = backendURLText
-            preferencesStore.customBackendURLText = backendURLText
+            if backendPreset == .custom {
+                customBackendURLText = backendURLText
+                preferencesStore.customBackendURLText = backendURLText
+            }
+            validateBackendURLText()
         }
     }
     @Published public var selectedSurahID = 108 {
@@ -33,6 +55,7 @@ public final class RecitationViewModel: ObservableObject {
     private var isStartingRecording = false
     private var audioSendTask: Task<Void, Never>?
     private var audioQueueGeneration = 0
+    private var eventHistoryID = 0
 
     public init(
         socketClient: BackendSocketing? = nil,
@@ -59,6 +82,7 @@ public final class RecitationViewModel: ObservableObject {
         case .custom:
             backendURLText = storedCustomURLText
         }
+        validateBackendURLText()
     }
 
     @available(*, deprecated, renamed: "backendBearerTokenText")
@@ -81,11 +105,13 @@ public final class RecitationViewModel: ObservableObject {
         case .custom:
             backendURLText = customBackendURLText
         }
+        validateBackendURLText()
     }
 
     public func selectCustomBackendProvider(_ provider: BackendProvider) {
         customBackendProvider = provider
         preferencesStore.customBackendProvider = provider
+        validateBackendURLText()
     }
 
     public func selectRecitationMode(_ mode: RecitationMode) {
@@ -106,6 +132,52 @@ public final class RecitationViewModel: ObservableObject {
         guard backendPreset == .custom else { return nil }
         let token = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
         return token.isEmpty ? nil : token
+    }
+
+    public var canStartRecording: Bool {
+        !isRecording && !isStartingRecording && validatedCurrentBackendURLText() != nil
+    }
+
+    public var recordingActionTitle: String {
+        if isStartingRecording {
+            return "Connecting"
+        }
+        return isRecording ? "Stop Recitation" : "Start Recitation"
+    }
+
+    public var recordingActionSystemImage: String {
+        if isStartingRecording {
+            return "waveform.badge.magnifyingglass"
+        }
+        return isRecording ? "xmark.circle.fill" : "mic.circle.fill"
+    }
+
+    public var recordingActionHelp: String {
+        if isStartingRecording {
+            return "Connecting to the selected backend"
+        }
+        if isRecording {
+            return "Stop the current recitation stream"
+        }
+        return backendURLValidationMessage ?? "Start streaming microphone audio"
+    }
+
+    public var shareableSessionSummary: String {
+        let events = recentEventHistory.map { item in
+            let ref = item.ayahRef ?? "none"
+            return "- \(item.typeText) \(ref): \(item.transcript)"
+        }.joined(separator: "\n")
+
+        return """
+        Tarteel realtime session
+        Connection: \(connectionStatus)
+        Latest ayah: \(state.debugAyahText)
+        Latest ayah text: \(state.debugAyahBodyText)
+        Transcript: \(state.debugTranscriptText)
+
+        Recent events:
+        \(events.isEmpty ? "- none" : events)
+        """
     }
 
     public func toggleRecording() {
@@ -130,6 +202,8 @@ public final class RecitationViewModel: ObservableObject {
         }
 
         errorMessage = nil
+        recentEventHistory = []
+        eventHistoryID = 0
         connectionStatus = "Connecting"
         sequenceNumber = 0
         audioSendTask?.cancel()
@@ -150,6 +224,11 @@ public final class RecitationViewModel: ObservableObject {
                 recitationScope: recitationScopeSelection,
                 provider: customBackendProvider
             )
+            guard Self.isValidWebSocketURLText(urlText) else {
+                backendURLValidationMessage = Self.invalidBackendURLMessage
+                throw RecitationViewModelError.invalidBackendURL
+            }
+            backendURLValidationMessage = nil
             if urlText != backendURLText {
                 backendURLText = urlText
             }
@@ -164,6 +243,7 @@ public final class RecitationViewModel: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     guard self.isAudioQueueActive(generation: generation) else { return }
+                    self.recordHistoryItem(for: event)
                     let currentState = self.state
                     let nextState = currentState.applying(event)
                     if nextState != currentState {
@@ -271,6 +351,90 @@ public final class RecitationViewModel: ObservableObject {
             detail: "Tap the mic to begin again"
         )
     }
+
+    public func validateBackendURLText() {
+        guard backendPreset == .custom else {
+            backendURLValidationMessage = nil
+            return
+        }
+
+        let text = backendURLText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            backendURLValidationMessage = "Enter a backend WebSocket URL before recording."
+            return
+        }
+
+        guard validatedCurrentBackendURLText() != nil else {
+            backendURLValidationMessage = "Use a ws:// or wss:// backend URL."
+            return
+        }
+
+        backendURLValidationMessage = nil
+    }
+
+    @discardableResult
+    public func applyDroppedBackendText(_ text: String) -> String? {
+        guard !isRecording, !isStartingRecording else { return nil }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let provider = Self.inferredBackendProvider(for: trimmed)
+        let normalized = BackendEndpointPreset.custom.recordingURLText(
+            currentURLText: trimmed,
+            provider: provider
+        )
+        guard Self.isValidWebSocketURLText(normalized) else {
+            backendURLValidationMessage = "Drop a ws://, wss://, Modal, or RunPod backend URL."
+            return nil
+        }
+
+        selectBackendPreset(.custom)
+        selectCustomBackendProvider(provider)
+        backendURLText = normalized
+        validateBackendURLText()
+        return normalized
+    }
+
+    private func recordHistoryItem(for event: RecitationEvent) {
+        eventHistoryID += 1
+        let item = RecitationEventHistoryItem(event: event, id: eventHistoryID)
+        recentEventHistory.insert(item, at: 0)
+        if recentEventHistory.count > 5 {
+            recentEventHistory.removeLast(recentEventHistory.count - 5)
+        }
+    }
+
+    private func validatedCurrentBackendURLText() -> String? {
+        let normalized = backendPreset.recordingURLText(
+            currentURLText: backendURLText,
+            provider: customBackendProvider
+        )
+        guard Self.isValidWebSocketURLText(normalized) else { return nil }
+        return normalized
+    }
+
+    private static func inferredBackendProvider(for text: String) -> BackendProvider {
+        let lowercasedText = text.lowercased()
+        if lowercasedText.contains(".modal.run") {
+            return .modal
+        }
+        if lowercasedText.contains(".proxy.runpod.net") || lowercasedText.contains(".api.runpod.ai") {
+            return .runPod
+        }
+        return .generic
+    }
+
+    private static func isValidWebSocketURLText(_ text: String) -> Bool {
+        guard let components = URLComponents(string: text),
+              let scheme = components.scheme?.lowercased(),
+              ["ws", "wss"].contains(scheme),
+              let host = components.host,
+              !host.isEmpty else {
+            return false
+        }
+        return true
+    }
+
+    private static let invalidBackendURLMessage = "Enter a valid backend URL."
 
     private func errorMessage(for error: Error, backendPreset: BackendEndpointPreset) -> String {
         let message = error.localizedDescription

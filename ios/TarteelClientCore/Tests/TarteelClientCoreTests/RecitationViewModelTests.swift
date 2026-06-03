@@ -84,6 +84,26 @@ final class RecitationViewModelTests: XCTestCase {
         await drainScheduledTasks()
     }
 
+    func testRecordingActionReflectsConnectingStateBeforeStreaming() async throws {
+        let socket = SuspendedConnectSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        viewModel.toggleRecording()
+        await socket.waitForConnectCount(1)
+
+        XCTAssertEqual(viewModel.recordingActionTitle, "Connecting")
+        XCTAssertEqual(viewModel.recordingActionSystemImage, "waveform.badge.magnifyingglass")
+        XCTAssertFalse(viewModel.canStartRecording)
+
+        await socket.releaseAllConnections()
+        await drainScheduledTasks()
+    }
+
     func testStopWhileConnectIsSuspendedKeepsSessionStopped() async throws {
         let socket = SuspendedConnectSocket()
         let audio = FakeAudioStreamer()
@@ -222,6 +242,45 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, "Receiving events")
     }
 
+    func testRecentEventHistoryKeepsNewestFiveEventsAndShareSummary() async throws {
+        let socket = FakeSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+        await viewModel.startRecording()
+
+        for sequence in 0..<7 {
+            await socket.emit(
+                RecitationEvent(
+                    type: sequence == 0 ? .locked : .progress,
+                    transcript: "transcript \(sequence)",
+                    confidence: 0.9,
+                    chunkSequence: sequence,
+                    reason: "test_event",
+                    candidateRefs: [],
+                    ayahText: "ayah \(sequence)",
+                    ayahRef: "112:\(sequence + 1)",
+                    startRef: "112:\(sequence + 1):1",
+                    nextExpectedRef: nil,
+                    consumedWords: 1,
+                    expectedRef: nil,
+                    expectedWord: nil,
+                    recognizedWord: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(viewModel.recentEventHistory.count, 5)
+        XCTAssertEqual(viewModel.recentEventHistory.first?.chunkSequence, 6)
+        XCTAssertEqual(viewModel.recentEventHistory.last?.chunkSequence, 2)
+        XCTAssertTrue(viewModel.shareableSessionSummary.contains("Connection: Receiving events"))
+        XCTAssertTrue(viewModel.shareableSessionSummary.contains("112:7"))
+        XCTAssertTrue(viewModel.shareableSessionSummary.contains("transcript 6"))
+    }
+
     func testStaleSocketEventAfterStopDoesNotMutateStoppedState() async throws {
         let socket = ConnectionCapturingSocket()
         let viewModel = RecitationViewModel(
@@ -277,6 +336,31 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(vad.resetCount, 2)
         XCTAssertFalse(viewModel.isRecording)
         XCTAssertEqual(viewModel.state.phase, .stopped)
+    }
+
+    func testBackendURLValidationAndDroppedURLApplication() {
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        XCTAssertNil(viewModel.applyDroppedBackendText("not a websocket url"))
+        XCTAssertNotNil(viewModel.backendURLValidationMessage)
+
+        let normalizedURL = viewModel.applyDroppedBackendText(
+            "https://workspace--tarteel-realtime-asr-fastapi-app.modal.run"
+        )
+
+        XCTAssertEqual(
+            normalizedURL,
+            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation"
+        )
+        XCTAssertEqual(viewModel.backendPreset, .custom)
+        XCTAssertEqual(viewModel.customBackendProvider, .modal)
+        XCTAssertEqual(viewModel.backendURLText, normalizedURL)
+        XCTAssertNil(viewModel.backendURLValidationMessage)
     }
 }
 
