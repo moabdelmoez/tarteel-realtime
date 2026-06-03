@@ -256,7 +256,15 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("tokenHelpText", settings_source)
         self.assertIn("Saved securely in macOS Keychain", settings_source)
         self.assertIn("backendBearerTokenPersistenceMessage", settings_source)
-        self.assertNotIn("viewModel.customBackendProvider.tokenHelpText)", settings_source)
+        self.assertIn("if let tokenMessage = viewModel.backendBearerTokenPersistenceMessage", settings_source)
+        self.assertIsNotNone(re.search(
+            r"if let tokenMessage = viewModel\.backendBearerTokenPersistenceMessage \{"
+            r".*Label\(tokenMessage, systemImage: \"key\.horizontal\"\)"
+            r".*\} else \{"
+            r".*Text\(tokenHelpText\)",
+            settings_source,
+            flags=re.DOTALL,
+        ))
 
 
 if __name__ == "__main__":
