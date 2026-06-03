@@ -27,7 +27,7 @@ struct MacContentView: View {
         HStack(spacing: 0) {
             VStack(spacing: 22) {
                 RecitationHeader(viewModel: viewModel)
-                MacRecitationControls(viewModel: viewModel)
+                MacRecitationControls(viewModel: viewModel, filteredSurahs: filteredSurahs)
                 MacVoiceActivityIndicator(isActive: viewModel.isRecording)
                 MacMicButton(viewModel: viewModel)
                 Spacer(minLength: 0)
@@ -74,10 +74,9 @@ struct MacContentView: View {
         .onAppear {
             guard !hasSeenNativeOnboarding else { return }
             isShowingOnboarding = true
-            hasSeenNativeOnboarding = true
         }
         .sheet(isPresented: $isShowingOnboarding) {
-            NativeOnboardingSheet()
+            NativeOnboardingSheet(hasSeenNativeOnboarding: $hasSeenNativeOnboarding)
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusMacSurahSearch)) { _ in
             isSearchFocused = true
@@ -151,6 +150,7 @@ private struct RecitationHeader: View {
 
 private struct MacRecitationControls: View {
     @ObservedObject var viewModel: RecitationViewModel
+    let filteredSurahs: [SurahMetadata]
 
     var body: some View {
         VStack(spacing: 12) {
@@ -167,13 +167,20 @@ private struct MacRecitationControls: View {
 
             if viewModel.recitationMode == .selectedSurah {
                 Picker("Surah", selection: $viewModel.selectedSurahID) {
-                    ForEach(SurahCatalog.all) { surah in
+                    ForEach(filteredSurahs) { surah in
                         Text(surah.displayName).tag(surah.id)
                     }
                 }
                 .pickerStyle(.menu)
                 .disabled(viewModel.isRecording)
                 .frame(width: 320)
+
+                if filteredSurahs.isEmpty {
+                    Text("No matching surah")
+                        .font(.caption)
+                        .foregroundStyle(MacTheme.muted)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
     }
@@ -326,6 +333,7 @@ private struct EventHistoryRow: View {
 }
 
 private struct NativeOnboardingSheet: View {
+    @Binding var hasSeenNativeOnboarding: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -354,6 +362,7 @@ private struct NativeOnboardingSheet: View {
             HStack {
                 Spacer()
                 Button("Continue") {
+                    hasSeenNativeOnboarding = true
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)

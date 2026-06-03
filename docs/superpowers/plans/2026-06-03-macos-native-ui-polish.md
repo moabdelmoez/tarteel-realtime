@@ -59,11 +59,16 @@ Append these tests to `MacOSAppProjectTests` in `tests/test_macos_app_project.py
         self.assertIn('TextField("Search surahs"', content_source)
         self.assertIn(".focused($isSearchFocused)", content_source)
         self.assertIn("filteredSurahs", content_source)
+        self.assertIn("ForEach(filteredSurahs)", content_source)
+        self.assertNotIn("ForEach(SurahCatalog.all)", content_source)
+        self.assertIn("No matching surah", content_source)
         self.assertIn(".onDrop(of:", content_source)
         self.assertIn("UTType.url.identifier", content_source)
         self.assertIn("UTType.plainText.identifier", content_source)
         self.assertIn(".draggable(viewModel.shareableSessionSummary)", content_source)
         self.assertIn("NativeOnboardingSheet", content_source)
+        self.assertIn("NativeOnboardingSheet(hasSeenNativeOnboarding: $hasSeenNativeOnboarding)", content_source)
+        self.assertIn("@Binding var hasSeenNativeOnboarding", content_source)
         self.assertIn("focusMacSurahSearch", content_source)
         self.assertIn(".onReceive(NotificationCenter.default.publisher", content_source)
         self.assertIn(".transition(.opacity.combined", content_source)
@@ -384,6 +389,7 @@ env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE
 ```
 
 Expected: PASS.
+If Task 5 has not been implemented yet, the focused suite may still report the settings validation guardrail as the only remaining failure.
 
 - [ ] **Step 9: Commit shared state changes**
 
@@ -446,10 +452,7 @@ Update `MacContentView.body` so the root uses:
             }
         }
         .sheet(isPresented: $isShowingOnboarding) {
-            NativeOnboardingSheet(
-                hasSeenNativeOnboarding: $hasSeenNativeOnboarding,
-                toggleRecording: { viewModel.toggleRecording() }
-            )
+            NativeOnboardingSheet(hasSeenNativeOnboarding: $hasSeenNativeOnboarding)
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusMacSurahSearch)) { _ in
             isSearchFocused = true
@@ -605,34 +608,26 @@ Add this view to `MacContentView.swift`:
 ```swift
 private struct NativeOnboardingSheet: View {
     @Binding var hasSeenNativeOnboarding: Bool
-    let toggleRecording: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Tarteel")
-                .font(.title.bold())
-            Text("Use the toolbar or Space to start listening. Drop a backend URL anywhere in the window to switch Custom endpoints.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Tarteel Realtime")
+                .font(.title2.weight(.semibold))
+            Text("Use the toolbar to record, search surahs, adjust settings, and drag diagnostics into notes or issues.")
+                .foregroundStyle(MacTheme.muted)
 
             HStack {
-                Button("Try Space") {
-                    hasSeenNativeOnboarding = true
-                    dismiss()
-                    toggleRecording()
-                }
-                .keyboardShortcut(.space, modifiers: [])
-
-                Button("Done") {
+                Spacer()
+                Button("Continue") {
                     hasSeenNativeOnboarding = true
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
             }
         }
-        .padding(24)
-        .frame(width: 420)
+        .padding(28)
+        .frame(width: 460)
     }
 }
 ```
@@ -698,6 +693,8 @@ git commit -m "feat: polish native macOS window shell"
 ---
 
 ### Task 4: Replace The Full Surah Menu With Search-Aware Selection
+
+> Follow-up note: this refinement can be folded into the Task 3 shell follow-up. If `MacRecitationControls` already accepts `filteredSurahs`, the picker already uses `ForEach(filteredSurahs)`, and the empty state says `No matching surah`, treat this task as complete and do not create a separate search-selection commit.
 
 **Files:**
 - Modify: `ios/TarteelPrototype/TarteelPrototypeMac/App/MacContentView.swift`
