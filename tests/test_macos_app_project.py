@@ -148,6 +148,45 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("AVAudioEngine", audio_source)
         self.assertNotIn("AVAudioSession", audio_source)
 
+    def test_macos_ui_uses_native_visual_system_and_toolbar_actions(self) -> None:
+        content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
+        app_source = (MAC_APP_SOURCE_ROOT / "TarteelPrototypeMacApp.swift").read_text(encoding="utf-8")
+
+        self.assertNotIn(".background(Color.white)", content_source)
+        self.assertIn("Color(nsColor: .windowBackgroundColor)", content_source)
+        self.assertIn(".background(.regularMaterial)", content_source)
+        self.assertIn("ToolbarItemGroup", content_source)
+        self.assertIn("Label(viewModel.recordingActionTitle", content_source)
+        self.assertIn(".help(viewModel.recordingActionHelp)", content_source)
+        self.assertIn(".windowToolbarStyle(.unifiedCompact)", app_source)
+        self.assertIn('CommandMenu("Recitation")', app_source)
+        self.assertIn(".keyboardShortcut(\"f\", modifiers: [.command])", app_source)
+
+    def test_macos_ui_exposes_search_drag_drop_onboarding_and_transitions(self) -> None:
+        content_source = (MAC_APP_SOURCE_ROOT / "MacContentView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("@FocusState", content_source)
+        self.assertIn(".searchable(text:", content_source)
+        self.assertIn("filteredSurahs", content_source)
+        self.assertIn(".onDrop(of:", content_source)
+        self.assertIn("UTType.url.identifier", content_source)
+        self.assertIn("UTType.plainText.identifier", content_source)
+        self.assertIn(".draggable(viewModel.shareableSessionSummary)", content_source)
+        self.assertIn("NativeOnboardingSheet", content_source)
+        self.assertIn("focusMacSurahSearch", content_source)
+        self.assertIn(".onReceive(NotificationCenter.default.publisher", content_source)
+        self.assertIn(".transition(.opacity.combined", content_source)
+        self.assertIn(".animation(.snappy", content_source)
+
+    def test_macos_settings_show_validation_and_disabled_state_feedback(self) -> None:
+        settings_source = (MAC_APP_SOURCE_ROOT / "MacSettingsView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("viewModel.backendURLValidationMessage", settings_source)
+        self.assertIn("Label(viewModel.backendURLValidationMessage", settings_source)
+        self.assertIn("exclamationmark.triangle", settings_source)
+        self.assertIn("Settings controls are locked while recording", settings_source)
+        self.assertIn(".help(", settings_source)
+
 
 if __name__ == "__main__":
     unittest.main()
