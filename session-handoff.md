@@ -2,7 +2,13 @@
 
 ## Verified Now
 
-- Latest slice: macOS native UI polish, completed locally on 2026-06-03.
+- Latest slice: Modal macOS default and Keychain token persistence, completed locally on 2026-06-03.
+- Modal is the macOS first-launch `Custom` provider default, including the deployed WSS URL `wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation`.
+- macOS injects `UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)`, and persisted preferences override the fallback.
+- macOS stores the selected `Custom` provider bearer token in Keychain through `KeychainBackendBearerTokenStore`; iPhone remains memory-only.
+- Shared `RecitationViewModel` now persists, clears, reloads, and reports selected-provider bearer token storage through an injected `BackendBearerTokenStoring` boundary.
+- macOS Settings copy/tooltips now describe selected-provider Keychain persistence and surface Keychain failure messages without contradicting success copy.
+- Previous slice: macOS native UI polish, completed locally on 2026-06-03.
 - The macOS prototype now uses a unified compact toolbar for recording, Surah search, and Settings, with source/build-verified native shell behavior.
 - Keyboard commands are wired for `Space`/`Command-R` recording and `Command-F` Surah search focus.
 - The macOS recitation surface now includes macOS 14-compatible Surah filtering/selection, first-run onboarding, event history, empty states, URL/text drop-in for backend setup with visible feedback, diagnostic drag-out text, adaptive system colors/materials, and Settings validation feedback.
@@ -42,12 +48,23 @@
   - RunPod normalizes bare `.proxy.runpod.net` and `.api.runpod.ai` hosts.
   - Modal normalizes bare `.modal.run` hosts.
   - iPhone bearer tokens remain memory-only.
-- Modal is the macOS first-launch `Custom` provider default.
-- macOS injects `UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)`, and persisted preferences override the fallback.
-- macOS stores the selected `Custom` provider bearer token in Keychain through `KeychainBackendBearerTokenStore`; iPhone remains memory-only.
 
 ## Verification
 
+- Modal macOS default and Keychain token persistence checks passed:
+  - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
+  - Result: 25 XCTest tests plus 27 Swift Testing tests.
+  - `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
+  - Result: 20 tests.
+  - `uv run python -B -m json.tool feature_list.json`
+  - `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"`
+  - Result: `[]`.
+  - `uv run python -m compileall -q tarteel_realtime tests`
+  - `git diff --check`
+  - `uv run python -B -m unittest discover -s tests -v`
+  - Result: 223 tests.
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`
+  - `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
 - macOS native UI polish checks passed:
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
   - Result: 44 checks.
@@ -113,7 +130,7 @@
 
 ## Next Best Step
 
-For the current UI branch, manually launch the macOS app and exercise light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, URL/text drop-in, diagnostic drag-out, Settings validation feedback, microphone permission, and a local `/ws/recitation` recording.
+Manually launch the macOS app, confirm first-launch Custom/Modal defaults, enter the Modal bearer token once, quit/reopen, confirm the token reloads from Keychain, then exercise light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, Settings validation feedback, microphone permission, and a local or Modal `/ws/recitation` recording.
 
 Run the remaining Modal replay or recitation proof, especially scope 4:1-3,
 then check logs after the test window. Replay command:

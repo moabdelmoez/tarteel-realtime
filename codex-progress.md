@@ -14,13 +14,43 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
 - Current transport direction: WebSocket `/ws/recitation` is the only active transport. The iOS app uses `Simulator` and `Custom` WebSocket presets; RunPod/mobile testing should use direct WSS to `/ws/recitation`.
 - Current iOS UI direction: the home screen is a light recitation surface. Backend preset, Custom provider, custom WebSocket URL, and memory-only bearer token live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
-- Current macOS UI direction: the app uses a unified native toolbar with recording, Surah search, and Settings; supports Space/Command-R recording, Command-F search focus, URL/text backend drop-in, diagnostic drag-out, first-run onboarding, event history, adaptive system colors/materials, and Settings validation feedback.
+- Current macOS UI direction: the app uses a unified native toolbar with recording, Surah search, and Settings; supports Space/Command-R recording, Command-F search focus, URL/text backend drop-in, diagnostic drag-out, first-run onboarding, event history, adaptive system colors/materials, Settings validation feedback, first-launch Custom/Modal defaults, and Keychain persistence for selected Custom provider bearer tokens.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: deploy provider-comparison GPU serverless endpoints, starting with Modal and RunPod, then measure cold start/scale-to-zero and scoped faster-whisper replay through `?scope=108` and `?scope=4:1-3`.
-- Current blocker: RunPod and Modal serverless packaging are locally verified, but no live endpoint has been deployed or fixture-replayed yet; endpoint latency, billing, idle shutdown, and real-ASR quality remain unverified.
+- Current highest-priority unfinished feature: complete provider-comparison GPU serverless evidence, especially remaining Modal scoped replay through `?scope=4:1-3`, idle shutdown/cost evidence, and RunPod Serverless live endpoint proof.
+- Current blocker: Modal is deployed and has post-CUDA-fix `/ping` plus scoped Surah 108 replay evidence, but the replay produced `lock_candidate` rather than a full lock; Modal 4:1-3 replay, idle shutdown, cost evidence, RunPod live endpoint proof, and live-ASR quality remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+
+### Session 082
+
+- Date: 2026-06-03
+- Goal: Make Modal the primary macOS prototype backend and persist selected Custom provider bearer tokens securely.
+- Completed:
+  - Added the design spec `docs/superpowers/specs/2026-06-03-modal-primary-keychain-token-design.md` and implementation plan `docs/superpowers/plans/2026-06-03-modal-primary-keychain-token.md`.
+  - Added configurable `RecitationPreferencesDefaults` so macOS can use first-launch `Custom`/`Modal` defaults without changing shared iPhone simulator defaults.
+  - Added `BackendBearerTokenStoring` plus a volatile default store for shared client code and tests.
+  - Updated `RecitationViewModel` to load, save, clear, and report selected-provider bearer token persistence through the injected storage boundary.
+  - Added macOS-only `KeychainBackendBearerTokenStore` using service `dev.mostafa.TarteelPrototypeMac.backend-token` and provider raw values as accounts.
+  - Injected `UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)` and `KeychainBackendBearerTokenStore()` into the macOS app while leaving the iPhone initializer unchanged.
+  - Updated macOS Settings copy and tooltips so selected Custom provider tokens are described as Keychain-backed and Keychain failure messages do not contradict success copy.
+  - Updated README, Modal docs, feature state, and handoff to distinguish iPhone memory-only tokens from macOS Keychain persistence and to refresh stale Modal replay status.
+- Verification run:
+  - Swift client core passed: `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 25 XCTest tests plus 27 Swift Testing tests.
+  - Focused Apple source guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v` with 20 tests.
+  - JSON validation passed: `uv run python -B -m json.tool feature_list.json`.
+  - Active-feature sanity passed: `uv run python -B -c "import json; data=json.load(open('feature_list.json', encoding='utf-8')); active=[f['id'] for f in data['features'] if f['status']=='in_progress']; print(active); assert len(active) <= 1"` returned `[]`.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Whitespace check passed: `git diff --check`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 223 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iPhone app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- Known risk or unresolved issue:
+  - The macOS Keychain path is source/build verified, but the agent did not manually launch the app, enter a real token, quit, reopen, and confirm the token reloads from Keychain.
+  - Live Modal recitation was not rerun in this slice; existing Modal evidence remains post-CUDA-fix `/ping` and scoped Surah 108 replay that produced `lock_candidate` for 108:1 rather than a full lock.
+  - Modal still needs remaining scoped replay, especially 4:1-3, plus idle shutdown/cost evidence; RunPod Serverless live endpoint proof remains outstanding.
+- Next best step: manually launch the macOS app, confirm first-launch Custom/Modal defaults, enter the Modal bearer token once, quit/reopen, confirm Keychain reload, then run the remaining Modal `scope=4:1-3` replay or live recitation proof.
 
 
 ### Session 081
