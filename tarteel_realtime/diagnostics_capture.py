@@ -54,7 +54,7 @@ def reconstruct_asr_windows(
     envelopes: list[dict[str, Any]],
     chunks: dict[int, bytes],
 ) -> list[dict[str, Any]]:
-    windows: dict[int, bytes] = {}
+    windows: dict[int, dict[str, Any]] = {}
     for envelope in envelopes:
         trace = envelope.get("trace")
         if not isinstance(trace, dict):
@@ -67,16 +67,15 @@ def reconstruct_asr_windows(
             continue
 
         pieces: list[bytes] = []
-        for segment in window.get("segments", []):
-            sequence_number = int(segment["sequence_number"])
-            start_byte = int(segment["start_byte"])
-            end_byte = int(segment["end_byte"])
-            pieces.append(chunks[sequence_number][start_byte:end_byte])
-        windows[window_id] = b"".join(pieces)
+        for segment in _window_segments(window, window_id=window_id):
+            pieces.append(_slice_segment(chunks, segment, window_id=window_id))
+        reconstructed_window = deepcopy(window)
+        reconstructed_window["pcm"] = b"".join(pieces)
+        windows[window_id] = reconstructed_window
 
     return [
-        {"id": window_id, "pcm": pcm}
-        for window_id, pcm in sorted(windows.items())
+        window
+        for _, window in sorted(windows.items())
     ]
 
 
@@ -323,6 +322,43 @@ def decode_trace_envelope(response_text: str) -> dict[str, Any]:
 def _validate_capture_inputs(*, chunk_ms: int) -> None:
     if chunk_ms <= 0:
         raise DiagnosticCaptureError("--chunk-ms must be positive.")
+
+
+def _window_segments(window: dict[str, Any], *, window_id: int) -> list[dict[str, Any]]:
+    segments = window.get("segments", [])
+    if not isinstance(segments, list):
+        raise DiagnosticCaptureError(f"ASR window {window_id} segments must be a list.")
+    for segment in segments:
+        if not isinstance(segment, dict):
+            raise DiagnosticCaptureError(f"ASR window {window_id} segment must be an object.")
+    return segments
+
+
+def _slice_segment(
+    chunks: dict[int, bytes],
+    segment: dict[str, Any],
+    *,
+    window_id: int,
+) -> bytes:
+    try:
+        sequence_number = int(segment["sequence_number"])
+        start_byte = int(segment["start_byte"])
+        end_byte = int(segment["end_byte"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise DiagnosticCaptureError(
+            f"ASR window {window_id} has an invalid segment shape."
+        ) from exc
+
+    pcm = chunks.get(sequence_number)
+    if pcm is None:
+        raise DiagnosticCaptureError(
+            f"ASR window {window_id} references missing chunk sequence {sequence_number}."
+        )
+    if start_byte < 0 or end_byte < start_byte or end_byte > len(pcm):
+        raise DiagnosticCaptureError(
+            f"ASR window {window_id} has an invalid byte range for chunk sequence {sequence_number}."
+        )
+    return pcm[start_byte:end_byte]
 
 
 async def _sleep_until_offset(start: float, offset_ms: int) -> None:

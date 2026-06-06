@@ -53,6 +53,8 @@ class DiagnosticsCaptureTests(unittest.TestCase):
                 "sequence_number": 1,
                 "asr_window": {
                     "id": 0,
+                    "transcript": "sample transcript",
+                    "duration_ms": 123,
                     "segments": [
                         {"sequence_number": 0, "start_byte": 1, "end_byte": 4},
                         {"sequence_number": 1, "start_byte": 0, "end_byte": 2},
@@ -63,7 +65,57 @@ class DiagnosticsCaptureTests(unittest.TestCase):
 
         windows = reconstruct_asr_windows(envelopes, chunks)
 
-        self.assertEqual(windows, [{"id": 0, "pcm": b"aaabb"}])
+        self.assertEqual(
+            windows,
+            [
+                {
+                    "id": 0,
+                    "transcript": "sample transcript",
+                    "duration_ms": 123,
+                    "segments": [
+                        {"sequence_number": 0, "start_byte": 1, "end_byte": 4},
+                        {"sequence_number": 1, "start_byte": 0, "end_byte": 2},
+                    ],
+                    "pcm": b"aaabb",
+                }
+            ],
+        )
+
+    def test_reconstruct_asr_windows_rejects_missing_chunk_segments(self):
+        envelopes = [{
+            "kind": "recitation_trace",
+            "event": {"type": "locked"},
+            "trace": {
+                "sequence_number": 0,
+                "asr_window": {
+                    "id": 0,
+                    "segments": [
+                        {"sequence_number": 7, "start_byte": 0, "end_byte": 2},
+                    ],
+                },
+            },
+        }]
+
+        with self.assertRaisesRegex(DiagnosticCaptureError, "sequence 7"):
+            reconstruct_asr_windows(envelopes, {0: b"aa"})
+
+    def test_reconstruct_asr_windows_rejects_invalid_segment_bounds(self):
+        envelopes = [{
+            "kind": "recitation_trace",
+            "event": {"type": "locked"},
+            "trace": {
+                "sequence_number": 0,
+                "asr_window": {
+                    "id": 0,
+                    "segments": [
+                        {"sequence_number": 0, "start_byte": -1, "end_byte": 2},
+                    ],
+                },
+            },
+        }]
+
+        with self.assertRaisesRegex(DiagnosticCaptureError, "byte range"):
+            reconstruct_asr_windows(envelopes, {0: b"aa"})
 
     def test_merges_client_timing_with_backend_trace(self):
         envelopes = [{
