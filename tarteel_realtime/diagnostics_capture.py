@@ -121,12 +121,17 @@ async def run_capture(
 ) -> Path:
     import websockets
 
+    _validate_capture_inputs(chunk_ms=chunk_ms)
     audio = load_replay_audio_file(
         audio_path,
         raw_sample_rate_hz=raw_sample_rate_hz,
     )
-    diagnostic_url = _url_with_diagnostics(url_with_scope(url, scope))
+    if not audio.pcm:
+        raise DiagnosticCaptureError("Cannot capture diagnostics for empty audio input.")
+    diagnostic_url = prepare_diagnostic_url(url, scope=scope)
     chunks = split_pcm_audio(audio, chunk_duration_ms=chunk_ms)
+    if not chunks:
+        raise DiagnosticCaptureError("Cannot capture diagnostics because audio produced no chunks.")
     chunk_bytes_by_sequence = {
         sequence_number: pcm
         for sequence_number, pcm in enumerate(chunks)
@@ -137,38 +142,46 @@ async def run_capture(
     envelopes: list[dict[str, Any]] = []
     client_chunks: list[dict[str, Any]] = []
 
-    async with websockets.connect(
-        diagnostic_url,
-        **websocket_connect_kwargs(
-            disable_ping=disable_ping,
-            authorization_token=bearer_token,
-        ),
-    ) as websocket:
-        for sequence_number, pcm in enumerate(chunks):
-            capture_offset_ms = sequence_number * chunk_ms
-            await _sleep_until_offset(start, capture_offset_ms)
-            send_offset_ms = _elapsed_ms(start)
-            payload = build_chunk_payload(
-                sequence_number=sequence_number,
-                pcm=pcm,
-                sample_rate_hz=audio.sample_rate_hz,
-            )
-            await websocket.send(json.dumps(payload))
-            response_text = await websocket.recv()
-            receive_offset_ms = _elapsed_ms(start)
-            envelope = _decode_trace_envelope(response_text)
-            envelopes.append(envelope)
-            client_chunks.append(
-                {
-                    "sequence_number": sequence_number,
-                    "capture_offset_ms": capture_offset_ms,
-                    "send_offset_ms": send_offset_ms,
-                    "receive_offset_ms": receive_offset_ms,
-                    "roundtrip_ms": receive_offset_ms - send_offset_ms,
-                    "pcm_bytes": len(pcm),
-                    "sample_rate_hz": audio.sample_rate_hz,
-                }
-            )
+    try:
+        async with websockets.connect(
+            diagnostic_url,
+            **websocket_connect_kwargs(
+                disable_ping=disable_ping,
+                authorization_token=bearer_token,
+            ),
+        ) as websocket:
+            for sequence_number, pcm in enumerate(chunks):
+                capture_offset_ms = sequence_number * chunk_ms
+                await _sleep_until_offset(start, capture_offset_ms)
+                send_offset_ms = _elapsed_ms(start)
+                payload = build_chunk_payload(
+                    sequence_number=sequence_number,
+                    pcm=pcm,
+                    sample_rate_hz=audio.sample_rate_hz,
+                )
+                await websocket.send(json.dumps(payload))
+                response_text = await websocket.recv()
+                receive_offset_ms = _elapsed_ms(start)
+                envelope = decode_trace_envelope(response_text)
+                envelopes.append(envelope)
+                client_chunks.append(
+                    {
+                        "sequence_number": sequence_number,
+                        "capture_offset_ms": capture_offset_ms,
+                        "send_offset_ms": send_offset_ms,
+                        "receive_offset_ms": receive_offset_ms,
+                        "roundtrip_ms": receive_offset_ms - send_offset_ms,
+                        "pcm_bytes": len(pcm),
+                        "sample_rate_hz": audio.sample_rate_hz,
+                    }
+                )
+    except DiagnosticCaptureError:
+        raise
+    except Exception as exc:
+        raise DiagnosticCaptureError(
+            "WebSocket capture failed for "
+            f"{scrub_url(diagnostic_url)}: {type(exc).__name__}"
+        ) from None
 
     ended_at = datetime.now(UTC)
     metadata = {
@@ -214,9 +227,8 @@ async def run_capture(
 
 def bearer_token_from_args(args: argparse.Namespace) -> tuple[str | None, str]:
     if args.bearer_token_env:
-        token = os.environ.get(args.bearer_token_env)
-        if token:
-            return token, "environment"
+        token = os.environ.get(args.bearer_token_env, "")
+        return (token or None), "environment"
     if args.bearer_token:
         return args.bearer_token, "argument"
     return None, "none"
@@ -267,6 +279,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def prepare_diagnostic_url(url: str, *, scope: str | None) -> str:
+    scoped_url = url_with_scope(url, scope)
+    parts = urlsplit(scoped_url)
+    if "@" in parts.netloc:
+        raise DiagnosticCaptureError(
+            f"WebSocket URL userinfo is not supported: {scrub_url(scoped_url)}"
+        )
+    return _url_with_diagnostics(scoped_url)
+
+
 def _url_with_diagnostics(url: str) -> str:
     parts = urlsplit(url)
     query_items = [
@@ -281,12 +303,12 @@ def _url_with_diagnostics(url: str) -> str:
             parts.netloc,
             parts.path,
             urlencode(query_items),
-            parts.fragment,
+            "",
         )
     )
 
 
-def _decode_trace_envelope(response_text: str) -> dict[str, Any]:
+def decode_trace_envelope(response_text: str) -> dict[str, Any]:
     try:
         payload = json.loads(response_text)
     except json.JSONDecodeError as exc:
@@ -296,6 +318,11 @@ def _decode_trace_envelope(response_text: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise DiagnosticCaptureError("Backend returned a non-object diagnostics response.")
     return validate_trace_envelope(payload)
+
+
+def _validate_capture_inputs(*, chunk_ms: int) -> None:
+    if chunk_ms <= 0:
+        raise DiagnosticCaptureError("--chunk-ms must be positive.")
 
 
 async def _sleep_until_offset(start: float, offset_ms: int) -> None:

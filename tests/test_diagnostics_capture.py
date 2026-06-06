@@ -1,14 +1,23 @@
-import json
-import struct
+from argparse import Namespace
+import asyncio
+from contextlib import redirect_stderr
+import io
 import tempfile
 from pathlib import Path
+import sys
 import unittest
+from unittest.mock import patch
 
 from tarteel_realtime.asr_smoke import SmokeAudio
+import tarteel_realtime.diagnostics_capture as diagnostics_capture
 from tarteel_realtime.diagnostics_capture import (
     DiagnosticCaptureError,
+    bearer_token_from_args,
+    main,
     merge_trace_records,
+    prepare_diagnostic_url,
     reconstruct_asr_windows,
+    run_capture,
     session_slug,
     validate_trace_envelope,
 )
@@ -81,6 +90,155 @@ class DiagnosticsCaptureTests(unittest.TestCase):
         self.assertEqual(trace["chunks"][0]["sequence_number"], 0)
         self.assertEqual(trace["chunks"][0]["roundtrip_ms"], 18)
         self.assertEqual(trace["raw_backend_envelopes"], envelopes)
+
+    def test_prepare_diagnostic_url_replaces_diagnostics_and_strips_fragment(self):
+        self.assertEqual(
+            prepare_diagnostic_url(
+                "wss://example.test/ws/recitation?diagnostics=0&foo=bar#access_token=secret",
+                scope="108",
+            ),
+            "wss://example.test/ws/recitation?foo=bar&scope=108&diagnostics=1",
+        )
+
+    def test_prepare_diagnostic_url_rejects_userinfo_without_leaking_secret(self):
+        with self.assertRaises(DiagnosticCaptureError) as context:
+            prepare_diagnostic_url(
+                "wss://user:pass@example.test/ws/recitation?token=secret",
+                scope=None,
+            )
+
+        message = str(context.exception)
+        self.assertIn("userinfo", message)
+        self.assertNotIn("user:pass", message)
+        self.assertNotIn("secret", message)
+
+    def test_decode_trace_envelope_rejects_non_json_and_non_object(self):
+        with self.assertRaisesRegex(DiagnosticCaptureError, "non-JSON"):
+            diagnostics_capture.decode_trace_envelope("not json")
+        with self.assertRaisesRegex(DiagnosticCaptureError, "non-object"):
+            diagnostics_capture.decode_trace_envelope("[]")
+
+    def test_bearer_token_from_args_prefers_environment(self):
+        args = Namespace(
+            bearer_token="argument-token",
+            bearer_token_env="DIAGNOSTIC_TOKEN",
+        )
+        with patch.dict("os.environ", {"DIAGNOSTIC_TOKEN": "environment-token"}):
+            self.assertEqual(
+                bearer_token_from_args(args),
+                ("environment-token", "environment"),
+            )
+
+    def test_bearer_token_from_args_uses_environment_source_when_env_missing(self):
+        args = Namespace(
+            bearer_token="argument-token",
+            bearer_token_env="DIAGNOSTIC_TOKEN",
+        )
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(bearer_token_from_args(args), (None, "environment"))
+
+    def test_run_capture_rejects_invalid_chunk_ms_before_connecting(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(DiagnosticCaptureError, "chunk-ms"):
+                asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("missing.wav"),
+                        chunk_ms=0,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+    def test_run_capture_wraps_websocket_errors_without_leaking_url_secrets(self):
+        connect_urls = []
+
+        class FailingConnection:
+            async def __aenter__(self):
+                raise RuntimeError("token=secret")
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+        class FakeWebSockets:
+            @staticmethod
+            def connect(url, **kwargs):
+                connect_urls.append(url)
+                return FailingConnection()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(sys.modules, {"websockets": FakeWebSockets}), patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+                return_value=SmokeAudio(pcm=b"\x00\x00", sample_rate_hz=16_000),
+            ), self.assertRaisesRegex(DiagnosticCaptureError, "WebSocket capture failed") as context:
+                asyncio.run(
+                    run_capture(
+                        url="wss://example.test/ws/recitation?token=secret#fragment-secret",
+                        audio_path=Path("sample.wav"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+        self.assertEqual(
+            connect_urls,
+            ["wss://example.test/ws/recitation?token=secret&diagnostics=1"],
+        )
+        message = str(context.exception)
+        self.assertNotIn("secret", message)
+        self.assertNotIn("fragment-secret", message)
+
+    def test_run_capture_rejects_empty_audio_before_connecting(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+                return_value=SmokeAudio(pcm=b"", sample_rate_hz=16_000),
+            ), self.assertRaisesRegex(DiagnosticCaptureError, "empty audio"):
+                asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("empty.wav"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+    def test_main_returns_2_for_diagnostic_capture_error_without_traceback(self):
+        with patch.object(
+            diagnostics_capture,
+            "run_capture",
+            side_effect=DiagnosticCaptureError("plain diagnostic error"),
+        ):
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = main(
+                    [
+                        "--url",
+                        "ws://127.0.0.1:8000/ws/recitation",
+                        "--audio-path",
+                        "sample.wav",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(stderr.getvalue().strip(), "plain diagnostic error")
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":
