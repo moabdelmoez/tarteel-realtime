@@ -1,5 +1,6 @@
 import unittest
 
+from tarteel_realtime.diagnostics import DiagnosticTraceCollector
 from tarteel_realtime.quran import QuranCorpus, QuranRef
 from tarteel_realtime.recitation_scope import parse_recitation_scope
 from tarteel_realtime.recognition import RecognitionResult
@@ -39,6 +40,37 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(event.ayah_ref, QuranRef(surah=114, ayah=2))
         self.assertEqual(event.start_ref, QuranRef(surah=114, ayah=2, word_index=1))
         self.assertEqual(event.next_expected_ref, QuranRef(surah=114, ayah=2, word_index=2))
+
+    def test_records_initial_location_decision_diagnostics(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=1,
+        )
+        collector = DiagnosticTraceCollector()
+        collector.begin_chunk(
+            sequence_number=0,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+
+        event = policy.handle_recognition_with_diagnostics(
+            RecognitionResult(
+                transcript="مَلِكِ",
+                confidence=1.0,
+                chunk_sequence=0,
+                is_final=True,
+            ),
+            diagnostic_collector=collector,
+        )
+
+        envelope = collector.envelope({"type": event.type.value})
+        decision = envelope["trace"]["decision"]
+        self.assertEqual(event.type, SessionEventType.LOCKED)
+        self.assertEqual(decision["mode"], "initial_location")
+        self.assertEqual(decision["locator"]["status"], "locked")
+        self.assertEqual(decision["locator"]["reason"], "unique_match")
+        self.assertEqual(decision["locator"]["top_candidates"][0]["ayah_ref"], "114:2")
 
     def test_pre_lock_short_asr_snippets_accumulate_until_unique_ayah_lock(self):
         policy = RecitationTransitionPolicy(
@@ -234,6 +266,40 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(event.type, SessionEventType.PROGRESS)
         self.assertEqual(event.consumed_words, 1)
         self.assertIsNone(event.next_expected_ref)
+
+    def test_records_post_lock_alignment_decision_diagnostics(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=1,
+        )
+        policy.handle_recognition(
+            RecognitionResult(transcript="مَلِكِ", confidence=0.9, chunk_sequence=0)
+        )
+        collector = DiagnosticTraceCollector()
+        collector.begin_chunk(
+            sequence_number=1,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+
+        event = policy.handle_recognition_with_diagnostics(
+            RecognitionResult(
+                transcript="النَّاسِ",
+                confidence=0.9,
+                chunk_sequence=1,
+                is_final=True,
+            ),
+            diagnostic_collector=collector,
+        )
+
+        envelope = collector.envelope({"type": event.type.value})
+        decision = envelope["trace"]["decision"]
+        self.assertEqual(event.type, SessionEventType.PROGRESS)
+        self.assertEqual(decision["mode"], "post_lock_alignment")
+        self.assertIsNone(decision["locator"])
+        self.assertEqual(decision["alignment"]["status"], "correct")
+        self.assertEqual(decision["alignment"]["consumed_words"], 1)
 
     def test_ayah_boundary_short_snippets_accumulate_into_ordered_lock(self):
         policy = RecitationTransitionPolicy(

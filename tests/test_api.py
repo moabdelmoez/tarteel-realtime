@@ -83,6 +83,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(diagnostic["event"]["start_ref"], "114:2:1")
         self.assertEqual(diagnostic["trace"]["sequence_number"], 0)
         self.assertEqual(diagnostic["trace"]["audio"]["pcm_bytes"], 2)
+        decision = diagnostic["trace"]["decision"]
+        self.assertEqual(decision["mode"], "initial_location")
+        self.assertEqual(decision["locator"]["status"], "locked")
+        self.assertEqual(decision["locator"]["top_candidates"][0]["ayah_ref"], "114:2")
 
     def test_each_websocket_connection_gets_fresh_recitation_stream(self):
         app = create_app(

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
-from tarteel_realtime.alignment import AlignmentStatus, QuranAligner
+from tarteel_realtime.alignment import AlignmentDecision, AlignmentStatus, QuranAligner
 from tarteel_realtime.locator import (
     LocatorCandidate,
     LocatorDecision,
@@ -45,6 +46,9 @@ class RecitationTransitionPolicy:
         self._corpus = corpus
         self._recitation_scope = recitation_scope
         self._has_locked = False
+        self._last_decision_mode: str | None = None
+        self._last_locator_payload: dict[str, object] | None = None
+        self._last_alignment_payload: dict[str, object] | None = None
 
     def handle_recognition(self, recognition: RecognitionResult) -> SessionEvent:
         if _is_waiting_for_audio_buffer(recognition):
@@ -64,6 +68,23 @@ class RecitationTransitionPolicy:
 
         return self._handle_post_lock_alignment(recognition)
 
+    def handle_recognition_with_diagnostics(
+        self,
+        recognition: RecognitionResult,
+        *,
+        diagnostic_collector: Any,
+    ) -> SessionEvent:
+        self._clear_remembered_decision()
+        event = self.handle_recognition(recognition)
+        diagnostic_collector.record_decision(
+            {
+                "mode": self._last_decision_mode,
+                "locator": self._last_locator_payload,
+                "alignment": self._last_alignment_payload,
+            }
+        )
+        return event
+
     def _handle_initial_location(
         self,
         recognition: RecognitionResult,
@@ -71,6 +92,7 @@ class RecitationTransitionPolicy:
         initial_location = self._recognition_and_decision_for_initial_location(recognition)
         recognition_for_location = initial_location.recognition
         locator_decision = initial_location.decision
+        self._remember_locator_decision("initial_location", locator_decision)
 
         if locator_decision.status == LocatorStatus.NOT_FOUND:
             self._initial_transcript_context.clear()
@@ -229,6 +251,7 @@ class RecitationTransitionPolicy:
         recognition_for_location, ordered_decision = (
             self._recognition_and_decision_for_ordered_progression(recognition)
         )
+        self._remember_locator_decision("ordered_progression", ordered_decision)
         if (
             ordered_decision.status == LocatorStatus.LOCKED
             and ordered_decision.best is not None
@@ -294,6 +317,7 @@ class RecitationTransitionPolicy:
             current_expected_ref,
             recognition.transcript,
         )
+        self._remember_alignment_decision("post_lock_alignment", alignment_decision)
 
         if alignment_decision.status == AlignmentStatus.CORRECT:
             next_expected_ref = self._progression.mark_alignment_progress(
@@ -318,6 +342,7 @@ class RecitationTransitionPolicy:
             )
 
         ordered_decision = self._locate_ordered_progression(recognition.transcript)
+        self._remember_locator_decision("ordered_progression", ordered_decision)
         if (
             ordered_decision.status == LocatorStatus.LOCKED
             and ordered_decision.best is not None
@@ -435,6 +460,52 @@ class RecitationTransitionPolicy:
 
     def _is_inside_recitation_scope(self, ref: QuranRef) -> bool:
         return self._recitation_scope is None or self._recitation_scope.contains(ref)
+
+    def _clear_remembered_decision(self) -> None:
+        self._last_decision_mode = None
+        self._last_locator_payload = None
+        self._last_alignment_payload = None
+
+    def _remember_locator_decision(
+        self,
+        mode: str,
+        decision: LocatorDecision,
+    ) -> None:
+        self._last_decision_mode = mode
+        self._last_locator_payload = {
+            "status": decision.status.value,
+            "reason": decision.reason,
+            "top_candidates": [
+                {
+                    "ayah_ref": str(candidate.ayah_ref),
+                    "start_ref": str(candidate.start_ref),
+                    "matched_words": candidate.matched_words,
+                    "score": candidate.score,
+                }
+                for candidate in decision.candidates[:5]
+            ],
+        }
+        self._last_alignment_payload = None
+
+    def _remember_alignment_decision(
+        self,
+        mode: str,
+        decision: AlignmentDecision,
+    ) -> None:
+        self._last_decision_mode = mode
+        self._last_locator_payload = None
+        self._last_alignment_payload = {
+            "status": decision.status.value,
+            "reason": decision.reason,
+            "expected_ref": (
+                str(decision.expected_ref)
+                if decision.expected_ref is not None
+                else None
+            ),
+            "expected_word": decision.expected_word,
+            "recognized_word": decision.recognized_word,
+            "consumed_words": decision.consumed_words,
+        }
 
 
 def _is_waiting_for_audio_buffer(recognition: RecognitionResult) -> bool:

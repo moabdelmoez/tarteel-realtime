@@ -41,7 +41,10 @@ class RecitationSession:
             chunk,
             diagnostic_collector=diagnostic_collector,
         )
-        return self._transitions.handle_recognition(recognition)
+        return self._transitions.handle_recognition_with_diagnostics(
+            recognition,
+            diagnostic_collector=diagnostic_collector,
+        )
 
 
 def _recognize_with_optional_diagnostics(
