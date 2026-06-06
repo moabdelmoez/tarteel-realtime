@@ -19,6 +19,14 @@ class DiagnosticsBundleTests(unittest.TestCase):
             "wss://example.test/ws/recitation?scope=108&token=%3Credacted%3E",
         )
 
+    def test_scrub_url_removes_userinfo_fragment_and_redacts_query_values(self):
+        self.assertEqual(
+            scrub_url(
+                "wss://user:pass@example.test/ws/recitation?scope=108&token=secret&diagnostics=1#access_token=frag"
+            ),
+            "wss://example.test/ws/recitation?scope=108&token=%3Credacted%3E&diagnostics=1",
+        )
+
     def test_builds_waveform_min_max_peaks(self):
         pcm = struct.pack("<hhhh", -1000, 500, -200, 1200)
 
@@ -90,6 +98,53 @@ class DiagnosticsBundleTests(unittest.TestCase):
             )
             self.assertNotIn("secret", bundle.trace_json_path.read_text(encoding="utf-8"))
             self.assertNotIn("secret", html)
+
+    def test_sanitizes_url_and_sensitive_keys_anywhere_in_trace(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = write_diagnostics_bundle(
+                output_root=Path(tmpdir),
+                session_slug="session",
+                trace={
+                    "metadata": {},
+                    "chunks": [
+                        {
+                            "sequence_number": 0,
+                            "backend_url": "wss://user:pass@example.test/ws/recitation?scope=108&token=secret#fragment-secret",
+                            "nested": {
+                                "url": "https://example.test/report?api_key=secret",
+                                "authorization": "Bearer secret",
+                                "access_token": "secret",
+                                "api_key": "secret",
+                            },
+                        }
+                    ],
+                },
+                raw_audio_pcm=b"",
+                sample_rate_hz=16_000,
+                asr_input_segments=[],
+                asr_windows=[],
+            )
+
+            trace_text = bundle.trace_json_path.read_text(encoding="utf-8")
+            html = bundle.index_html_path.read_text(encoding="utf-8")
+            trace_json = json.loads(trace_text)
+
+            self.assertEqual(
+                trace_json["chunks"][0]["backend_url"],
+                "wss://example.test/ws/recitation?scope=108&token=%3Credacted%3E",
+            )
+            self.assertEqual(
+                trace_json["chunks"][0]["nested"]["url"],
+                "https://example.test/report?api_key=%3Credacted%3E",
+            )
+            self.assertEqual(
+                trace_json["chunks"][0]["nested"]["authorization"],
+                "<redacted>",
+            )
+            self.assertNotIn("secret", trace_text)
+            self.assertNotIn("secret", html)
+            self.assertNotIn("user:pass", trace_text)
+            self.assertNotIn("fragment-secret", trace_text)
 
     def test_writes_asr_window_audio_and_normalizes_trace(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -254,6 +309,31 @@ class DiagnosticsBundleTests(unittest.TestCase):
 
         self.assertIn("\\u003c/script\\u003e", html)
         self.assertNotIn("</script><script>alert(1)</script>", html)
+
+    def test_renderer_script_does_not_use_inner_html_for_trace_values(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = write_diagnostics_bundle(
+                output_root=Path(tmpdir),
+                session_slug="session",
+                trace={
+                    "chunks": [
+                        {
+                            "sequence_number": '<img src=x onerror="alert(1)">',
+                            "transcript": '<script>alert("x")</script>',
+                        }
+                    ]
+                },
+                raw_audio_pcm=b"",
+                sample_rate_hz=16_000,
+                asr_input_segments=[],
+                asr_windows=[],
+            )
+
+            renderer_js = (bundle.path / "assets" / "diagnostics.js").read_text(
+                encoding="utf-8"
+            )
+
+            self.assertNotIn("innerHTML", renderer_js)
 
     def test_rejects_odd_length_pcm_for_wav_artifacts(self):
         with tempfile.TemporaryDirectory() as tmpdir:

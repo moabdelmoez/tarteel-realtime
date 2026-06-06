@@ -17,21 +17,26 @@ class DiagnosticsBundle:
     trace_json_path: Path
 
 
+_SAFE_QUERY_PARAMS = {"scope", "diagnostics"}
+_SENSITIVE_KEYS = {"authorization", "bearer_token", "access_token", "token", "api_key"}
+
+
 def scrub_url(url: str) -> str:
     parts = urlsplit(url)
     safe_query = []
     for name, value in parse_qsl(parts.query, keep_blank_values=True):
-        if name in {"scope", "diagnostics"}:
+        if name in _SAFE_QUERY_PARAMS:
             safe_query.append((name, value))
         else:
             safe_query.append((name, "<redacted>"))
+    netloc = parts.netloc.rsplit("@", 1)[-1]
     return urlunsplit(
         (
             parts.scheme,
-            parts.netloc,
+            netloc,
             parts.path,
             urlencode(safe_query),
-            parts.fragment,
+            "",
         )
     )
 
@@ -239,15 +244,15 @@ def _validate_pcm16(pcm: bytes) -> None:
 
 def _sanitize_trace_value(value: Any) -> Any:
     if isinstance(value, dict):
-        sanitized = {
-            str(key): _sanitize_trace_value(item)
-            for key, item in value.items()
-        }
-        metadata = sanitized.get("metadata")
-        if isinstance(metadata, dict):
-            backend_url = metadata.get("backend_url")
-            if isinstance(backend_url, str):
-                metadata["backend_url"] = scrub_url(backend_url)
+        sanitized = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if _is_sensitive_key(key_text):
+                sanitized[key_text] = "<redacted>"
+            elif _is_url_key(key_text) and isinstance(item, str):
+                sanitized[key_text] = scrub_url(item)
+            else:
+                sanitized[key_text] = _sanitize_trace_value(item)
         return sanitized
     if isinstance(value, list):
         return [_sanitize_trace_value(item) for item in value]
@@ -256,6 +261,15 @@ def _sanitize_trace_value(value: Any) -> Any:
     if isinstance(value, bytes | bytearray | memoryview):
         raise TypeError("trace JSON must not contain raw bytes")
     return value
+
+
+def _is_sensitive_key(key: str) -> bool:
+    return key.lower() in _SENSITIVE_KEYS
+
+
+def _is_url_key(key: str) -> bool:
+    key_lower = key.lower()
+    return key_lower == "url" or key_lower.endswith("_url")
 
 
 def _json_for_inline_script(trace: dict[str, Any]) -> str:
@@ -382,35 +396,63 @@ function show(value) {
 }
 
 function metric(label, value) {
-  return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
+  const card = document.createElement("div");
+  const labelElement = document.createElement("span");
+  const valueElement = document.createElement("strong");
+  card.className = "metric";
+  labelElement.textContent = label;
+  valueElement.textContent = String(value);
+  card.append(labelElement, valueElement);
+  return card;
 }
 
-function lane(title, content) {
+function lane(title, populate) {
   const row = document.createElement("div");
+  const heading = document.createElement("strong");
+  const content = document.createElement("div");
   row.className = "lane";
-  row.innerHTML = `<strong>${title}</strong><div>${content}</div>`;
+  heading.textContent = title;
+  populate(content);
+  row.append(heading, content);
   return row;
+}
+
+function addButtons(container, values, className, labelFor, emptyText) {
+  if (!values.length) {
+    container.textContent = emptyText;
+    return;
+  }
+  values.forEach((value, index) => {
+    const button = document.createElement("button");
+    button.className = className;
+    button.dataset.kind = className;
+    button.dataset.index = String(index);
+    button.textContent = String(labelFor(value, index));
+    container.appendChild(button);
+  });
 }
 
 const chunks = trace.chunks || [];
 const windows = trace.asr_windows || [];
 summary.className = "summary-grid";
-summary.innerHTML = [
+summary.replaceChildren(
   metric("Chunks", chunks.length),
   metric("ASR windows", windows.length),
   metric("Raw artifact", trace.audio_artifacts?.raw_mic?.filename || "none"),
   metric("ASR artifact", trace.audio_artifacts?.asr_input?.filename || "none"),
-].join("");
+);
 
-timeline.appendChild(lane("Raw waveform", "<div class=\\"bar\\"></div>"));
-timeline.appendChild(lane(
-  "Chunks",
-  chunks.map((chunk, index) => `<button class="chunk" data-kind="chunk" data-index="${index}">${chunk.sequence_number ?? index}</button>`).join("") || "No chunks recorded"
-));
-timeline.appendChild(lane(
-  "ASR windows",
-  windows.map((window, index) => `<button class="window" data-kind="window" data-index="${index}">${window.id}</button>`).join("") || "No ASR windows recorded"
-));
+timeline.appendChild(lane("Raw waveform", (content) => {
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  content.appendChild(bar);
+}));
+timeline.appendChild(lane("Chunks", (content) => {
+  addButtons(content, chunks, "chunk", (chunk, index) => chunk.sequence_number ?? index, "No chunks recorded");
+}));
+timeline.appendChild(lane("ASR windows", (content) => {
+  addButtons(content, windows, "window", (window) => window.id, "No ASR windows recorded");
+}));
 
 timeline.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-kind][data-index]");
