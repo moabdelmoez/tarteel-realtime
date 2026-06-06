@@ -6,10 +6,11 @@ import struct
 from dataclasses import dataclass
 from typing import Any
 
+from tarteel_realtime.diagnostics import DiagnosticTraceCollector
 from tarteel_realtime.event_payloads import session_event_to_payload
 from tarteel_realtime.quran import QuranCorpus, QuranRef
 from tarteel_realtime.recitation_scope import RecitationScope
-from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer
+from tarteel_realtime.recognition import AudioChunk, SpeechRecognizer, VoiceActivity
 from tarteel_realtime.session import RecitationSession
 from tarteel_realtime.session_events import SessionEvent, uncertain_event
 
@@ -37,6 +38,7 @@ class RecitationStreamResult:
     event: SessionEvent
     payload: dict[str, Any]
     diagnostics: RecitationChunkDiagnostics
+    diagnostic_envelope: dict[str, Any] | None = None
 
 
 class RecitationStream:
@@ -48,6 +50,7 @@ class RecitationStream:
         minimum_lock_words: int = 3,
         log_transcripts: bool = False,
         recitation_scope: RecitationScope | None = None,
+        diagnostics_enabled: bool = False,
     ) -> None:
         self._corpus = corpus
         self._session = RecitationSession(
@@ -57,8 +60,20 @@ class RecitationStream:
             recitation_scope=recitation_scope,
         )
         self._log_transcripts = log_transcripts
+        self._diagnostic_collector = (
+            DiagnosticTraceCollector() if diagnostics_enabled else None
+        )
 
     def process_chunk(self, chunk: AudioChunk) -> RecitationStreamResult:
+        diagnostic_collector = self._diagnostic_collector
+        if diagnostic_collector is not None:
+            diagnostic_collector.begin_chunk(
+                sequence_number=chunk.sequence_number,
+                pcm_bytes=len(chunk.pcm),
+                sample_rate_hz=chunk.sample_rate_hz,
+                voice_activity=voice_activity_payload(chunk.voice_activity),
+            )
+
         try:
             event = self._session.handle_chunk(chunk)
         except Exception:
@@ -79,6 +94,11 @@ class RecitationStream:
             event,
             corpus=self._corpus,
         )
+        diagnostic_envelope = (
+            None
+            if diagnostic_collector is None
+            else diagnostic_collector.envelope(payload)
+        )
         return RecitationStreamResult(
             event=event,
             payload=payload,
@@ -87,6 +107,7 @@ class RecitationStream:
                 event,
                 log_transcripts=self._log_transcripts,
             ),
+            diagnostic_envelope=diagnostic_envelope,
         )
 
 
@@ -142,6 +163,18 @@ def ref_to_string(ref: QuranRef | None) -> str | None:
     if ref is None:
         return None
     return str(ref)
+
+
+def voice_activity_payload(
+    voice_activity: VoiceActivity | None,
+) -> dict[str, Any] | None:
+    if voice_activity is None:
+        return None
+    return {
+        "probability": voice_activity.probability,
+        "is_speech_active": voice_activity.is_speech_active,
+        "event": voice_activity.event,
+    }
 
 
 def pcm_bytes_to_ms(byte_count: int, *, sample_rate_hz: int) -> int:

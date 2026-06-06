@@ -55,6 +55,7 @@ def create_app(
             await websocket.close(code=1008, reason=str(exc))
             return
 
+        diagnostics_enabled = websocket.query_params.get("diagnostics") == "1"
         await websocket.accept()
         stream = RecitationStream(
             corpus=corpus,
@@ -62,6 +63,7 @@ def create_app(
             minimum_lock_words=minimum_lock_words,
             log_transcripts=log_transcripts,
             recitation_scope=recitation_scope,
+            diagnostics_enabled=diagnostics_enabled,
         )
 
         try:
@@ -73,7 +75,12 @@ def create_app(
                     result.diagnostics,
                     target_logger=logger,
                 )
-                await websocket.send_json(result.payload)
+                response_payload = (
+                    result.diagnostic_envelope
+                    if diagnostics_enabled
+                    else result.payload
+                )
+                await websocket.send_json(response_payload)
         except WebSocketDisconnect:
             return
 

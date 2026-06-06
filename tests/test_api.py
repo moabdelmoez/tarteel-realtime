@@ -60,6 +60,30 @@ class ApiTests(unittest.TestCase):
         self.assertIsNone(progress["next_expected_ref"])
         self.assertEqual(progress["chunk_sequence"], 1)
 
+    def test_diagnostics_query_returns_trace_envelope_without_changing_normal_socket(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws/recitation") as websocket:
+            websocket.send_json(chunk_payload(0))
+            normal = websocket.receive_json()
+
+        with client.websocket_connect("/ws/recitation?diagnostics=1") as websocket:
+            websocket.send_json(chunk_payload(0))
+            diagnostic = websocket.receive_json()
+
+        self.assertEqual(normal["type"], "locked")
+        self.assertNotIn("kind", normal)
+        self.assertEqual(diagnostic["kind"], "recitation_trace")
+        self.assertEqual(diagnostic["event"]["type"], "locked")
+        self.assertEqual(diagnostic["event"]["start_ref"], "114:2:1")
+        self.assertEqual(diagnostic["trace"]["sequence_number"], 0)
+        self.assertEqual(diagnostic["trace"]["audio"]["pcm_bytes"], 2)
+
     def test_each_websocket_connection_gets_fresh_recitation_stream(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),

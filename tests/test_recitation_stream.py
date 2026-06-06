@@ -63,6 +63,23 @@ class RecitationStreamTests(unittest.TestCase):
 
         self.assertEqual(result.diagnostics.transcript_text, "مَلِكِ")
 
+    def test_process_chunk_can_return_diagnostic_envelope(self):
+        stream = RecitationStream(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer=FakeRecognizer(["مَلِكِ"]),
+            minimum_lock_words=1,
+            diagnostics_enabled=True,
+        )
+
+        result = stream.process_chunk(chunk(0, pcm=struct.pack("<h", 1000)))
+
+        self.assertEqual(result.payload["type"], "locked")
+        self.assertIsNotNone(result.diagnostic_envelope)
+        self.assertEqual(result.diagnostic_envelope["kind"], "recitation_trace")
+        self.assertEqual(result.diagnostic_envelope["event"], result.payload)
+        self.assertEqual(result.diagnostic_envelope["trace"]["sequence_number"], 0)
+        self.assertEqual(result.diagnostic_envelope["trace"]["audio"]["pcm_bytes"], 2)
+
     def test_process_chunk_surfaces_asr_errors_as_uncertain_events(self):
         stream = RecitationStream(
             corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
