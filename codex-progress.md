@@ -23,6 +23,23 @@
 ## Session Log
 
 
+### Session 084
+
+- Date: 2026-06-06
+- Goal: Stress-test and capture the design for a replayable visual diagnostics tool that can identify recitation performance bottlenecks.
+- Completed:
+  - Interviewed and resolved the major design branches for a local visual diagnostics workflow.
+  - Added `docs/superpowers/specs/2026-06-06-visual-diagnostics-tool.md` covering the agreed v1 scope: replay-based local bundles, `?diagnostics=1` envelopes, chunk-centric traces, raw/ASR audio artifacts, static HTML rendering, privacy constraints, and test expectations.
+  - Added `docs/superpowers/plans/2026-06-06-visual-diagnostics-tool.md` with a test-first implementation plan for backend trace collection, buffering/ASR/locator instrumentation, bundle generation, CLI replay capture, docs, and verification.
+- Verification run:
+  - `rg -n 'TBD|TODO|appropriate|Similar to|similar to|If .* add|placeholder|fill in' docs/superpowers/plans/2026-06-06-visual-diagnostics-tool.md` returned no matches.
+  - `git diff --check` passed.
+- Known risk or unresolved issue:
+  - This slice is design and planning only; no runtime diagnostic capture code exists yet.
+  - The implementation plan includes code sketches that must still be reconciled against the live code during TDD.
+- Next best step: execute the plan starting with the diagnostic collector tests, then preserve normal `/ws/recitation` compatibility while adding `?diagnostics=1`.
+
+
 ### Session 083
 
 - Date: 2026-06-03
