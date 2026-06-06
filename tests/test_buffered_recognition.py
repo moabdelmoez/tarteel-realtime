@@ -362,6 +362,65 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertIsNone(envelope["trace"]["asr_window"])
         self.assertEqual(inner.chunks, [])
 
+    def test_empty_speech_end_chunk_does_not_flush_ready_buffer(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=10,
+                tail_audio_ms=0,
+                minimum_frame_rms=150,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        buffered_chunk = chunk(0, struct.pack("<hh", 1000, -1000))
+        empty_speech_end = AudioChunk(
+            sequence_number=1,
+            pcm=b"",
+            sample_rate_hz=1_000,
+            voice_activity=VoiceActivity(
+                probability=0.0,
+                is_speech_active=False,
+                event="speech_end",
+            ),
+        )
+
+        collector.begin_chunk(
+            sequence_number=buffered_chunk.sequence_number,
+            pcm_bytes=len(buffered_chunk.pcm),
+            sample_rate_hz=buffered_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(buffered_chunk, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=empty_speech_end.sequence_number,
+            pcm_bytes=len(empty_speech_end.pcm),
+            sample_rate_hz=empty_speech_end.sample_rate_hz,
+            voice_activity={
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
+        )
+        result = recognizer.recognize(
+            empty_speech_end,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        self.assertEqual(result.transcript, "")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_DROP_VAD_OR_RMS,
+        )
+        self.assertFalse(envelope["trace"]["buffer"]["appended"])
+        self.assertIsNone(envelope["trace"]["asr_window"])
+        self.assertEqual(inner.chunks, [])
+
     def test_records_appended_wait_actions_before_flush_conditions(self):
         inner = RecordingRecognizer()
         recognizer = BufferedRecognizer(

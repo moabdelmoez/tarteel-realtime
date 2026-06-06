@@ -134,6 +134,29 @@ class BufferedRecognizer:
                     incoming_rms,
                 )
                 return _waiting_result(chunk.sequence_number)
+        elif _is_vad_speech_end(chunk):
+            _record_buffer_action(
+                diagnostic_collector,
+                chunk=chunk,
+                action=BUFFER_ACTION_DROP_VAD_OR_RMS,
+                incoming_rms=incoming_rms,
+                buffered_ms_before=buffered_ms_before,
+                buffered_ms_after=self._buffered_ms,
+                unflushed_ms_after=self._unflushed_ms,
+                appended=False,
+                appended_segments=[],
+            )
+            logger.warning(
+                "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
+                "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait_vad",
+                chunk.sequence_number,
+                len(chunk.pcm),
+                chunk.sample_rate_hz,
+                self._buffered_ms,
+                self._unflushed_ms,
+                incoming_rms,
+            )
+            return _waiting_result(chunk.sequence_number)
         if not self._ready_to_flush(chunk):
             if appended_segments:
                 action = _wait_action_for_buffer_state(
