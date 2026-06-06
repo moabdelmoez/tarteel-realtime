@@ -342,11 +342,11 @@ class RecitationTransitionPolicy:
             )
 
         ordered_decision = self._locate_ordered_progression(recognition.transcript)
-        self._remember_locator_decision("ordered_progression", ordered_decision)
         if (
             ordered_decision.status == LocatorStatus.LOCKED
             and ordered_decision.best is not None
         ):
+            self._remember_locator_decision("ordered_progression", ordered_decision)
             event_type = (
                 SessionEventType.LOCKED
                 if ayah_ref(ordered_decision.best.ayah_ref) != ayah_ref(current_expected_ref)

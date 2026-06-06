@@ -301,6 +301,123 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(decision["alignment"]["status"], "correct")
         self.assertEqual(decision["alignment"]["consumed_words"], 1)
 
+    def test_records_wrong_alignment_diagnostics_when_ordered_fallback_misses(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=1,
+        )
+        policy.handle_recognition(
+            RecognitionResult(transcript="مَلِكِ", confidence=0.9, chunk_sequence=0)
+        )
+        collector = DiagnosticTraceCollector()
+        collector.begin_chunk(
+            sequence_number=1,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+
+        event = policy.handle_recognition_with_diagnostics(
+            RecognitionResult(
+                transcript="الْفَلَقِ",
+                confidence=0.9,
+                chunk_sequence=1,
+                is_final=True,
+            ),
+            diagnostic_collector=collector,
+        )
+
+        envelope = collector.envelope({"type": event.type.value})
+        decision = envelope["trace"]["decision"]
+        self.assertEqual(event.type, SessionEventType.WRONG)
+        self.assertEqual(event.reason, "word_mismatch")
+        self.assertEqual(decision["mode"], "post_lock_alignment")
+        self.assertIsNone(decision["locator"])
+        self.assertEqual(decision["alignment"]["status"], "wrong")
+        self.assertEqual(decision["alignment"]["reason"], "word_mismatch")
+        self.assertEqual(decision["alignment"]["expected_ref"], "114:2:2")
+        self.assertEqual(decision["alignment"]["expected_word"], "الناس")
+        self.assertEqual(decision["alignment"]["recognized_word"], "الفلق")
+
+    def test_records_ordered_progression_when_wrong_alignment_fallback_locks(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=1,
+        )
+        policy.handle_recognition(
+            RecognitionResult(transcript="إِنَّا", confidence=0.9, chunk_sequence=0)
+        )
+        collector = DiagnosticTraceCollector()
+        collector.begin_chunk(
+            sequence_number=1,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+
+        event = policy.handle_recognition_with_diagnostics(
+            RecognitionResult(
+                transcript="الْكَوْثَرَ",
+                confidence=0.9,
+                chunk_sequence=1,
+                is_final=True,
+            ),
+            diagnostic_collector=collector,
+        )
+
+        envelope = collector.envelope({"type": event.type.value})
+        decision = envelope["trace"]["decision"]
+        self.assertEqual(event.type, SessionEventType.PROGRESS)
+        self.assertEqual(event.reason, "tolerant_progression")
+        self.assertEqual(decision["mode"], "ordered_progression")
+        self.assertIsNone(decision["alignment"])
+        self.assertEqual(decision["locator"]["status"], "locked")
+        self.assertEqual(
+            decision["locator"]["top_candidates"][0]["start_ref"],
+            "108:1:3",
+        )
+
+    def test_waiting_diagnostics_do_not_reuse_previous_decision(self):
+        policy = RecitationTransitionPolicy(
+            corpus=self.corpus,
+            minimum_lock_words=1,
+        )
+        collector = DiagnosticTraceCollector()
+        collector.begin_chunk(
+            sequence_number=0,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+        policy.handle_recognition_with_diagnostics(
+            RecognitionResult(transcript="مَلِكِ", confidence=0.9, chunk_sequence=0),
+            diagnostic_collector=collector,
+        )
+
+        collector.begin_chunk(
+            sequence_number=1,
+            pcm_bytes=0,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+        event = policy.handle_recognition_with_diagnostics(
+            RecognitionResult(
+                transcript="",
+                confidence=0.0,
+                chunk_sequence=1,
+                is_final=False,
+            ),
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope({"type": event.type.value})
+
+        self.assertEqual(event.type, SessionEventType.UNCERTAIN)
+        self.assertEqual(event.reason, "waiting_for_audio_buffer")
+        self.assertEqual(
+            envelope["trace"]["decision"],
+            {"mode": None, "locator": None, "alignment": None},
+        )
+
     def test_ayah_boundary_short_snippets_accumulate_into_ordered_lock(self):
         policy = RecitationTransitionPolicy(
             corpus=self.corpus,
