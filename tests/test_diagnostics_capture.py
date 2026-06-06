@@ -207,6 +207,72 @@ class DiagnosticsCaptureTests(unittest.TestCase):
                     )
                 )
 
+    def test_run_capture_rejects_invalid_sample_rate_before_loading_audio(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+            ) as load_audio, self.assertRaisesRegex(DiagnosticCaptureError, "sample-rate"):
+                asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("missing.wav"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=0,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+            load_audio.assert_not_called()
+
+    def test_run_capture_wraps_audio_load_errors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+                side_effect=OSError("secret path token"),
+            ), self.assertRaisesRegex(DiagnosticCaptureError, "Could not load audio") as context:
+                asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("missing.wav"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+        self.assertNotIn("secret", str(context.exception))
+
+    def test_run_capture_rejects_odd_length_pcm_before_connecting(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+                return_value=SmokeAudio(pcm=b"\x00", sample_rate_hz=16_000),
+            ), self.assertRaisesRegex(DiagnosticCaptureError, "PCM16"):
+                asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("odd.raw"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
     def test_run_capture_wraps_websocket_errors_without_leaking_url_secrets(self):
         connect_urls = []
 

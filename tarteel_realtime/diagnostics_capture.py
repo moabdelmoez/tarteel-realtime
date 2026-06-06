@@ -120,13 +120,15 @@ async def run_capture(
 ) -> Path:
     import websockets
 
-    _validate_capture_inputs(chunk_ms=chunk_ms)
-    audio = load_replay_audio_file(
+    _validate_capture_inputs(
+        chunk_ms=chunk_ms,
+        raw_sample_rate_hz=raw_sample_rate_hz,
+    )
+    audio = _load_capture_audio(
         audio_path,
         raw_sample_rate_hz=raw_sample_rate_hz,
     )
-    if not audio.pcm:
-        raise DiagnosticCaptureError("Cannot capture diagnostics for empty audio input.")
+    _validate_audio(audio)
     diagnostic_url = prepare_diagnostic_url(url, scope=scope)
     chunks = split_pcm_audio(audio, chunk_duration_ms=chunk_ms)
     if not chunks:
@@ -319,9 +321,32 @@ def decode_trace_envelope(response_text: str) -> dict[str, Any]:
     return validate_trace_envelope(payload)
 
 
-def _validate_capture_inputs(*, chunk_ms: int) -> None:
+def _validate_capture_inputs(*, chunk_ms: int, raw_sample_rate_hz: int) -> None:
     if chunk_ms <= 0:
         raise DiagnosticCaptureError("--chunk-ms must be positive.")
+    if raw_sample_rate_hz <= 0:
+        raise DiagnosticCaptureError("--sample-rate must be positive.")
+
+
+def _load_capture_audio(audio_path: Path, *, raw_sample_rate_hz: int):
+    try:
+        return load_replay_audio_file(
+            audio_path,
+            raw_sample_rate_hz=raw_sample_rate_hz,
+        )
+    except (OSError, ValueError) as exc:
+        raise DiagnosticCaptureError(
+            f"Could not load audio file {audio_path.name}: {type(exc).__name__}"
+        ) from None
+
+
+def _validate_audio(audio) -> None:
+    if not audio.pcm:
+        raise DiagnosticCaptureError("Cannot capture diagnostics for empty audio input.")
+    if audio.sample_rate_hz <= 0:
+        raise DiagnosticCaptureError("Loaded audio sample rate must be positive.")
+    if len(audio.pcm) % 2 != 0:
+        raise DiagnosticCaptureError("Loaded audio must contain even-length PCM16 bytes.")
 
 
 def _window_segments(window: dict[str, Any], *, window_id: int) -> list[dict[str, Any]]:
