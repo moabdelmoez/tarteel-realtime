@@ -138,7 +138,6 @@ async def run_capture(
     }
 
     started_at = datetime.now(UTC)
-    start = monotonic()
     envelopes: list[dict[str, Any]] = []
     client_chunks: list[dict[str, Any]] = []
 
@@ -150,6 +149,7 @@ async def run_capture(
                 authorization_token=bearer_token,
             ),
         ) as websocket:
+            start = monotonic()
             for sequence_number, pcm in enumerate(chunks):
                 capture_offset_ms = sequence_number * chunk_ms
                 await _sleep_until_offset(start, capture_offset_ms)

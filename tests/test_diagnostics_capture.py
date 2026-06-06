@@ -5,6 +5,7 @@ import io
 import tempfile
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -218,6 +219,78 @@ class DiagnosticsCaptureTests(unittest.TestCase):
                         authorization_source="none",
                     )
                 )
+
+    def test_run_capture_starts_replay_clock_after_websocket_connects(self):
+        current_time = {"value": 0.0}
+        captured_traces = []
+        response_count = {"value": 0}
+
+        def fake_monotonic():
+            return current_time["value"]
+
+        async def fake_sleep(seconds):
+            current_time["value"] += seconds
+
+        class FakeConnection:
+            async def __aenter__(self):
+                current_time["value"] = 0.7
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                return False
+
+            async def send(self, payload):
+                return None
+
+            async def recv(self):
+                sequence_number = response_count["value"]
+                response_count["value"] += 1
+                return (
+                    '{"kind":"recitation_trace",'
+                    f'"event":{{"type":"locating"}},'
+                    f'"trace":{{"sequence_number":{sequence_number},'
+                    '"buffer":{"appended":true}}}'
+                )
+
+        class FakeWebSockets:
+            @staticmethod
+            def connect(url, **kwargs):
+                return FakeConnection()
+
+        def fake_write_diagnostics_bundle(**kwargs):
+            captured_traces.append(kwargs["trace"])
+            return SimpleNamespace(index_html_path=Path("/tmp/index.html"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(sys.modules, {"websockets": FakeWebSockets}), patch.object(
+                diagnostics_capture,
+                "load_replay_audio_file",
+                return_value=SmokeAudio(pcm=b"\x00\x00\x01\x00", sample_rate_hz=1),
+            ), patch.object(
+                diagnostics_capture,
+                "write_diagnostics_bundle",
+                side_effect=fake_write_diagnostics_bundle,
+            ), patch.object(
+                diagnostics_capture,
+                "monotonic",
+                side_effect=fake_monotonic,
+            ), patch.object(diagnostics_capture.asyncio, "sleep", side_effect=fake_sleep):
+                index_path = asyncio.run(
+                    run_capture(
+                        url="ws://127.0.0.1:8000/ws/recitation",
+                        audio_path=Path("sample.wav"),
+                        chunk_ms=1000,
+                        scope=None,
+                        output_root=Path(tmpdir),
+                        raw_sample_rate_hz=16_000,
+                        disable_ping=True,
+                        bearer_token=None,
+                        authorization_source="none",
+                    )
+                )
+
+        self.assertEqual(index_path, Path("/tmp/index.html"))
+        self.assertEqual(captured_traces[0]["chunks"][0]["send_offset_ms"], 0)
 
     def test_main_returns_2_for_diagnostic_capture_error_without_traceback(self):
         with patch.object(
