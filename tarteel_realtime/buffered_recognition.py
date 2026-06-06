@@ -133,6 +133,7 @@ class BufferedRecognizer:
                     self._unflushed_ms,
                     incoming_rms,
                 )
+                return _waiting_result(chunk.sequence_number)
         if not self._ready_to_flush(chunk):
             if appended_segments:
                 action = _wait_action_for_buffer_state(
@@ -205,7 +206,11 @@ class BufferedRecognizer:
         _record_buffer_action(
             diagnostic_collector,
             chunk=chunk,
-            action=BUFFER_ACTION_FLUSH_ASR,
+            action=(
+                BUFFER_ACTION_RESET_SAMPLE_RATE
+                if sample_rate_reset
+                else BUFFER_ACTION_FLUSH_ASR
+            ),
             incoming_rms=incoming_rms,
             buffered_ms_before=buffered_ms_before,
             buffered_ms_after=self._buffered_ms,

@@ -303,6 +303,65 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertFalse(envelope["trace"]["buffer"]["appended"])
         self.assertEqual(inner.chunks, [])
 
+    def test_rejected_speech_end_chunk_does_not_flush_ready_buffer(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=10,
+                tail_audio_ms=0,
+                minimum_frame_rms=150,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        buffered_chunk = chunk(0, struct.pack("<hh", 1000, -1000))
+        rejected_speech_end = AudioChunk(
+            sequence_number=1,
+            pcm=struct.pack("<h", 1),
+            sample_rate_hz=1_000,
+            voice_activity=VoiceActivity(
+                probability=0.0,
+                is_speech_active=False,
+                event="speech_end",
+            ),
+        )
+
+        collector.begin_chunk(
+            sequence_number=buffered_chunk.sequence_number,
+            pcm_bytes=len(buffered_chunk.pcm),
+            sample_rate_hz=buffered_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(buffered_chunk, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=rejected_speech_end.sequence_number,
+            pcm_bytes=len(rejected_speech_end.pcm),
+            sample_rate_hz=rejected_speech_end.sample_rate_hz,
+            voice_activity={
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
+        )
+        result = recognizer.recognize(
+            rejected_speech_end,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        self.assertEqual(result.transcript, "")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_DROP_VAD_OR_RMS,
+        )
+        self.assertFalse(envelope["trace"]["buffer"]["appended"])
+        self.assertIsNone(envelope["trace"]["asr_window"])
+        self.assertEqual(inner.chunks, [])
+
     def test_records_appended_wait_actions_before_flush_conditions(self):
         inner = RecordingRecognizer()
         recognizer = BufferedRecognizer(
@@ -591,6 +650,63 @@ class BufferedRecognizerTests(unittest.TestCase):
         )
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
             reset_chunk.pcm + flush_chunk.pcm,
+        ])
+
+    def test_immediate_flush_after_sample_rate_reset_keeps_reset_action_visible(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=4,
+                flush_interval_ms=4,
+                tail_audio_ms=0,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        old_rate_chunk = chunk(0, struct.pack("<hh", 1000, -1000), sample_rate_hz=1_000)
+        reset_flush_chunk = chunk(
+            1,
+            struct.pack("<hhhhhhhh", 900, -900, 800, -800, 700, -700, 600, -600),
+            sample_rate_hz=2_000,
+        )
+
+        collector.begin_chunk(
+            sequence_number=old_rate_chunk.sequence_number,
+            pcm_bytes=len(old_rate_chunk.pcm),
+            sample_rate_hz=old_rate_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(old_rate_chunk, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=reset_flush_chunk.sequence_number,
+            pcm_bytes=len(reset_flush_chunk.pcm),
+            sample_rate_hz=reset_flush_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        result = recognizer.recognize(
+            reset_flush_chunk,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope({"type": "locked"})
+
+        self.assertEqual(result.transcript, "flush-1")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_RESET_SAMPLE_RATE,
+        )
+        self.assertTrue(envelope["trace"]["buffer"]["appended"])
+        self.assertEqual(
+            envelope["trace"]["buffer"]["appended_segments"],
+            [{"sequence_number": 1, "start_byte": 0, "end_byte": 16}],
+        )
+        self.assertEqual(
+            envelope["trace"]["asr_window"]["segments"],
+            [{"sequence_number": 1, "start_byte": 0, "end_byte": 16}],
+        )
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            reset_flush_chunk.pcm,
         ])
 
 
