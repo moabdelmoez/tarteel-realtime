@@ -6,6 +6,14 @@ from tarteel_realtime.buffered_recognition import (
     BufferedRecognizer,
     buffering_profile_config,
 )
+from tarteel_realtime.diagnostics import (
+    BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL,
+    BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO,
+    BUFFER_ACTION_DROP_VAD_OR_RMS,
+    BUFFER_ACTION_DROP_QUIET_BUFFER,
+    BUFFER_ACTION_FLUSH_ASR,
+    DiagnosticTraceCollector,
+)
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, VoiceActivity
 
 
@@ -257,6 +265,254 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertIn("buffered_ms=3", joined_logs)
         self.assertIn("action=wait", joined_logs)
         self.assertIn("action=flush", joined_logs)
+
+    def test_records_vad_or_rms_drop_action_when_chunk_is_not_buffered(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_frame_rms=150,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        audio_chunk = chunk(0, struct.pack("<h", 100))
+        collector.begin_chunk(
+            sequence_number=audio_chunk.sequence_number,
+            pcm_bytes=len(audio_chunk.pcm),
+            sample_rate_hz=audio_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+
+        result = recognizer.recognize(
+            audio_chunk,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        self.assertEqual(result.transcript, "")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_DROP_VAD_OR_RMS,
+        )
+        self.assertFalse(envelope["trace"]["buffer"]["appended"])
+        self.assertEqual(inner.chunks, [])
+
+    def test_records_appended_wait_actions_before_flush_conditions(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=4,
+                tail_audio_ms=0,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        first = chunk(0, struct.pack("<h", 1000))
+        second = chunk(1, struct.pack("<h", -1000))
+
+        collector.begin_chunk(
+            sequence_number=first.sequence_number,
+            pcm_bytes=len(first.pcm),
+            sample_rate_hz=first.sample_rate_hz,
+            voice_activity=None,
+        )
+        first_result = recognizer.recognize(
+            first,
+            diagnostic_collector=collector,
+        )
+        first_envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        collector.begin_chunk(
+            sequence_number=second.sequence_number,
+            pcm_bytes=len(second.pcm),
+            sample_rate_hz=second.sample_rate_hz,
+            voice_activity=None,
+        )
+        second_result = recognizer.recognize(
+            second,
+            diagnostic_collector=collector,
+        )
+        second_envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        self.assertEqual(first_result.transcript, "")
+        self.assertEqual(second_result.transcript, "")
+        self.assertEqual(
+            first_envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO,
+        )
+        self.assertEqual(
+            second_envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL,
+        )
+        self.assertEqual(inner.chunks, [])
+
+    def test_records_flush_asr_window_segments_when_buffer_flushes(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        first = chunk(0, struct.pack("<h", 1000))
+        second = chunk(1, struct.pack("<h", -1000))
+
+        collector.begin_chunk(
+            sequence_number=first.sequence_number,
+            pcm_bytes=len(first.pcm),
+            sample_rate_hz=first.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(first, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=second.sequence_number,
+            pcm_bytes=len(second.pcm),
+            sample_rate_hz=second.sample_rate_hz,
+            voice_activity=None,
+        )
+        result = recognizer.recognize(
+            second,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope({"type": "locked"})
+
+        self.assertEqual(result.transcript, "flush-1")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_FLUSH_ASR,
+        )
+        self.assertEqual(
+            envelope["trace"]["asr_window"]["segments"],
+            [
+                {"sequence_number": 0, "start_byte": 0, "end_byte": 2},
+                {"sequence_number": 1, "start_byte": 0, "end_byte": 2},
+            ],
+        )
+        self.assertEqual(envelope["trace"]["asr_window"]["transcript"], "flush-1")
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            first.pcm + second.pcm,
+        ])
+
+    def test_records_drop_quiet_buffer_when_flush_window_is_below_speech_rms(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_speech_rms=400,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        first = chunk(0, struct.pack("<h", 0))
+        second = chunk(1, struct.pack("<h", 0))
+
+        collector.begin_chunk(
+            sequence_number=first.sequence_number,
+            pcm_bytes=len(first.pcm),
+            sample_rate_hz=first.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(first, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=second.sequence_number,
+            pcm_bytes=len(second.pcm),
+            sample_rate_hz=second.sample_rate_hz,
+            voice_activity=None,
+        )
+        result = recognizer.recognize(
+            second,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        self.assertEqual(result.transcript, "")
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_DROP_QUIET_BUFFER,
+        )
+        self.assertTrue(envelope["trace"]["buffer"]["appended"])
+        self.assertIsNone(envelope["trace"]["asr_window"])
+        self.assertEqual(inner.chunks, [])
+
+    def test_tail_retention_keeps_asr_segment_metadata_aligned(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=4,
+                flush_interval_ms=1,
+                tail_audio_ms=3,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        first = chunk(0, struct.pack("<hh", 1000, -1000))
+        second = chunk(1, struct.pack("<hh", 900, -900))
+        third = chunk(2, struct.pack("<h", 800))
+
+        collector.begin_chunk(
+            sequence_number=first.sequence_number,
+            pcm_bytes=len(first.pcm),
+            sample_rate_hz=first.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(first, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=second.sequence_number,
+            pcm_bytes=len(second.pcm),
+            sample_rate_hz=second.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(second, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=third.sequence_number,
+            pcm_bytes=len(third.pcm),
+            sample_rate_hz=third.sample_rate_hz,
+            voice_activity=None,
+        )
+        result = recognizer.recognize(
+            third,
+            diagnostic_collector=collector,
+        )
+        envelope = collector.envelope({"type": "locked"})
+
+        self.assertEqual(result.transcript, "flush-2")
+        self.assertEqual(
+            envelope["trace"]["asr_window"]["segments"],
+            [
+                {"sequence_number": 0, "start_byte": 2, "end_byte": 4},
+                {"sequence_number": 1, "start_byte": 0, "end_byte": 4},
+                {"sequence_number": 2, "start_byte": 0, "end_byte": 2},
+            ],
+        )
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            first.pcm + second.pcm,
+            first.pcm[2:] + second.pcm + third.pcm,
+        ])
 
 
 if __name__ == "__main__":

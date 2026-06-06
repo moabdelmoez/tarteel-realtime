@@ -1,8 +1,13 @@
 import struct
 import unittest
 
+from tarteel_realtime.buffered_recognition import (
+    BufferedRecognitionConfig,
+    BufferedRecognizer,
+)
+from tarteel_realtime.diagnostics import BUFFER_ACTION_FLUSH_ASR
 from tarteel_realtime.quran import QuranCorpus
-from tarteel_realtime.recognition import AudioChunk, FakeRecognizer
+from tarteel_realtime.recognition import AudioChunk, FakeRecognizer, RecognitionResult
 from tarteel_realtime.recitation_stream import RecitationStream
 
 
@@ -12,17 +17,35 @@ SAMPLE_TANZIL_LINES = [
 ]
 
 
-def chunk(sequence_number: int = 0, pcm: bytes = b"\x00\x01") -> AudioChunk:
+def chunk(
+    sequence_number: int = 0,
+    pcm: bytes = b"\x00\x01",
+    sample_rate_hz: int = 16_000,
+) -> AudioChunk:
     return AudioChunk(
         sequence_number=sequence_number,
         pcm=pcm,
-        sample_rate_hz=16_000,
+        sample_rate_hz=sample_rate_hz,
     )
 
 
 class FailingRecognizer:
     def recognize(self, audio_chunk: AudioChunk):
         raise RuntimeError("CUDA error: device-side assert triggered")
+
+
+class RecordingRecognizer:
+    def __init__(self):
+        self.chunks = []
+
+    def recognize(self, audio_chunk: AudioChunk):
+        self.chunks.append(audio_chunk)
+        return RecognitionResult(
+            transcript="مَلِكِ",
+            confidence=0.9,
+            chunk_sequence=audio_chunk.sequence_number,
+            is_final=True,
+        )
 
 
 class RecitationStreamTests(unittest.TestCase):
@@ -79,6 +102,46 @@ class RecitationStreamTests(unittest.TestCase):
         self.assertEqual(result.diagnostic_envelope["event"], result.payload)
         self.assertEqual(result.diagnostic_envelope["trace"]["sequence_number"], 0)
         self.assertEqual(result.diagnostic_envelope["trace"]["audio"]["pcm_bytes"], 2)
+
+    def test_diagnostic_collector_reaches_buffered_recognizer(self):
+        inner = RecordingRecognizer()
+        stream = RecitationStream(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer=BufferedRecognizer(
+                inner,
+                config=BufferedRecognitionConfig(
+                    minimum_audio_ms=2,
+                    flush_interval_ms=2,
+                    tail_audio_ms=0,
+                    minimum_frame_rms=0,
+                ),
+            ),
+            minimum_lock_words=1,
+            diagnostics_enabled=True,
+        )
+
+        stream.process_chunk(
+            chunk(0, pcm=struct.pack("<h", 1000), sample_rate_hz=1_000)
+        )
+        result = stream.process_chunk(
+            chunk(1, pcm=struct.pack("<h", -1000), sample_rate_hz=1_000)
+        )
+
+        self.assertEqual(result.payload["type"], "locked")
+        self.assertEqual(
+            result.diagnostic_envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_FLUSH_ASR,
+        )
+        self.assertEqual(
+            result.diagnostic_envelope["trace"]["asr_window"]["segments"],
+            [
+                {"sequence_number": 0, "start_byte": 0, "end_byte": 2},
+                {"sequence_number": 1, "start_byte": 0, "end_byte": 2},
+            ],
+        )
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            struct.pack("<h", 1000) + struct.pack("<h", -1000),
+        ])
 
     def test_process_chunk_surfaces_asr_errors_as_uncertain_events(self):
         stream = RecitationStream(

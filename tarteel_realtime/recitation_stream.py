@@ -75,7 +75,10 @@ class RecitationStream:
             )
 
         try:
-            event = self._session.handle_chunk(chunk)
+            event = self._handle_chunk(
+                chunk,
+                diagnostic_collector=diagnostic_collector,
+            )
         except Exception:
             logger.exception(
                 "recitation_stream asr_error sequence=%s sample_rate_hz=%s pcm_bytes=%s",
@@ -108,6 +111,19 @@ class RecitationStream:
                 log_transcripts=self._log_transcripts,
             ),
             diagnostic_envelope=diagnostic_envelope,
+        )
+
+    def _handle_chunk(
+        self,
+        chunk: AudioChunk,
+        *,
+        diagnostic_collector: DiagnosticTraceCollector | None,
+    ) -> SessionEvent:
+        if diagnostic_collector is None:
+            return self._session.handle_chunk(chunk)
+        return self._session.handle_chunk_with_diagnostics(
+            chunk,
+            diagnostic_collector=diagnostic_collector,
         )
 
 

@@ -4,7 +4,16 @@ from dataclasses import dataclass
 import logging
 import math
 import struct
+from time import monotonic
 
+from tarteel_realtime.diagnostics import (
+    BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL,
+    BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO,
+    BUFFER_ACTION_DROP_VAD_OR_RMS,
+    BUFFER_ACTION_DROP_QUIET_BUFFER,
+    BUFFER_ACTION_FLUSH_ASR,
+    diagnostic_asr_context,
+)
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
 
 
@@ -30,6 +39,20 @@ class BufferedRecognitionConfig:
             raise ValueError("minimum_speech_rms must be non-negative")
         if self.minimum_frame_rms < 0:
             raise ValueError("minimum_frame_rms must be non-negative")
+
+
+@dataclass(frozen=True)
+class BufferedAudioSegment:
+    sequence_number: int
+    start_byte: int
+    end_byte: int
+
+    def to_payload(self) -> dict[str, int]:
+        return {
+            "sequence_number": self.sequence_number,
+            "start_byte": self.start_byte,
+            "end_byte": self.end_byte,
+        }
 
 
 DEFAULT_BUFFERING_PROFILE = "stable"
@@ -69,15 +92,34 @@ class BufferedRecognizer:
         self._recognizer = recognizer
         self._config = config
         self._buffer = bytearray()
+        self._segments: list[BufferedAudioSegment] = []
         self._sample_rate_hz: int | None = None
         self._bytes_since_flush = 0
 
-    def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+    def recognize(
+        self,
+        chunk: AudioChunk,
+        *,
+        diagnostic_collector=None,
+    ) -> RecognitionResult:
         incoming_rms = _pcm_rms(chunk.pcm) if chunk.pcm else 0
+        buffered_ms_before = self._buffered_ms
+        appended_segments: list[BufferedAudioSegment] = []
         if chunk.pcm:
             if self._should_buffer_chunk(chunk, incoming_rms=incoming_rms):
-                self._append(chunk)
+                appended_segments = self._append(chunk)
             else:
+                _record_buffer_action(
+                    diagnostic_collector,
+                    chunk=chunk,
+                    action=BUFFER_ACTION_DROP_VAD_OR_RMS,
+                    incoming_rms=incoming_rms,
+                    buffered_ms_before=buffered_ms_before,
+                    buffered_ms_after=self._buffered_ms,
+                    unflushed_ms_after=self._unflushed_ms,
+                    appended=False,
+                    appended_segments=[],
+                )
                 logger.warning(
                     "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                     "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait_vad",
@@ -89,6 +131,23 @@ class BufferedRecognizer:
                     incoming_rms,
                 )
         if not self._ready_to_flush(chunk):
+            if appended_segments:
+                action = (
+                    BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO
+                    if self._buffered_ms < self._config.minimum_audio_ms
+                    else BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL
+                )
+                _record_buffer_action(
+                    diagnostic_collector,
+                    chunk=chunk,
+                    action=action,
+                    incoming_rms=incoming_rms,
+                    buffered_ms_before=buffered_ms_before,
+                    buffered_ms_after=self._buffered_ms,
+                    unflushed_ms_after=self._unflushed_ms,
+                    appended=True,
+                    appended_segments=appended_segments,
+                )
             logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                 "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait",
@@ -103,6 +162,17 @@ class BufferedRecognizer:
 
         buffered_rms = _pcm_rms(bytes(self._buffer))
         if buffered_rms < self._config.minimum_speech_rms:
+            _record_buffer_action(
+                diagnostic_collector,
+                chunk=chunk,
+                action=BUFFER_ACTION_DROP_QUIET_BUFFER,
+                incoming_rms=incoming_rms,
+                buffered_ms_before=buffered_ms_before,
+                buffered_ms_after=self._buffered_ms,
+                unflushed_ms_after=self._unflushed_ms,
+                appended=bool(appended_segments),
+                appended_segments=appended_segments,
+            )
             logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                 "buffered_ms=%s unflushed_ms=%s buffered_rms=%s action=wait_quiet",
@@ -114,6 +184,7 @@ class BufferedRecognizer:
                 buffered_rms,
             )
             self._buffer.clear()
+            self._segments.clear()
             self._bytes_since_flush = 0
             return _waiting_result(chunk.sequence_number)
 
@@ -128,11 +199,48 @@ class BufferedRecognizer:
             buffered_rms,
         )
 
-        result = self._recognizer.recognize(AudioChunk(
+        _record_buffer_action(
+            diagnostic_collector,
+            chunk=chunk,
+            action=BUFFER_ACTION_FLUSH_ASR,
+            incoming_rms=incoming_rms,
+            buffered_ms_before=buffered_ms_before,
+            buffered_ms_after=self._buffered_ms,
+            unflushed_ms_after=self._unflushed_ms,
+            appended=bool(appended_segments),
+            appended_segments=appended_segments,
+        )
+        window_id = None
+        if diagnostic_collector is not None:
+            window_id = diagnostic_collector.begin_asr_window(
+                triggering_sequence_number=chunk.sequence_number,
+                segments=[segment.to_payload() for segment in self._segments],
+                audio_ms=self._buffered_ms,
+                pcm_bytes=len(self._buffer),
+                buffered_rms=buffered_rms,
+                tail_audio_ms=self._config.tail_audio_ms,
+            )
+
+        start = monotonic()
+        asr_chunk = AudioChunk(
             sequence_number=chunk.sequence_number,
             pcm=bytes(self._buffer),
             sample_rate_hz=self._sample_rate_hz or chunk.sample_rate_hz,
-        ))
+        )
+        if diagnostic_collector is not None and window_id is not None:
+            with diagnostic_asr_context(diagnostic_collector, window_id):
+                result = self._recognizer.recognize(asr_chunk)
+        else:
+            result = self._recognizer.recognize(asr_chunk)
+        total_ms = int(round((monotonic() - start) * 1_000))
+        if diagnostic_collector is not None and window_id is not None:
+            diagnostic_collector.finish_asr_window(
+                window_id,
+                transcript=result.transcript,
+                confidence=result.confidence,
+                is_final=result.is_final,
+                total_duration_ms=total_ms,
+            )
         self._keep_tail()
         self._bytes_since_flush = 0
         return result
@@ -147,16 +255,24 @@ class BufferedRecognizer:
                 return True
         return incoming_rms >= self._config.minimum_frame_rms
 
-    def _append(self, chunk: AudioChunk) -> None:
+    def _append(self, chunk: AudioChunk) -> list[BufferedAudioSegment]:
         if self._sample_rate_hz is None:
             self._sample_rate_hz = chunk.sample_rate_hz
         elif self._sample_rate_hz != chunk.sample_rate_hz:
             self._buffer.clear()
+            self._segments.clear()
             self._bytes_since_flush = 0
             self._sample_rate_hz = chunk.sample_rate_hz
 
         self._buffer.extend(chunk.pcm)
+        segment = BufferedAudioSegment(
+            sequence_number=chunk.sequence_number,
+            start_byte=0,
+            end_byte=len(chunk.pcm),
+        )
+        self._segments.append(segment)
         self._bytes_since_flush += len(chunk.pcm)
+        return [segment]
 
     def _ready_to_flush(self, chunk: AudioChunk) -> bool:
         if self._sample_rate_hz is None:
@@ -183,8 +299,32 @@ class BufferedRecognizer:
         )
         if tail_bytes == 0:
             self._buffer.clear()
+            self._segments.clear()
             return
         del self._buffer[:-tail_bytes]
+        self._trim_segments_to_tail(tail_bytes)
+
+    def _trim_segments_to_tail(self, tail_bytes: int) -> None:
+        if tail_bytes == 0:
+            self._segments.clear()
+            return
+        remaining = tail_bytes
+        kept: list[BufferedAudioSegment] = []
+        for segment in reversed(self._segments):
+            segment_length = segment.end_byte - segment.start_byte
+            if remaining <= 0:
+                break
+            if segment_length <= remaining:
+                kept.append(segment)
+                remaining -= segment_length
+                continue
+            kept.append(BufferedAudioSegment(
+                sequence_number=segment.sequence_number,
+                start_byte=segment.end_byte - remaining,
+                end_byte=segment.end_byte,
+            ))
+            remaining = 0
+        self._segments = list(reversed(kept))
 
 
 def _waiting_result(sequence_number: int) -> RecognitionResult:
@@ -193,6 +333,32 @@ def _waiting_result(sequence_number: int) -> RecognitionResult:
         confidence=0.0,
         chunk_sequence=sequence_number,
         is_final=False,
+    )
+
+
+def _record_buffer_action(
+    diagnostic_collector,
+    *,
+    chunk: AudioChunk,
+    action: str,
+    incoming_rms: int,
+    buffered_ms_before: int,
+    buffered_ms_after: int,
+    unflushed_ms_after: int,
+    appended: bool,
+    appended_segments: list[BufferedAudioSegment],
+) -> None:
+    if diagnostic_collector is None:
+        return
+    diagnostic_collector.record_buffer_action(
+        sequence_number=chunk.sequence_number,
+        action=action,
+        incoming_rms=incoming_rms,
+        buffered_ms_before=buffered_ms_before,
+        buffered_ms_after=buffered_ms_after,
+        unflushed_ms_after=unflushed_ms_after,
+        appended=appended,
+        appended_segments=[segment.to_payload() for segment in appended_segments],
     )
 
 
