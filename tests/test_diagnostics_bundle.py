@@ -38,7 +38,7 @@ class DiagnosticsBundleTests(unittest.TestCase):
             raw_pcm = struct.pack("<hhhh", 1000, -1000, 500, -500)
             trace = {
                 "metadata": {
-                    "backend_url": "wss://example.test/ws/recitation",
+                    "backend_url": "wss://example.test/ws/recitation?scope=108&token=secret",
                     "authorization_used": True,
                 },
                 "chunks": [],
@@ -84,6 +84,12 @@ class DiagnosticsBundleTests(unittest.TestCase):
                 trace_json["audio_artifacts"]["asr_input"]["filename"],
                 "asr-input.wav",
             )
+            self.assertEqual(
+                trace_json["metadata"]["backend_url"],
+                "wss://example.test/ws/recitation?scope=108&token=%3Credacted%3E",
+            )
+            self.assertNotIn("secret", bundle.trace_json_path.read_text(encoding="utf-8"))
+            self.assertNotIn("secret", html)
 
     def test_writes_asr_window_audio_and_normalizes_trace(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -157,6 +163,60 @@ class DiagnosticsBundleTests(unittest.TestCase):
             self.assertEqual(second.path, output_root / "session-2")
             self.assertTrue((first.path / "trace.json").is_file())
             self.assertTrue((second.path / "trace.json").is_file())
+
+    def test_rejects_unsafe_session_slug(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "session_slug"):
+                write_diagnostics_bundle(
+                    output_root=Path(tmpdir),
+                    session_slug="../outside",
+                    trace={},
+                    raw_audio_pcm=b"",
+                    sample_rate_hz=16_000,
+                    asr_input_segments=[],
+                    asr_windows=[],
+                )
+
+    def test_rejects_raw_bytes_in_trace_json(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(TypeError, "raw bytes"):
+                write_diagnostics_bundle(
+                    output_root=Path(tmpdir),
+                    session_slug="session",
+                    trace={"chunks": [{"sequence_number": 0, "pcm": b"\x00\x01"}]},
+                    raw_audio_pcm=b"",
+                    sample_rate_hz=16_000,
+                    asr_input_segments=[],
+                    asr_windows=[],
+                )
+
+    def test_inline_trace_json_survives_script_terminator_text(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            html = write_diagnostics_bundle(
+                output_root=Path(tmpdir),
+                session_slug="session",
+                trace={"chunks": [{"transcript": "</script><script>alert(1)</script>"}]},
+                raw_audio_pcm=b"",
+                sample_rate_hz=16_000,
+                asr_input_segments=[],
+                asr_windows=[],
+            ).index_html_path.read_text(encoding="utf-8")
+
+        self.assertIn("\\u003c/script\\u003e", html)
+        self.assertNotIn("</script><script>alert(1)</script>", html)
+
+    def test_rejects_odd_length_pcm_for_wav_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "PCM16"):
+                write_diagnostics_bundle(
+                    output_root=Path(tmpdir),
+                    session_slug="session",
+                    trace={},
+                    raw_audio_pcm=b"\x00",
+                    sample_rate_hz=16_000,
+                    asr_input_segments=[],
+                    asr_windows=[],
+                )
 
 
 if __name__ == "__main__":

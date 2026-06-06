@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import html
 import json
+import re
 import struct
 import wave
 from dataclasses import dataclass
@@ -74,6 +74,7 @@ def write_diagnostics_bundle(
     asr_input_segments: list[dict[str, Any]],
     asr_windows: list[dict[str, Any]],
 ) -> DiagnosticsBundle:
+    _validate_session_slug(session_slug)
     bundle_path = unique_bundle_path(output_root / session_slug)
     assets_path = bundle_path / "assets"
     asr_windows_path = bundle_path / "asr-windows"
@@ -112,7 +113,7 @@ def write_diagnostics_bundle(
         normalized["waveform_peaks"] = build_waveform_peaks(pcm)
         normalized_windows.append(normalized)
 
-    normalized_trace = dict(trace)
+    normalized_trace = _sanitize_trace_value(trace)
     normalized_trace["asr_windows"] = normalized_windows
     normalized_trace["audio_artifacts"] = {
         "raw_mic": {
@@ -172,6 +173,7 @@ def unique_bundle_path(path: Path) -> Path:
 
 
 def write_pcm16_wav(path: Path, pcm: bytes, *, sample_rate_hz: int) -> None:
+    _validate_pcm16(pcm)
     with wave.open(str(path), "wb") as wav_file:
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
@@ -180,10 +182,7 @@ def write_pcm16_wav(path: Path, pcm: bytes, *, sample_rate_hz: int) -> None:
 
 
 def render_index_html(trace: dict[str, Any]) -> str:
-    encoded_trace = html.escape(
-        json.dumps(trace, ensure_ascii=False, sort_keys=True),
-        quote=False,
-    )
+    encoded_trace = _json_for_inline_script(trace)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -218,6 +217,52 @@ def render_index_html(trace: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _validate_session_slug(session_slug: str) -> None:
+    if not session_slug or session_slug in {".", ".."}:
+        raise ValueError("session_slug must be a non-empty relative name")
+    if Path(session_slug).name != session_slug:
+        raise ValueError("session_slug must not contain path separators")
+    if Path(session_slug).is_absolute():
+        raise ValueError("session_slug must be relative")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", session_slug):
+        raise ValueError("session_slug contains unsupported characters")
+
+
+def _validate_pcm16(pcm: bytes) -> None:
+    if len(pcm) % 2 != 0:
+        raise ValueError("PCM16 audio must contain an even number of bytes")
+
+
+def _sanitize_trace_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized = {
+            str(key): _sanitize_trace_value(item)
+            for key, item in value.items()
+        }
+        metadata = sanitized.get("metadata")
+        if isinstance(metadata, dict):
+            backend_url = metadata.get("backend_url")
+            if isinstance(backend_url, str):
+                metadata["backend_url"] = scrub_url(backend_url)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_trace_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_trace_value(item) for item in value]
+    if isinstance(value, bytes | bytearray | memoryview):
+        raise TypeError("trace JSON must not contain raw bytes")
+    return value
+
+
+def _json_for_inline_script(trace: dict[str, Any]) -> str:
+    return (
+        json.dumps(trace, ensure_ascii=False, sort_keys=True)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 DIAGNOSTICS_CSS = """body {
