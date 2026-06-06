@@ -102,13 +102,15 @@ def write_diagnostics_bundle(
         window_id = int(window["id"])
         filename = f"asr-window-{window_id:03d}.wav"
         pcm = window["pcm"]
+        normalized = _sanitize_trace_value(
+            {key: value for key, value in window.items() if key != "pcm"}
+        )
         write_pcm16_wav(
             asr_windows_path / filename,
             pcm,
             sample_rate_hz=sample_rate_hz,
         )
 
-        normalized = {key: value for key, value in window.items() if key != "pcm"}
         normalized["filename"] = f"asr-windows/{filename}"
         normalized["waveform_peaks"] = build_waveform_peaks(pcm)
         normalized_windows.append(normalized)

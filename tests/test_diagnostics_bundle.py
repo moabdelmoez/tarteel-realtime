@@ -136,6 +136,56 @@ class DiagnosticsBundleTests(unittest.TestCase):
                 [{"min": -0.0305, "max": 0.0366}],
             )
 
+    def test_scrubs_backend_url_inside_asr_window_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bundle = write_diagnostics_bundle(
+                output_root=Path(tmpdir),
+                session_slug="session",
+                trace={"metadata": {}},
+                raw_audio_pcm=b"",
+                sample_rate_hz=16_000,
+                asr_input_segments=[],
+                asr_windows=[
+                    {
+                        "id": 1,
+                        "pcm": struct.pack("<h", 1),
+                        "metadata": {
+                            "backend_url": "wss://example.test/ws/recitation?scope=108&token=secret",
+                        },
+                    }
+                ],
+            )
+
+            trace_text = bundle.trace_json_path.read_text(encoding="utf-8")
+            html = bundle.index_html_path.read_text(encoding="utf-8")
+            trace_json = json.loads(trace_text)
+
+            self.assertEqual(
+                trace_json["asr_windows"][0]["metadata"]["backend_url"],
+                "wss://example.test/ws/recitation?scope=108&token=%3Credacted%3E",
+            )
+            self.assertNotIn("secret", trace_text)
+            self.assertNotIn("secret", html)
+
+    def test_rejects_raw_bytes_inside_asr_window_json_fields(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(TypeError, "raw bytes"):
+                write_diagnostics_bundle(
+                    output_root=Path(tmpdir),
+                    session_slug="session",
+                    trace={},
+                    raw_audio_pcm=b"",
+                    sample_rate_hz=16_000,
+                    asr_input_segments=[],
+                    asr_windows=[
+                        {
+                            "id": 1,
+                            "pcm": struct.pack("<h", 1),
+                            "metadata": {"raw_payload": b"\x00\x01"},
+                        }
+                    ],
+                )
+
     def test_duplicate_session_slug_creates_unique_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_root = Path(tmpdir)
