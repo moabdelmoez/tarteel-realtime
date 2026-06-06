@@ -118,6 +118,42 @@ class DiagnosticTraceCollectorTests(unittest.TestCase):
         )
         self.assertEqual(envelope["trace"]["asr_window"]["confidence"], 0.9)
         self.assertTrue(envelope["trace"]["asr_window"]["is_final"])
+        self.assertIsNone(envelope["trace"]["asr_window"]["error"])
+
+    def test_failed_asr_window_adds_timing_and_error_to_trace(self):
+        collector = DiagnosticTraceCollector(
+            clock=FakeClock([35.000, 35.010, 35.045])
+        )
+        collector.begin_chunk(
+            sequence_number=9,
+            pcm_bytes=64_000,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+        window_id = collector.begin_asr_window(
+            triggering_sequence_number=9,
+            segments=[{"sequence_number": 9, "start_byte": 0, "end_byte": 64_000}],
+            audio_ms=2000,
+            pcm_bytes=64_000,
+            buffered_rms=1200,
+            tail_audio_ms=0,
+        )
+
+        collector.fail_asr_window(
+            window_id,
+            error=RuntimeError("backend unavailable"),
+            total_duration_ms=35,
+        )
+        envelope = collector.envelope({"type": "uncertain", "reason": "asr_error"})
+
+        self.assertEqual(envelope["trace"]["asr_window"]["asr_total_ms"], 35)
+        self.assertEqual(envelope["trace"]["asr_window"]["transcript"], "")
+        self.assertEqual(envelope["trace"]["asr_window"]["confidence"], 0.0)
+        self.assertFalse(envelope["trace"]["asr_window"]["is_final"])
+        self.assertEqual(
+            envelope["trace"]["asr_window"]["error"],
+            "RuntimeError: backend unavailable",
+        )
 
     def test_record_decision_adds_decision_payload_to_trace(self):
         collector = DiagnosticTraceCollector(clock=FakeClock([40.000, 40.020]))

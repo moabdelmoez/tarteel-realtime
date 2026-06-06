@@ -40,6 +40,11 @@ class RecordingRecognizer:
         )
 
 
+class FailingRecognizer:
+    def recognize(self, audio_chunk: AudioChunk) -> RecognitionResult:
+        raise RuntimeError("backend exploded")
+
+
 class BufferedRecognizerTests(unittest.TestCase):
     def test_default_config_uses_stable_asr_window(self):
         config = BufferedRecognitionConfig()
@@ -523,10 +528,63 @@ class BufferedRecognizerTests(unittest.TestCase):
                 {"sequence_number": 1, "start_byte": 0, "end_byte": 2},
             ],
         )
+        self.assertEqual(envelope["trace"]["buffer"]["buffered_ms_after"], 0)
+        self.assertEqual(envelope["trace"]["buffer"]["unflushed_ms_after"], 0)
         self.assertEqual(envelope["trace"]["asr_window"]["transcript"], "flush-1")
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
             first.pcm + second.pcm,
         ])
+
+    def test_records_failed_asr_window_when_inner_recognizer_raises(self):
+        recognizer = BufferedRecognizer(
+            FailingRecognizer(),
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=2,
+                flush_interval_ms=2,
+                tail_audio_ms=0,
+                minimum_speech_rms=0,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        first = chunk(0, struct.pack("<h", 1000))
+        second = chunk(1, struct.pack("<h", -1000))
+
+        collector.begin_chunk(
+            sequence_number=first.sequence_number,
+            pcm_bytes=len(first.pcm),
+            sample_rate_hz=first.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(first, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=second.sequence_number,
+            pcm_bytes=len(second.pcm),
+            sample_rate_hz=second.sample_rate_hz,
+            voice_activity=None,
+        )
+        with self.assertRaisesRegex(RuntimeError, "backend exploded"):
+            recognizer.recognize(second, diagnostic_collector=collector)
+        envelope = collector.envelope({"type": "uncertain", "reason": "asr_error"})
+
+        self.assertEqual(
+            envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_FLUSH_ASR,
+        )
+        self.assertEqual(envelope["trace"]["buffer"]["buffered_ms_after"], 2)
+        self.assertEqual(envelope["trace"]["buffer"]["unflushed_ms_after"], 2)
+        self.assertIsInstance(
+            envelope["trace"]["asr_window"]["asr_total_ms"],
+            int,
+        )
+        self.assertEqual(envelope["trace"]["asr_window"]["transcript"], "")
+        self.assertEqual(envelope["trace"]["asr_window"]["confidence"], 0.0)
+        self.assertFalse(envelope["trace"]["asr_window"]["is_final"])
+        self.assertEqual(
+            envelope["trace"]["asr_window"]["error"],
+            "RuntimeError: backend exploded",
+        )
 
     def test_records_drop_quiet_buffer_when_flush_window_is_below_speech_rms(self):
         inner = RecordingRecognizer()
@@ -572,6 +630,8 @@ class BufferedRecognizerTests(unittest.TestCase):
             BUFFER_ACTION_DROP_QUIET_BUFFER,
         )
         self.assertTrue(envelope["trace"]["buffer"]["appended"])
+        self.assertEqual(envelope["trace"]["buffer"]["buffered_ms_after"], 0)
+        self.assertEqual(envelope["trace"]["buffer"]["unflushed_ms_after"], 0)
         self.assertIsNone(envelope["trace"]["asr_window"])
         self.assertEqual(inner.chunks, [])
 
@@ -628,6 +688,8 @@ class BufferedRecognizerTests(unittest.TestCase):
                 {"sequence_number": 2, "start_byte": 0, "end_byte": 2},
             ],
         )
+        self.assertEqual(envelope["trace"]["buffer"]["buffered_ms_after"], 3)
+        self.assertEqual(envelope["trace"]["buffer"]["unflushed_ms_after"], 0)
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
             first.pcm + second.pcm,
             first.pcm[2:] + second.pcm + third.pcm,
@@ -764,6 +826,8 @@ class BufferedRecognizerTests(unittest.TestCase):
             envelope["trace"]["asr_window"]["segments"],
             [{"sequence_number": 1, "start_byte": 0, "end_byte": 16}],
         )
+        self.assertEqual(envelope["trace"]["buffer"]["buffered_ms_after"], 0)
+        self.assertEqual(envelope["trace"]["buffer"]["unflushed_ms_after"], 0)
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
             reset_flush_chunk.pcm,
         ])

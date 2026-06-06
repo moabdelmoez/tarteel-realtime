@@ -189,17 +189,6 @@ class BufferedRecognizer:
 
         buffered_rms = _pcm_rms(bytes(self._buffer))
         if buffered_rms < self._config.minimum_speech_rms:
-            _record_buffer_action(
-                diagnostic_collector,
-                chunk=chunk,
-                action=BUFFER_ACTION_DROP_QUIET_BUFFER,
-                incoming_rms=incoming_rms,
-                buffered_ms_before=buffered_ms_before,
-                buffered_ms_after=self._buffered_ms,
-                unflushed_ms_after=self._unflushed_ms,
-                appended=bool(appended_segments),
-                appended_segments=appended_segments,
-            )
             logger.warning(
                 "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
                 "buffered_ms=%s unflushed_ms=%s buffered_rms=%s action=wait_quiet",
@@ -213,6 +202,17 @@ class BufferedRecognizer:
             self._buffer.clear()
             self._segments.clear()
             self._bytes_since_flush = 0
+            _record_buffer_action(
+                diagnostic_collector,
+                chunk=chunk,
+                action=BUFFER_ACTION_DROP_QUIET_BUFFER,
+                incoming_rms=incoming_rms,
+                buffered_ms_before=buffered_ms_before,
+                buffered_ms_after=self._buffered_ms,
+                unflushed_ms_after=self._unflushed_ms,
+                appended=bool(appended_segments),
+                appended_segments=appended_segments,
+            )
             return _waiting_result(chunk.sequence_number)
 
         logger.warning(
@@ -226,20 +226,10 @@ class BufferedRecognizer:
             buffered_rms,
         )
 
-        _record_buffer_action(
-            diagnostic_collector,
-            chunk=chunk,
-            action=(
-                BUFFER_ACTION_RESET_SAMPLE_RATE
-                if sample_rate_reset
-                else BUFFER_ACTION_FLUSH_ASR
-            ),
-            incoming_rms=incoming_rms,
-            buffered_ms_before=buffered_ms_before,
-            buffered_ms_after=self._buffered_ms,
-            unflushed_ms_after=self._unflushed_ms,
-            appended=bool(appended_segments),
-            appended_segments=appended_segments,
+        buffer_action = (
+            BUFFER_ACTION_RESET_SAMPLE_RATE
+            if sample_rate_reset
+            else BUFFER_ACTION_FLUSH_ASR
         )
         window_id = None
         if diagnostic_collector is not None:
@@ -258,11 +248,32 @@ class BufferedRecognizer:
             pcm=bytes(self._buffer),
             sample_rate_hz=self._sample_rate_hz or chunk.sample_rate_hz,
         )
-        if diagnostic_collector is not None and window_id is not None:
-            with diagnostic_asr_context(diagnostic_collector, window_id):
+        try:
+            if diagnostic_collector is not None and window_id is not None:
+                with diagnostic_asr_context(diagnostic_collector, window_id):
+                    result = self._recognizer.recognize(asr_chunk)
+            else:
                 result = self._recognizer.recognize(asr_chunk)
-        else:
-            result = self._recognizer.recognize(asr_chunk)
+        except Exception as exc:
+            total_ms = int(round((monotonic() - start) * 1_000))
+            _record_buffer_action(
+                diagnostic_collector,
+                chunk=chunk,
+                action=buffer_action,
+                incoming_rms=incoming_rms,
+                buffered_ms_before=buffered_ms_before,
+                buffered_ms_after=self._buffered_ms,
+                unflushed_ms_after=self._unflushed_ms,
+                appended=bool(appended_segments),
+                appended_segments=appended_segments,
+            )
+            if diagnostic_collector is not None and window_id is not None:
+                diagnostic_collector.fail_asr_window(
+                    window_id,
+                    error=exc,
+                    total_duration_ms=total_ms,
+                )
+            raise
         total_ms = int(round((monotonic() - start) * 1_000))
         if diagnostic_collector is not None and window_id is not None:
             diagnostic_collector.finish_asr_window(
@@ -274,6 +285,17 @@ class BufferedRecognizer:
             )
         self._keep_tail()
         self._bytes_since_flush = 0
+        _record_buffer_action(
+            diagnostic_collector,
+            chunk=chunk,
+            action=buffer_action,
+            incoming_rms=incoming_rms,
+            buffered_ms_before=buffered_ms_before,
+            buffered_ms_after=self._buffered_ms,
+            unflushed_ms_after=self._unflushed_ms,
+            appended=bool(appended_segments),
+            appended_segments=appended_segments,
+        )
         return result
 
     def _should_buffer_chunk(self, chunk: AudioChunk, *, incoming_rms: int) -> bool:

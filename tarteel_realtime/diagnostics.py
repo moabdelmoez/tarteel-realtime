@@ -121,6 +121,7 @@ class DiagnosticTraceCollector:
             "transcript": "",
             "confidence": None,
             "is_final": False,
+            "error": None,
         }
         self._asr_windows[window_id] = window
         self._trace["asr_window"] = window
@@ -147,6 +148,21 @@ class DiagnosticTraceCollector:
         window["confidence"] = confidence
         window["is_final"] = is_final
         window["asr_total_ms"] = total_duration_ms
+        window["error"] = None
+
+    def fail_asr_window(
+        self,
+        window_id: int,
+        *,
+        error: BaseException,
+        total_duration_ms: int,
+    ) -> None:
+        window = self._asr_windows[window_id]
+        window["transcript"] = ""
+        window["confidence"] = 0.0
+        window["is_final"] = False
+        window["asr_total_ms"] = total_duration_ms
+        window["error"] = f"{type(error).__name__}: {error}"
 
     def record_decision(self, decision: dict[str, Any]) -> None:
         self._trace["decision"] = decision
