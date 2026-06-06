@@ -1,6 +1,10 @@
 import unittest
 from unittest.mock import patch
 
+from tarteel_realtime.diagnostics import (
+    DiagnosticTraceCollector,
+    diagnostic_asr_context,
+)
 from tarteel_realtime.recognition import AudioChunk
 from tarteel_realtime.whisper_adapter import (
     FasterWhisperBackend,
@@ -76,6 +80,40 @@ class WhisperRecognizerTests(unittest.TestCase):
         self.assertEqual(result.transcript, "النَّاسِ")
         self.assertEqual(result.confidence, 0.0)
         self.assertFalse(result.is_final)
+
+    def test_whisper_recognizer_records_inference_timing_in_diagnostic_context(self):
+        class StaticBackend:
+            def transcribe(self, *, samples, sample_rate_hz, language):
+                return {"text": "مَلِكِ", "confidence": 0.7, "is_final": True}
+
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        collector.begin_chunk(
+            sequence_number=0,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+        window_id = collector.begin_asr_window(
+            triggering_sequence_number=0,
+            segments=[{"sequence_number": 0, "start_byte": 0, "end_byte": 2}],
+            audio_ms=1,
+            pcm_bytes=2,
+            buffered_rms=1000,
+            tail_audio_ms=0,
+        )
+        recognizer = WhisperRecognizer(
+            backend=StaticBackend(),
+            config=WhisperConfig(model_id="fake"),
+        )
+
+        with diagnostic_asr_context(collector, window_id):
+            recognizer.recognize(AudioChunk(0, b"\x00\x01", 16_000))
+
+        envelope = collector.envelope({"type": "locked"})
+        self.assertIsInstance(
+            envelope["trace"]["asr_window"]["asr_inference_ms"],
+            int,
+        )
 
     def test_from_transformers_raises_clear_error_when_dependency_missing(self):
         def missing_pipeline_factory(*args, **kwargs):

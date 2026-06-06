@@ -5,9 +5,14 @@ from tempfile import TemporaryDirectory
 from tarteel_realtime.asr_runtime import (
     DEFAULT_QURAN_WHISPER_MODEL_ID,
     AsrRuntimeSettings,
+    LazyRecognizer,
     create_buffered_whisper_recognizer_factory,
     create_lazy_whisper_recognizer_factory,
     settings_from_env,
+)
+from tarteel_realtime.diagnostics import (
+    DiagnosticTraceCollector,
+    diagnostic_asr_context,
 )
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult
 
@@ -99,6 +104,46 @@ class AsrRuntimeTests(unittest.TestCase):
         self.assertEqual(built, [])
         recognizer.recognize(AudioChunk(0, b"\x00\x00", 16_000))
         self.assertEqual(len(built), 1)
+
+    def test_lazy_recognizer_records_cold_start_timing_in_diagnostic_context(self):
+        calls = []
+
+        class StaticRecognizer:
+            def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+                return RecognitionResult(
+                    transcript="ready",
+                    confidence=1.0,
+                    chunk_sequence=chunk.sequence_number,
+                    is_final=True,
+                )
+
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        collector.begin_chunk(
+            sequence_number=0,
+            pcm_bytes=2,
+            sample_rate_hz=16_000,
+            voice_activity=None,
+        )
+        window_id = collector.begin_asr_window(
+            triggering_sequence_number=0,
+            segments=[{"sequence_number": 0, "start_byte": 0, "end_byte": 2}],
+            audio_ms=1,
+            pcm_bytes=2,
+            buffered_rms=1000,
+            tail_audio_ms=0,
+        )
+        recognizer = LazyRecognizer(lambda: calls.append("build") or StaticRecognizer())
+
+        with diagnostic_asr_context(collector, window_id):
+            recognizer.recognize(AudioChunk(0, b"\x00\x01", 16_000))
+
+        envelope = collector.envelope({"type": "locked"})
+        self.assertEqual(calls, ["build"])
+        self.assertTrue(envelope["trace"]["asr_window"]["cold_start"])
+        self.assertIsInstance(
+            envelope["trace"]["asr_window"]["recognizer_init_ms"],
+            int,
+        )
 
     def test_buffered_factory_wraps_lazy_recognizer(self):
         built = []

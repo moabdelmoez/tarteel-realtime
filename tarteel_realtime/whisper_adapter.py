@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any, Protocol
 
 from tarteel_realtime.audio import pcm16le_to_float_samples
+from tarteel_realtime.diagnostics import current_diagnostic_context
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult
 
 
@@ -87,11 +89,20 @@ class WhisperRecognizer:
         return cls(backend=backend, config=config)
 
     def recognize(self, chunk: AudioChunk) -> RecognitionResult:
+        samples = pcm16le_to_float_samples(chunk.pcm)
+        start = monotonic()
         payload = self._backend.transcribe(
-            samples=pcm16le_to_float_samples(chunk.pcm),
+            samples=samples,
             sample_rate_hz=chunk.sample_rate_hz,
             language=self._config.language,
         )
+        duration_ms = int(round((monotonic() - start) * 1_000))
+        context = current_diagnostic_context()
+        if context is not None:
+            context.collector.record_asr_inference(
+                context.window_id,
+                duration_ms=duration_ms,
+            )
         return RecognitionResult(
             transcript=str(payload["text"]),
             confidence=float(payload.get("confidence", 0.0)),

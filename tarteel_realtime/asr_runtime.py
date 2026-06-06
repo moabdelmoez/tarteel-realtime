@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+from time import monotonic
 
 from tarteel_realtime.buffered_recognition import (
     DEFAULT_BUFFERING_PROFILE,
@@ -13,6 +14,7 @@ from tarteel_realtime.buffered_recognition import (
     buffering_profile_config,
     normalize_buffering_profile_name,
 )
+from tarteel_realtime.diagnostics import current_diagnostic_context
 from tarteel_realtime.quran_data import DEFAULT_TANZIL_PATH
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
 from tarteel_realtime.whisper_adapter import WhisperConfig, WhisperRecognizer
@@ -51,7 +53,15 @@ class LazyRecognizer:
         if self._recognizer is None:
             with self._lock:
                 if self._recognizer is None:
+                    start = monotonic()
                     self._recognizer = self._recognizer_factory()
+                    duration_ms = int(round((monotonic() - start) * 1_000))
+                    context = current_diagnostic_context()
+                    if context is not None:
+                        context.collector.record_recognizer_init(
+                            context.window_id,
+                            duration_ms=duration_ms,
+                        )
         return self._recognizer.recognize(chunk)
 
 
