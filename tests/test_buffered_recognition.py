@@ -12,6 +12,7 @@ from tarteel_realtime.diagnostics import (
     BUFFER_ACTION_DROP_VAD_OR_RMS,
     BUFFER_ACTION_DROP_QUIET_BUFFER,
     BUFFER_ACTION_FLUSH_ASR,
+    BUFFER_ACTION_RESET_SAMPLE_RATE,
     DiagnosticTraceCollector,
 )
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, VoiceActivity
@@ -512,6 +513,84 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual([recorded.pcm for recorded in inner.chunks], [
             first.pcm + second.pcm,
             first.pcm[2:] + second.pcm + third.pcm,
+        ])
+
+    def test_records_sample_rate_reset_without_leaking_stale_segments(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=4,
+                flush_interval_ms=4,
+                tail_audio_ms=0,
+                minimum_frame_rms=0,
+            ),
+        )
+        collector = DiagnosticTraceCollector(clock=lambda: 1.0)
+        old_rate_chunk = chunk(0, struct.pack("<hh", 1000, -1000), sample_rate_hz=1_000)
+        reset_chunk = chunk(1, struct.pack("<hh", 900, -900), sample_rate_hz=2_000)
+        flush_chunk = chunk(
+            2,
+            struct.pack("<hhhhhh", 800, -800, 700, -700, 600, -600),
+            sample_rate_hz=2_000,
+        )
+
+        collector.begin_chunk(
+            sequence_number=old_rate_chunk.sequence_number,
+            pcm_bytes=len(old_rate_chunk.pcm),
+            sample_rate_hz=old_rate_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        recognizer.recognize(old_rate_chunk, diagnostic_collector=collector)
+
+        collector.begin_chunk(
+            sequence_number=reset_chunk.sequence_number,
+            pcm_bytes=len(reset_chunk.pcm),
+            sample_rate_hz=reset_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        reset_result = recognizer.recognize(
+            reset_chunk,
+            diagnostic_collector=collector,
+        )
+        reset_envelope = collector.envelope(
+            {"type": "locating", "reason": "waiting_for_audio_buffer"}
+        )
+
+        collector.begin_chunk(
+            sequence_number=flush_chunk.sequence_number,
+            pcm_bytes=len(flush_chunk.pcm),
+            sample_rate_hz=flush_chunk.sample_rate_hz,
+            voice_activity=None,
+        )
+        flush_result = recognizer.recognize(
+            flush_chunk,
+            diagnostic_collector=collector,
+        )
+        flush_envelope = collector.envelope({"type": "locked"})
+
+        self.assertEqual(reset_result.transcript, "")
+        self.assertEqual(
+            reset_envelope["trace"]["buffer"]["action"],
+            BUFFER_ACTION_RESET_SAMPLE_RATE,
+        )
+        self.assertTrue(reset_envelope["trace"]["buffer"]["appended"])
+        self.assertEqual(reset_envelope["trace"]["buffer"]["buffered_ms_before"], 2)
+        self.assertEqual(reset_envelope["trace"]["buffer"]["buffered_ms_after"], 1)
+        self.assertEqual(
+            reset_envelope["trace"]["buffer"]["appended_segments"],
+            [{"sequence_number": 1, "start_byte": 0, "end_byte": 4}],
+        )
+        self.assertEqual(flush_result.transcript, "flush-1")
+        self.assertEqual(
+            flush_envelope["trace"]["asr_window"]["segments"],
+            [
+                {"sequence_number": 1, "start_byte": 0, "end_byte": 4},
+                {"sequence_number": 2, "start_byte": 0, "end_byte": 12},
+            ],
+        )
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            reset_chunk.pcm + flush_chunk.pcm,
         ])
 
 

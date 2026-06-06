@@ -12,6 +12,7 @@ from tarteel_realtime.diagnostics import (
     BUFFER_ACTION_DROP_VAD_OR_RMS,
     BUFFER_ACTION_DROP_QUIET_BUFFER,
     BUFFER_ACTION_FLUSH_ASR,
+    BUFFER_ACTION_RESET_SAMPLE_RATE,
     diagnostic_asr_context,
 )
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
@@ -105,8 +106,10 @@ class BufferedRecognizer:
         incoming_rms = _pcm_rms(chunk.pcm) if chunk.pcm else 0
         buffered_ms_before = self._buffered_ms
         appended_segments: list[BufferedAudioSegment] = []
+        sample_rate_reset = False
         if chunk.pcm:
             if self._should_buffer_chunk(chunk, incoming_rms=incoming_rms):
+                sample_rate_reset = self._reset_sample_rate_if_needed(chunk)
                 appended_segments = self._append(chunk)
             else:
                 _record_buffer_action(
@@ -132,10 +135,10 @@ class BufferedRecognizer:
                 )
         if not self._ready_to_flush(chunk):
             if appended_segments:
-                action = (
-                    BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO
-                    if self._buffered_ms < self._config.minimum_audio_ms
-                    else BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL
+                action = _wait_action_for_buffer_state(
+                    sample_rate_reset=sample_rate_reset,
+                    buffered_ms=self._buffered_ms,
+                    minimum_audio_ms=self._config.minimum_audio_ms,
                 )
                 _record_buffer_action(
                     diagnostic_collector,
@@ -258,11 +261,6 @@ class BufferedRecognizer:
     def _append(self, chunk: AudioChunk) -> list[BufferedAudioSegment]:
         if self._sample_rate_hz is None:
             self._sample_rate_hz = chunk.sample_rate_hz
-        elif self._sample_rate_hz != chunk.sample_rate_hz:
-            self._buffer.clear()
-            self._segments.clear()
-            self._bytes_since_flush = 0
-            self._sample_rate_hz = chunk.sample_rate_hz
 
         self._buffer.extend(chunk.pcm)
         segment = BufferedAudioSegment(
@@ -273,6 +271,17 @@ class BufferedRecognizer:
         self._segments.append(segment)
         self._bytes_since_flush += len(chunk.pcm)
         return [segment]
+
+    def _reset_sample_rate_if_needed(self, chunk: AudioChunk) -> bool:
+        if self._sample_rate_hz is None:
+            return False
+        if self._sample_rate_hz == chunk.sample_rate_hz:
+            return False
+        self._buffer.clear()
+        self._segments.clear()
+        self._bytes_since_flush = 0
+        self._sample_rate_hz = chunk.sample_rate_hz
+        return True
 
     def _ready_to_flush(self, chunk: AudioChunk) -> bool:
         if self._sample_rate_hz is None:
@@ -360,6 +369,19 @@ def _record_buffer_action(
         appended=appended,
         appended_segments=[segment.to_payload() for segment in appended_segments],
     )
+
+
+def _wait_action_for_buffer_state(
+    *,
+    sample_rate_reset: bool,
+    buffered_ms: int,
+    minimum_audio_ms: int,
+) -> str:
+    if sample_rate_reset:
+        return BUFFER_ACTION_RESET_SAMPLE_RATE
+    if buffered_ms < minimum_audio_ms:
+        return BUFFER_ACTION_APPEND_WAIT_MIN_AUDIO
+    return BUFFER_ACTION_APPEND_WAIT_FLUSH_INTERVAL
 
 
 def _pcm_bytes_to_ms(byte_count: int, *, sample_rate_hz: int) -> int:
