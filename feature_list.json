@@ -1,6 +1,6 @@
 {
     "project": "tarteel-realtime",
-    "last_updated": "2026-06-03",
+    "last_updated": "2026-06-07",
     "rules": {
         "single_active_feature": true,
         "passing_requires_evidence": true,
@@ -117,14 +117,19 @@
             "verification": [
                 "uv run uvicorn tarteel_realtime.dev_app:app --reload",
                 "uv run python -m tarteel_realtime.ws_client",
-                "uv run python -B -m unittest tests.test_api tests.test_dev_app tests.test_ws_client"
+                "uv run python -B -m unittest tests.test_api tests.test_dev_app tests.test_ws_client",
+                "uv run python -B -m unittest tests.test_diagnostics tests.test_api tests.test_buffered_recognition tests.test_recitation_stream tests.test_diagnostics_bundle tests.test_diagnostics_capture -v"
             ],
             "evidence": [
                 "Implemented in tarteel_realtime/api.py, tarteel_realtime/dev_app.py, and tarteel_realtime/ws_client.py.",
                 "Manual server startup confirmed by user; / returns 404 because only /health and /ws/recitation are implemented.",
-                "Latest full suite after harness setup: 55 tests passed."
+                "Latest full suite after harness setup: 55 tests passed.",
+                "Replayable visual diagnostics are opt-in through /ws/recitation?diagnostics=1 and preserve the normal /ws/recitation payload shape when disabled.",
+                "tarteel_realtime.diagnostics_capture writes ignored local HTML bundles with raw mic audio, ASR input/window WAV artifacts, backend buffering, ASR timing/transcripts, locator/alignment decisions, and sanitized metadata.",
+                "Focused diagnostics/backend tests passed after the visual diagnostics implementation; full deterministic suite, compile check, JSON sanity, and git diff --check passed.",
+                "Local dev-backend diagnostics capture smoke with a temporary mono PCM16 WAV wrote diagnostics/sessions/20260607T040113Z-tarteel-diagnostics-smoke-scope-auto/index.html."
             ],
-            "notes": "Root / page is intentionally not implemented."
+            "notes": "Root / page is intentionally not implemented. Diagnostics bundles contain raw voice audio and ASR transcripts; keep generated diagnostics/sessions output local unless intentionally sharing evidence."
         },
         {
             "id": "asr-001",

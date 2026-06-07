@@ -2,11 +2,14 @@
 
 ## Verified Now
 
-- Latest slice: visual diagnostics tool design and implementation planning, completed locally on 2026-06-06.
-- Added design spec `docs/superpowers/specs/2026-06-06-visual-diagnostics-tool.md`.
-- Added implementation plan `docs/superpowers/plans/2026-06-06-visual-diagnostics-tool.md`.
-- Agreed v1 scope: replay-based local diagnostic bundles under ignored `diagnostics/sessions/`, opt-in `/ws/recitation?diagnostics=1` envelopes, chunk-centric trace schema, raw mic plus ASR input/window WAV artifacts, decision-level locator diagnostics, static no-build HTML, and test-first implementation.
-- No runtime diagnostics code has been implemented yet; normal `/ws/recitation` remains unchanged in the current working tree.
+- Latest slice: replay-based visual diagnostics bundle generation for realtime recitation performance analysis, completed locally on 2026-06-07.
+- Design spec: `docs/superpowers/specs/2026-06-06-visual-diagnostics-tool.md`.
+- Implementation plan: `docs/superpowers/plans/2026-06-06-visual-diagnostics-tool.md`.
+- V1 runtime scope: opt-in `/ws/recitation?diagnostics=1` trace envelopes plus `tarteel_realtime.diagnostics_capture`, which replays a WAV and writes an ignored static HTML bundle under `diagnostics/sessions/`.
+- Normal `/ws/recitation` remains unchanged when diagnostics are not requested.
+- Diagnostic bundles include raw mic audio, ASR input/window WAV artifacts, VAD metadata when supplied by the client, buffering decisions, ASR timing/transcripts, locator/alignment decisions, and sanitized metadata.
+- Local dev-backend capture smoke with a temporary mono PCM16 WAV wrote `diagnostics/sessions/20260607T040113Z-tarteel-diagnostics-smoke-scope-auto/index.html`.
+- macOS live recording/export remains a follow-up; the implemented v1 answers what reaches ASR exactly through replay capture.
 - Latest slice: macOS live-recitation timeline UX, completed locally on 2026-06-03.
 - The macOS right panel now shows a curated `Timeline` instead of raw `Recent Events` copy.
 - `RecitationViewModel` collapses adjacent repeated event signatures into one history row with `repeatCount` / `repeatBadgeText`; repeated rows keep the latest transcript and chunk sequence.

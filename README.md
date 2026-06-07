@@ -280,6 +280,38 @@ uv run --with websockets python -m tarteel_realtime.replay_probe \
   --disable-ping
 ```
 
+### Visual Diagnostics Bundle
+
+Use the diagnostics capture CLI when you need a local HTML bundle that aligns
+raw audio, VAD metadata, backend buffering, ASR windows, transcripts, locator
+decisions, and latency in one replayable report:
+
+```bash
+uv run --with websockets python -m tarteel_realtime.diagnostics_capture \
+  --url 'ws://127.0.0.1:8000/ws/recitation' \
+  --scope 108 \
+  --audio-path fixtures/local_audio/108001.wav \
+  --chunk-ms 1000 \
+  --disable-ping
+```
+
+For protected remote backends, prefer an environment variable so the bearer
+token does not appear in shell history:
+
+```bash
+MODAL_TOKEN='<token>' uv run --with websockets python -m tarteel_realtime.diagnostics_capture \
+  --url 'wss://example.modal.run/ws/recitation' \
+  --scope 108 \
+  --audio-path fixtures/local_audio/108001.wav \
+  --chunk-ms 1000 \
+  --bearer-token-env MODAL_TOKEN \
+  --disable-ping
+```
+
+The command prints the generated `index.html` path. Generated bundles live under
+ignored `diagnostics/sessions/` and contain raw voice audio plus ASR transcripts.
+Do not commit or upload them unless intentionally sharing diagnostic evidence.
+
 See `docs/modal-serverless.md` for Modal setup, prewarm, deployment, auth, and evidence capture.
 
 The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.

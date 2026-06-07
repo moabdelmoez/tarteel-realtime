@@ -23,6 +23,30 @@
 ## Session Log
 
 
+### Session 085
+
+- Date: 2026-06-07
+- Goal: Implement the replayable visual diagnostics tool for end-to-end recitation performance analysis.
+- Completed:
+  - Added opt-in `/ws/recitation?diagnostics=1` trace envelopes while preserving the normal `/ws/recitation` payload shape when diagnostics are disabled.
+  - Added diagnostic collection for backend buffering actions, ASR input/window audio, recognizer cold-start/inference timing, transcripts, locator decisions, and alignment outcomes.
+  - Added `tarteel_realtime.diagnostics_capture`, a replay CLI that streams a local WAV to a backend, writes raw mic/ASR audio artifacts, and renders a static no-build HTML report under ignored `diagnostics/sessions/`.
+  - Hardened diagnostics output against unsafe paths, raw bytes, URL/query/userinfo leaks, sensitive metadata keys, and unsafe HTML rendering.
+  - Documented the CLI workflow and privacy boundary in `README.md`.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_diagnostics tests.test_api tests.test_buffered_recognition tests.test_recitation_stream tests.test_diagnostics_bundle tests.test_diagnostics_capture -v` passed.
+  - `uv run python -B -m unittest discover -s tests -v` passed.
+  - `uv run python -m compileall -q tarteel_realtime tests` passed.
+  - `uv run python -B -m json.tool feature_list.json` passed.
+  - `git diff --check` passed.
+  - Local dev-backend capture smoke passed with a temporary mono PCM16 WAV: `uv run --with websockets python -m tarteel_realtime.diagnostics_capture --url 'ws://127.0.0.1:8765/ws/recitation' --audio-path /private/tmp/tarteel-diagnostics-smoke.wav --chunk-ms 1000 --disable-ping` wrote an ignored bundle at `diagnostics/sessions/20260607T040113Z-tarteel-diagnostics-smoke-scope-auto/index.html`.
+- Known risk or unresolved issue:
+  - V1 is replay-based; direct macOS live recording/export remains a follow-up.
+  - Remote Modal/RunPod diagnostics require deploying this backend code before `?diagnostics=1` envelopes are available remotely.
+  - The ignored `fixtures/local_audio/108001.wav` fixture was not present in this worktree, so the documented Surah 108 fixture capture was not run locally.
+- Next best step: run the diagnostics capture CLI against a real recitation fixture or macOS-exported recording and inspect the HTML timeline to decide whether VAD, ASR, buffering, or locator behavior is the main bottleneck.
+
+
 ### Session 084
 
 - Date: 2026-06-06
