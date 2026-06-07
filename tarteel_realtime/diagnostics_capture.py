@@ -12,6 +12,7 @@ import sys
 from time import monotonic
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.request import urlopen
 
 from tarteel_realtime.diagnostics_bundle import scrub_url, write_diagnostics_bundle
 from tarteel_realtime.replay_probe import load_replay_audio_file, url_with_scope
@@ -195,6 +196,7 @@ async def run_capture(
         "chunk_ms": chunk_ms,
         "authorization_used": bool(bearer_token),
         "authorization_source": authorization_source,
+        "ping": run_ping_precheck(url, disabled=disable_ping),
         "started_at_utc": _iso_utc(started_at),
         "ended_at_utc": _iso_utc(ended_at),
     }
@@ -288,6 +290,40 @@ def prepare_diagnostic_url(url: str, *, scope: str | None) -> str:
             f"WebSocket URL userinfo is not supported: {scrub_url(scoped_url)}"
         )
     return _url_with_diagnostics(scoped_url)
+
+
+def ping_url_from_websocket_url(url: str) -> str:
+    parts = urlsplit(url)
+    scheme = "https" if parts.scheme == "wss" else "http"
+    return urlunsplit((scheme, parts.netloc, "/ping", "", ""))
+
+
+def run_ping_precheck(url: str, *, disabled: bool) -> dict[str, Any]:
+    if disabled:
+        return {"enabled": False}
+
+    ping_url = ping_url_from_websocket_url(url)
+    start = monotonic()
+    try:
+        with urlopen(ping_url, timeout=5) as response:
+            body = response.read(1024).decode("utf-8", errors="replace")
+            status_code = response.status
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "url": scrub_url(ping_url),
+            "ok": False,
+            "error": str(exc),
+            "duration_ms": _elapsed_ms(start),
+        }
+    return {
+        "enabled": True,
+        "url": scrub_url(ping_url),
+        "ok": 200 <= status_code < 300,
+        "status_code": status_code,
+        "body": body,
+        "duration_ms": _elapsed_ms(start),
+    }
 
 
 def _url_with_diagnostics(url: str) -> str:

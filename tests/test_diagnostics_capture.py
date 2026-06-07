@@ -16,6 +16,7 @@ from tarteel_realtime.diagnostics_capture import (
     bearer_token_from_args,
     main,
     merge_trace_records,
+    ping_url_from_websocket_url,
     prepare_diagnostic_url,
     reconstruct_asr_windows,
     run_capture,
@@ -164,6 +165,16 @@ class DiagnosticsCaptureTests(unittest.TestCase):
         self.assertIn("userinfo", message)
         self.assertNotIn("user:pass", message)
         self.assertNotIn("secret", message)
+
+    def test_derives_ping_url_from_websocket_url(self):
+        self.assertEqual(
+            ping_url_from_websocket_url("wss://example.test/ws/recitation?scope=108"),
+            "https://example.test/ping",
+        )
+        self.assertEqual(
+            ping_url_from_websocket_url("ws://127.0.0.1:8000/ws/recitation"),
+            "http://127.0.0.1:8000/ping",
+        )
 
     def test_decode_trace_envelope_rejects_non_json_and_non_object(self):
         with self.assertRaisesRegex(DiagnosticCaptureError, "non-JSON"):
@@ -409,6 +420,7 @@ class DiagnosticsCaptureTests(unittest.TestCase):
 
         self.assertEqual(index_path, Path("/tmp/index.html"))
         self.assertEqual(captured_traces[0]["chunks"][0]["send_offset_ms"], 0)
+        self.assertEqual(captured_traces[0]["metadata"]["ping"], {"enabled": False})
 
     def test_main_returns_2_for_diagnostic_capture_error_without_traceback(self):
         with patch.object(
