@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import plistlib
 import re
@@ -10,6 +11,9 @@ MAC_APP_ROOT = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototypeMac"
 MAC_APP_SOURCE_ROOT = MAC_APP_ROOT / "App"
 MAC_PLIST_PATH = MAC_APP_ROOT / "Info.plist"
 MODEL_NAME = "silero-vad-unified-256ms-v6.0.0.mlmodelc"
+QURAN_LOGO_NAME = "quran_logo.png"
+ASSETS_CATALOG_NAME = "Assets.xcassets"
+APP_ICON_NAME = "AppIcon"
 
 
 class MacOSAppProjectTests(unittest.TestCase):
@@ -112,13 +116,29 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("App/KeychainBackendBearerTokenStore.swift", mac_paths)
         self.assertNotIn("App/KeychainBackendBearerTokenStore.swift", iphone_paths)
 
-    def test_project_includes_vad_model_resource_for_iphone_and_macos(self) -> None:
+    def test_project_includes_resources_for_iphone_and_macos(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
         iphone_resources = self._target_phase_body(project, "TarteelPrototype", "Resources")
         mac_resources = self._target_phase_body(project, "TarteelPrototypeMac", "Resources")
 
         self.assertIn(MODEL_NAME, iphone_resources)
         self.assertIn(MODEL_NAME, mac_resources)
+        self.assertIn(QURAN_LOGO_NAME, iphone_resources)
+        self.assertIn(QURAN_LOGO_NAME, mac_resources)
+        self.assertIn(ASSETS_CATALOG_NAME, iphone_resources)
+        self.assertIn(ASSETS_CATALOG_NAME, mac_resources)
+
+        for target_name in ["TarteelPrototype", "TarteelPrototypeMac"]:
+            for config_body in self._target_build_configuration_bodies(project, target_name):
+                self.assertIn("ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;", config_body)
+
+        app_icon_path = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototype" / ASSETS_CATALOG_NAME / f"{APP_ICON_NAME}.appiconset" / "Contents.json"
+        with app_icon_path.open(encoding="utf-8") as file:
+            contents = json.load(file)
+
+        filenames = {image.get("filename") for image in contents["images"]}
+        self.assertIn("app-icon-60@3x.png", filenames)
+        self.assertIn("app-icon-1024.png", filenames)
 
     def test_macos_info_plist_is_not_ios_plist(self) -> None:
         with MAC_PLIST_PATH.open("rb") as file:
@@ -147,6 +167,8 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn('CommandMenu("Recitation")', app_source)
         self.assertIn("UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)", app_source)
         self.assertIn("KeychainBackendBearerTokenStore()", app_source)
+        self.assertIn('Image("quran_logo")', content_source)
+        self.assertIn("QuranLogoMark", content_source)
         self.assertIn("MacSettingsView", settings_source)
         self.assertIn("EventHistoryPanel", content_source)
         self.assertIn("SettingsLink", content_source)

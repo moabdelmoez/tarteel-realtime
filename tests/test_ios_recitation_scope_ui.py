@@ -41,6 +41,8 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn("SettingsSheet(viewModel: viewModel)", source)
         self.assertIn("VoiceActivityIndicator(isActive: viewModel.isRecording)", source)
         self.assertIn("Image(systemName: viewModel.isRecording ? \"xmark\" : \"mic.fill\")", source)
+        self.assertIn('Image("quran_logo")', source)
+        self.assertIn("QuranLogoMark", source)
         self.assertIn("DebugStatusPanel(", source)
 
 

@@ -22,6 +22,53 @@
 
 ## Session Log
 
+### Session 088
+
+- Date: 2026-06-07
+- Goal: Fix the iOS simulator home-screen icon still showing the default placeholder after adding `quran_logo.png`.
+- Diagnosis:
+  - The previous slice bundled `quran_logo.png` and rendered it inside the SwiftUI surfaces, but the app had no `Assets.xcassets/AppIcon.appiconset` and no `ASSETCATALOG_COMPILER_APPICON_NAME` setting.
+  - The built iPhone app had no `CFBundleIconName` and only contained `quran_logo.png` as a normal resource, so SpringBoard kept showing the default placeholder icon.
+- Completed:
+  - Added `ios/TarteelPrototype/TarteelPrototype/Assets.xcassets/AppIcon.appiconset` with opaque iPhone, iOS marketing, and macOS icon renditions generated from the provided logo.
+  - Added `Assets.xcassets` to both `TarteelPrototype` and `TarteelPrototypeMac` resource phases.
+  - Set `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` for both app targets.
+  - Extended the Apple project guardrail so app-icon asset catalog resources and build settings are required in both targets.
+  - Uninstalled the stale iOS simulator app before rebuilding, so SpringBoard refreshed the app icon.
+- Verification run:
+  - Red check failed as expected: `uv run python -B -m unittest tests.test_macos_app_project -v` failed because `Assets.xcassets` was missing from the app resource phases.
+  - After the fix, `uv run python -B -m unittest tests.test_macos_app_project -v` passed with 8 tests.
+  - XcodeBuildMCP `build_run_sim` with `CODE_SIGNING_ALLOWED=NO` passed for scheme `TarteelPrototype` on `iPhone 17`, launching `dev.mostafa.TarteelPrototype`.
+  - Bundle inspection confirmed the iPhone app now has `CFBundleIconName = AppIcon`, `AppIcon60x60@2x.png`, and opaque `AppIcon` phone renditions in `Assets.car`.
+  - Fresh simulator screenshot `/private/tmp/tarteel-appicon-home.png` shows the Quran logo as the `TarteelPrototype` home-screen icon.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - Bundle inspection confirmed the macOS app now has `CFBundleIconName = AppIcon`, `CFBundleIconFile = AppIcon`, and `Contents/Resources/AppIcon.icns`.
+  - Final harness checks passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 11 tests, `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, `uv run python -B -m json.tool ios/TarteelPrototype/TarteelPrototype/Assets.xcassets/AppIcon.appiconset/Contents.json`, `uv run python -B -m unittest discover -s tests -v` with 283 tests, and `git diff --check`.
+- Known risk or unresolved issue:
+  - The icon renditions are generated from a 512x512 source, so the 1024px slots are upsampled. Good enough for the simulator/developer prototype, but a native 1024px source would be better for production distribution.
+- Next best step: use the simulator screenshot as the visual reference and replace the icon source with a native 1024px export if sharper production artwork becomes available.
+
+### Session 087
+
+- Date: 2026-06-07
+- Goal: Add `quran_logo.png` branding to the iPhone and macOS app surfaces.
+- Completed:
+  - Copied the provided 512x512 RGBA `quran_logo.png` into `ios/TarteelPrototype/TarteelPrototype/Resources/quran_logo.png`.
+  - Added the PNG to the existing Xcode project resource pattern so both `TarteelPrototype` and `TarteelPrototypeMac` copy it into their app bundles.
+  - Added small SwiftUI `QuranLogoMark` views to the iPhone home screen and macOS recitation header, each loading `Image("quran_logo")` from the app bundle.
+  - Added Apple source/resource guardrails that require the logo resource in both app targets and logo usage in both SwiftUI surfaces.
+- Verification run:
+  - Red check failed as expected: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` failed on missing `quran_logo.png` resources and missing `Image("quran_logo")` usage.
+  - After the fix, `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` passed with 11 tests.
+  - XcodeBuildMCP `build_run_sim` with `CODE_SIGNING_ALLOWED=NO` passed for scheme `TarteelPrototype` on `iPhone 17`, launching `dev.mostafa.TarteelPrototype`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - Bundle checks found `quran_logo.png` in `/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app/` and `/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app/Contents/Resources/`.
+  - Final harness checks passed: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, `uv run python -B -m unittest discover -s tests -v` passed with 283 tests, and `git diff --check` passed.
+- Known risk or unresolved issue:
+  - This slice is source/build/bundle verified, but no screenshot or manual visual QA was captured for exact logo placement.
+  - The original root-level `quran_logo.png` provided by the user remains in place; the app uses the copied resource under `ios/TarteelPrototype/TarteelPrototype/Resources/`.
+- Next best step: open the rebuilt iPhone and macOS apps and visually confirm logo sizing/placement in light and dark appearances before any UI polish follow-up.
+
 
 ### Session 087
 

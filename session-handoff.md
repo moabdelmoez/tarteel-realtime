@@ -2,12 +2,25 @@
 
 ## Verified Now
 
-- Latest slice: post-lock rolling ASR overlap progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
+- Latest slice: Quran logo app-icon fix for the Apple prototypes, completed locally on 2026-06-07.
+- Root cause: the previous logo slice bundled and rendered `quran_logo.png` inside the app, but the project still had no `Assets.xcassets/AppIcon.appiconset` or `ASSETCATALOG_COMPILER_APPICON_NAME`, so the iOS simulator home screen used the default placeholder icon.
+- Added `ios/TarteelPrototype/TarteelPrototype/Assets.xcassets/AppIcon.appiconset` with opaque iPhone, iOS marketing, and macOS icon renditions generated from the provided logo.
+- Added `Assets.xcassets` to both `TarteelPrototype` and `TarteelPrototypeMac` resource phases and set `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` for both targets.
+- Uninstalled the stale iOS simulator app before rebuilding, so SpringBoard refreshed the visible home-screen icon.
+- Fresh simulator screenshot `/private/tmp/tarteel-appicon-home.png` shows the Quran logo as the `TarteelPrototype` home-screen icon.
+- macOS build now emits `Contents/Resources/AppIcon.icns` and the built macOS `Info.plist` declares `CFBundleIconName = AppIcon`.
+- Previous slice: Quran logo branding for the Apple prototype in-app surfaces, completed locally on 2026-06-07.
+- Copied the provided 512x512 RGBA `quran_logo.png` into `ios/TarteelPrototype/TarteelPrototype/Resources/quran_logo.png`.
+- Added that PNG to the existing hand-authored Xcode project resource pattern so both `TarteelPrototype` and `TarteelPrototypeMac` copy it into their app bundles.
+- Added `QuranLogoMark` SwiftUI views using `Image("quran_logo")` on the iPhone home screen and macOS recitation header.
+- Added focused source/resource guardrails requiring the logo resource in both Apple app targets and visible logo usage in both SwiftUI surfaces.
+- The original root-level `quran_logo.png` provided by the user remains in place; the built apps use the copied resource under `ios/TarteelPrototype/TarteelPrototype/Resources/`.
+- Previous slice: post-lock rolling ASR overlap progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
 - Fixed the next scoped Surah 4 diagnostic finding after tolerant initial lock: after the branch advances to `next_expected_ref=4:1:10`, seq 9 transcript `رَبَّكُمُ الَّذِي` now progresses instead of reporting `wrong/extra_word`.
 - Added deterministic session-transition regression `test_post_lock_progress_ignores_leading_recently_consumed_word`.
 - Implementation is narrow and ordered/progression-local: post-lock alignment retries only after a zero-consumed `extra_word` failure, only when the first recognized word equals the immediate previous canonical same-ayah word, and only accepts the retry when the remaining transcript correctly consumes at least one expected word.
 - The fixed seq 9 event is `progress` with `consumed_words=1` and `next_expected_ref=4:1:11`.
-- Previous slice: scoped tolerant initial-lock progression fix, completed locally on 2026-06-07.
+- Previous slice: scoped tolerant initial-lock progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
 - Fixed the Surah 4 scoped diagnostic finding where a confirmed `tolerant_match` locked at `4:1:7` with `consumed_words=0` and kept `next_expected_ref=4:1:7`.
 - Added a deterministic session-transition regression for seq 5 `يَا وَالنَّاسُتَّ`, seq 6 waiting, and seq 7 `وَالنَّاسُتَّ اتَّقُوا رَبَّكُ`.
 - The fixed locked event still starts at `4:1:7`, reports `reason=tolerant_match`, now consumes the locator candidate span (`consumed_words=3`), and advances to `next_expected_ref=4:1:10`.
@@ -74,6 +87,24 @@
 
 ## Verification
 
+- Quran logo app-icon checks passed:
+  - Red check first failed as expected: `uv run python -B -m unittest tests.test_macos_app_project -v` failed because `Assets.xcassets` was missing from the app resource phases.
+  - After the fix, `uv run python -B -m unittest tests.test_macos_app_project -v`
+  - Result: 8 tests.
+  - XcodeBuildMCP `build_run_sim` with `CODE_SIGNING_ALLOWED=NO` succeeded for scheme `TarteelPrototype` on `iPhone 17`, launching bundle `dev.mostafa.TarteelPrototype`.
+  - iPhone bundle inspection confirmed `CFBundleIconName = AppIcon`, `AppIcon60x60@2x.png`, and opaque `AppIcon` phone renditions in `Assets.car`.
+  - Fresh simulator screenshot `/private/tmp/tarteel-appicon-home.png` shows the Quran logo as the `TarteelPrototype` home-screen icon.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - macOS bundle inspection confirmed `CFBundleIconName = AppIcon`, `CFBundleIconFile = AppIcon`, and `Contents/Resources/AppIcon.icns`.
+  - Final harness checks passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 11 tests, `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, `uv run python -B -m json.tool ios/TarteelPrototype/TarteelPrototype/Assets.xcassets/AppIcon.appiconset/Contents.json`, `uv run python -B -m unittest discover -s tests -v` with 283 tests, and `git diff --check`.
+- Quran logo Apple app checks passed:
+  - Red check first failed as expected: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` failed on missing `quran_logo.png` resources and missing `Image("quran_logo")` usage.
+  - After the fix, `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v`
+  - Result: 11 tests.
+  - XcodeBuildMCP `build_run_sim` with `CODE_SIGNING_ALLOWED=NO` succeeded for scheme `TarteelPrototype` on `iPhone 17`, launching bundle `dev.mostafa.TarteelPrototype`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - Bundle checks found `quran_logo.png` in `/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app/` and `/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app/Contents/Resources/`.
+  - Final harness checks passed: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, `uv run python -B -m unittest discover -s tests -v` passed with 283 tests, and `git diff --check` passed.
 - Scoped Surah 4 post-lock overlap progression checks passed:
   - Red check first failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_post_lock_progress_ignores_leading_recently_consumed_word` because the event was `SessionEventType.WRONG` instead of `SessionEventType.PROGRESS`.
   - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v`
@@ -177,6 +208,8 @@
 
 - The post-lock overlap progression fix is locally source/test verified, but the Modal scoped Surah 4 replay has not been rerun against a backend containing this branch.
 - The aggregate Modal event mix still needs fresh diagnostics after this second scoped Surah 4 fix; broader ASR noise remains model/audio dependent.
+- The new app-icon set is generated from a 512x512 source, so 1024px slots are upsampled; use a native 1024px logo export before production distribution if sharper artwork is needed.
+- The new Quran logo is source/build/bundle verified, but exact visual placement has not been screenshot-verified or manually checked in the running iPhone/macOS UI.
 - The curated timeline is source/build/test verified, but the running macOS app still needs a visual/live Modal recheck to confirm repeated rows collapse as expected during real ASR streaming.
 - The macOS UI polish is source/build verified, but manual visual QA and interaction testing are still outstanding for light/dark mode, drag/drop, diagnostic drag-out, keyboard focus, Settings validation layout, microphone permission, and live backend recording.
 - Modal post-deploy `/ping` and scoped Surah 108 replay evidence exists after the CUDA image fix, but the replay produced `lock_candidate` for 108:1 rather than a full lock.
@@ -188,6 +221,10 @@
 - Real ASR quality remains model/audio dependent; this slice only adds provider comparison infrastructure.
 
 ## Next Best Step
+
+Use `/private/tmp/tarteel-appicon-home.png` as the current simulator visual reference. If sharper production artwork becomes available, regenerate `Assets.xcassets/AppIcon.appiconset` from a native 1024px source.
+
+Open the rebuilt iPhone and macOS apps and visually confirm the Quran logo sizing and placement in the home/recitation headers, ideally in light and dark appearances.
 
 Reopen the rebuilt macOS app, record against Modal again, and confirm the right panel says `Timeline` and repeated `uncertain` / same-ayah `progress` rows collapse into one row with an `xN` badge. Also confirm first-launch Custom/Modal defaults, Keychain token reload, light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, Settings validation feedback, microphone permission, and a local or Modal `/ws/recitation` recording.
 

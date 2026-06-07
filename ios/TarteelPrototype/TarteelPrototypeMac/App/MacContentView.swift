@@ -153,6 +153,8 @@ private struct RecitationHeader: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            QuranLogoMark(size: 76)
+
             Text(viewModel.state.headline)
                 .font(.system(size: 34, weight: .bold))
                 .foregroundStyle(MacTheme.ink)
@@ -165,6 +167,19 @@ private struct RecitationHeader: View {
                 .lineLimit(4)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct QuranLogoMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image("quran_logo")
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityLabel("Quran logo")
     }
 }
 

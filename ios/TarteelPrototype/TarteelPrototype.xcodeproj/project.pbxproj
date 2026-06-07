@@ -25,6 +25,8 @@
 		100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 		100000000000000000000017 /* RecitationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000117 /* RecitationMode.swift */; };
 		100000000000000000000018 /* RecitationPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000118 /* RecitationPreferencesStore.swift */; };
+		100000000000000000000019 /* quran_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* quran_logo.png */; };
+		100000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000120 /* Assets.xcassets */; };
 		200000000000000000000001 /* TarteelPrototypeMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000101 /* TarteelPrototypeMacApp.swift */; };
 		200000000000000000000002 /* MacContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000102 /* MacContentView.swift */; };
 		200000000000000000000003 /* MacSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000103 /* MacSettingsView.swift */; };
@@ -45,6 +47,8 @@
 		200000000000000000000018 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */; };
 		200000000000000000000019 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000203 /* FluidAudio */; };
 		200000000000000000000021 /* KeychainBackendBearerTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000106 /* KeychainBackendBearerTokenStore.swift */; };
+		200000000000000000000022 /* quran_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* quran_logo.png */; };
+		200000000000000000000023 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000120 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +71,8 @@
 		100000000000000000000116 /* RecitationClientProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationClientProtocols.swift; sourceTree = "<group>"; };
 		100000000000000000000117 /* RecitationMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationMode.swift; sourceTree = "<group>"; };
 		100000000000000000000118 /* RecitationPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/RecitationPreferencesStore.swift; sourceTree = "<group>"; };
+		100000000000000000000119 /* quran_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Resources/quran_logo.png; sourceTree = "<group>"; };
+		100000000000000000000120 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		200000000000000000000020 /* TarteelPrototypeMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TarteelPrototypeMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000101 /* TarteelPrototypeMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TarteelPrototypeMacApp.swift; sourceTree = "<group>"; };
 		200000000000000000000102 /* MacContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/MacContentView.swift; sourceTree = "<group>"; };
@@ -114,6 +120,8 @@
 				100000000000000000000105 /* MicrophoneAudioStreamer.swift */,
 				100000000000000000000114 /* VoiceActivityDetector.swift */,
 				100000000000000000000115 /* silero-vad-unified-256ms-v6.0.0.mlmodelc */,
+				100000000000000000000119 /* quran_logo.png */,
+				100000000000000000000120 /* Assets.xcassets */,
 				100000000000000000000109 /* Info.plist */,
 			);
 			path = TarteelPrototype;
@@ -249,6 +257,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000016 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */,
+				100000000000000000000019 /* quran_logo.png in Resources */,
+				100000000000000000000021 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -257,6 +267,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				200000000000000000000018 /* silero-vad-unified-256ms-v6.0.0.mlmodelc in Resources */,
+				200000000000000000000022 /* quran_logo.png in Resources */,
+				200000000000000000000023 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -433,6 +445,7 @@
 		100000000000000000000083 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -458,6 +471,7 @@
 		100000000000000000000084 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -484,6 +498,7 @@
 		200000000000000000000083 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -508,6 +523,7 @@
 		200000000000000000000084 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";

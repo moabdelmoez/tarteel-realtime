@@ -26,6 +26,8 @@ struct ContentView: View {
                 .padding(.top, 10)
 
                 VStack(spacing: 20) {
+                    QuranLogoMark(size: 82)
+
                     DebugStatusPanel(
                         connectionStatus: viewModel.connectionStatus,
                         state: viewModel.state,
@@ -79,6 +81,19 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsSheet(viewModel: viewModel)
         }
+    }
+}
+
+private struct QuranLogoMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image("quran_logo")
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityLabel("Quran logo")
     }
 }
 
