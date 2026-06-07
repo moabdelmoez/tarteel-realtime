@@ -325,6 +325,13 @@ class RecitationTransitionPolicy:
             current_expected_ref,
             recognition.transcript,
         )
+        overlap_decision = self._alignment_after_leading_previous_word_overlap(
+            current_expected_ref,
+            recognition.transcript,
+            alignment_decision,
+        )
+        if overlap_decision is not None:
+            alignment_decision = overlap_decision
         self._remember_alignment_decision("post_lock_alignment", alignment_decision)
 
         if alignment_decision.status == AlignmentStatus.CORRECT:
@@ -394,6 +401,46 @@ class RecitationTransitionPolicy:
             allowed_ayah_refs=allowed_ayah_refs,
             minimum_start_ref=self._progression.next_expected_ref,
         )
+
+    def _alignment_after_leading_previous_word_overlap(
+        self,
+        current_expected_ref: QuranRef,
+        transcript: str,
+        alignment_decision: AlignmentDecision,
+    ) -> AlignmentDecision | None:
+        if (
+            alignment_decision.status != AlignmentStatus.WRONG
+            or alignment_decision.reason != "extra_word"
+            or alignment_decision.consumed_words != 0
+            or current_expected_ref.word_index is None
+            or current_expected_ref.word_index <= 1
+        ):
+            return None
+
+        transcript_words = transcript.split()
+        normalized_words = normalize_arabic(transcript).split()
+        if len(transcript_words) < 2 or len(transcript_words) != len(normalized_words):
+            return None
+
+        previous_ref = QuranRef(
+            surah=current_expected_ref.surah,
+            ayah=current_expected_ref.ayah,
+            word_index=current_expected_ref.word_index - 1,
+        )
+        previous_word = self._corpus.get_word(previous_ref)
+        if normalized_words[0] != previous_word.normalized_text:
+            return None
+
+        trimmed_decision = self._aligner.evaluate_from(
+            current_expected_ref,
+            " ".join(transcript_words[1:]),
+        )
+        if (
+            trimmed_decision.status == AlignmentStatus.CORRECT
+            and trimmed_decision.consumed_words > 0
+        ):
+            return trimmed_decision
+        return None
 
     def _event_from_ordered_candidate(
         self,

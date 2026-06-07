@@ -105,7 +105,8 @@
                 "Session tests verify lock, progress, wrong, uncertain, locating, and ambiguous candidate flows.",
                 "Post-recognition transition policy now lives in tarteel_realtime/session_transitions.py, keeping RecitationSession as the recognizer adapter.",
                 "Confirmed tolerant initial locks with noisy zero-consumed alignment now advance by the trusted locator span; the scoped Surah 4 regression locks at 4:1:7, consumes 3 words, and advances to 4:1:10.",
-                "Red check first failed with consumed_words 0 before the fix. Focused session/alignment suite passed with 43 tests, full deterministic suite passed with 283 tests, and compile check passed."
+                "Post-lock rolling ASR windows that start with the immediate previously consumed same-ayah word now retry alignment after that overlap; scoped Surah 4 seq 9 transcript رَبَّكُمُ الَّذِي progresses from 4:1:10 to 4:1:11 with consumed_words 1.",
+                "Red checks first failed for both scoped Surah 4 regressions before their fixes. Latest focused session/alignment suite passed with 44 tests, full deterministic suite passed with 284 tests, and compile check passed."
             ],
             "notes": "This is the core state machine that the iPhone/WebSocket client will eventually consume."
         },

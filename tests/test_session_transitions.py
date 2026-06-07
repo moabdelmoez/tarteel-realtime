@@ -175,6 +175,50 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(locked_event.consumed_words, 3)
         self.assertEqual(locked_event.next_expected_ref, QuranRef(surah=4, ayah=1, word_index=10))
 
+    def test_post_lock_progress_ignores_leading_recently_consumed_word(self):
+        corpus = QuranCorpus.from_tanzil_lines([SURAH_4_1_TANZIL_LINE])
+        policy = RecitationTransitionPolicy(
+            corpus=corpus,
+            minimum_lock_words=3,
+            recitation_scope=parse_recitation_scope("4", corpus=corpus),
+        )
+
+        policy.handle_recognition(
+            RecognitionResult(
+                transcript="يَا وَالنَّاسُتَّ",
+                confidence=1.0,
+                chunk_sequence=5,
+            )
+        )
+        policy.handle_recognition(
+            RecognitionResult(
+                transcript="",
+                confidence=0.0,
+                is_final=False,
+                chunk_sequence=6,
+            )
+        )
+        locked_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="وَالنَّاسُتَّ اتَّقُوا رَبَّكُ",
+                confidence=1.0,
+                chunk_sequence=7,
+            )
+        )
+        progress_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="رَبَّكُمُ الَّذِي",
+                confidence=1.0,
+                chunk_sequence=9,
+            )
+        )
+
+        self.assertEqual(locked_event.type, SessionEventType.LOCKED)
+        self.assertEqual(locked_event.next_expected_ref, QuranRef(surah=4, ayah=1, word_index=10))
+        self.assertEqual(progress_event.type, SessionEventType.PROGRESS)
+        self.assertEqual(progress_event.consumed_words, 1)
+        self.assertEqual(progress_event.next_expected_ref, QuranRef(surah=4, ayah=1, word_index=11))
+
     def test_stale_pre_lock_context_does_not_block_current_unique_lock(self):
         policy = RecitationTransitionPolicy(
             corpus=self.corpus,

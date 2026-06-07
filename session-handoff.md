@@ -2,7 +2,12 @@
 
 ## Verified Now
 
-- Latest slice: scoped tolerant initial-lock progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
+- Latest slice: post-lock rolling ASR overlap progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
+- Fixed the next scoped Surah 4 diagnostic finding after tolerant initial lock: after the branch advances to `next_expected_ref=4:1:10`, seq 9 transcript `رَبَّكُمُ الَّذِي` now progresses instead of reporting `wrong/extra_word`.
+- Added deterministic session-transition regression `test_post_lock_progress_ignores_leading_recently_consumed_word`.
+- Implementation is narrow and ordered/progression-local: post-lock alignment retries only after a zero-consumed `extra_word` failure, only when the first recognized word equals the immediate previous canonical same-ayah word, and only accepts the retry when the remaining transcript correctly consumes at least one expected word.
+- The fixed seq 9 event is `progress` with `consumed_words=1` and `next_expected_ref=4:1:11`.
+- Previous slice: scoped tolerant initial-lock progression fix, completed locally on 2026-06-07.
 - Fixed the Surah 4 scoped diagnostic finding where a confirmed `tolerant_match` locked at `4:1:7` with `consumed_words=0` and kept `next_expected_ref=4:1:7`.
 - Added a deterministic session-transition regression for seq 5 `يَا وَالنَّاسُتَّ`, seq 6 waiting, and seq 7 `وَالنَّاسُتَّ اتَّقُوا رَبَّكُ`.
 - The fixed locked event still starts at `4:1:7`, reports `reason=tolerant_match`, now consumes the locator candidate span (`consumed_words=3`), and advances to `next_expected_ref=4:1:10`.
@@ -69,6 +74,15 @@
 
 ## Verification
 
+- Scoped Surah 4 post-lock overlap progression checks passed:
+  - Red check first failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_post_lock_progress_ignores_leading_recently_consumed_word` because the event was `SessionEventType.WRONG` instead of `SessionEventType.PROGRESS`.
+  - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v`
+  - Result: 19 tests.
+  - `uv run python -B -m unittest tests.test_session tests.test_session_transitions tests.test_alignment -v`
+  - Result: 44 tests.
+  - `uv run python -B -m unittest discover -s tests -v`
+  - Result: 284 tests.
+  - `uv run python -m compileall -q tarteel_realtime tests`
 - Scoped tolerant initial-lock progression checks passed:
   - Red check first failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_confirmed_tolerant_initial_lock_advances_by_locator_span` with `AssertionError: 0 != 3`.
   - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v`
@@ -161,6 +175,8 @@
 
 ## Current Risks
 
+- The post-lock overlap progression fix is locally source/test verified, but the Modal scoped Surah 4 replay has not been rerun against a backend containing this branch.
+- The aggregate Modal event mix still needs fresh diagnostics after this second scoped Surah 4 fix; broader ASR noise remains model/audio dependent.
 - The curated timeline is source/build/test verified, but the running macOS app still needs a visual/live Modal recheck to confirm repeated rows collapse as expected during real ASR streaming.
 - The macOS UI polish is source/build verified, but manual visual QA and interaction testing are still outstanding for light/dark mode, drag/drop, diagnostic drag-out, keyboard focus, Settings validation layout, microphone permission, and live backend recording.
 - Modal post-deploy `/ping` and scoped Surah 108 replay evidence exists after the CUDA image fix, but the replay produced `lock_candidate` for 108:1 rather than a full lock.
@@ -176,7 +192,9 @@
 Reopen the rebuilt macOS app, record against Modal again, and confirm the right panel says `Timeline` and repeated `uncertain` / same-ayah `progress` rows collapse into one row with an `xN` badge. Also confirm first-launch Custom/Modal defaults, Keychain token reload, light/dark mode, `Space`/`Command-R`, `Command-F`, Surah filtering, Settings validation feedback, microphone permission, and a local or Modal `/ws/recitation` recording.
 
 Run the remaining Modal replay or recitation proof, especially scope 4:1-3,
-then check logs after the test window. Replay command:
+then check logs after the test window. For this branch, confirm the scoped
+Surah 4 trace has seq 7 `locked` at `next_expected_ref=4:1:10` and seq 9
+`progress` at `next_expected_ref=4:1:11`. Replay command:
 
 ```bash
 uv run --with websockets python -m tarteel_realtime.replay_probe \

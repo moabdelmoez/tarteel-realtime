@@ -23,6 +23,28 @@
 ## Session Log
 
 
+### Session 087
+
+- Date: 2026-06-07
+- Goal: Fix post-lock progression when a rolling ASR window starts with the immediately previous consumed word and then contains the expected word.
+- Completed:
+  - Added a session-transition regression for the next Surah 4 scoped diagnostic finding after the tolerant initial-lock fix: after lock advances to `next_expected_ref=4:1:10`, seq 9 transcript `رَبَّكُمُ الَّذِي` should progress instead of reporting `wrong/extra_word`.
+  - Confirmed the regression failed first because the post-lock event was `wrong`, matching the diagnostic symptom where `recognized_word=ربكم`, `expected_word=الذي`, and `consumed_words=0`.
+  - Updated post-lock alignment only: when a zero-consumed `extra_word` failure starts with the immediate canonical word before `next_expected_ref`, the policy retries alignment after dropping that leading overlap word.
+  - Kept the retry narrow: it is same-ayah, post-lock-only, requires the previous word to match exactly after normalization, and only accepts the retry if it is a correct alignment that consumes at least one expected word.
+  - The scoped Surah 4 post-lock window now emits `progress` with `consumed_words=1` and `next_expected_ref=4:1:11`.
+- Verification run:
+  - Red check failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_post_lock_progress_ignores_leading_recently_consumed_word` because the event was `SessionEventType.WRONG` instead of `SessionEventType.PROGRESS`.
+  - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v` passed with 19 tests.
+  - Focused session/alignment suite passed: `uv run python -B -m unittest tests.test_session tests.test_session_transitions tests.test_alignment -v` with 44 tests.
+  - Full deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 284 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- Known risk or unresolved issue:
+  - The fix is deterministic and locally verified, but the Modal scoped Surah 4 replay has not yet been rerun against a deployed backend containing this branch.
+  - This slice handles one rolling-window overlap pattern; broader ASR noise and the aggregate Modal event mix still need replay evidence.
+- Next best step: deploy or run this branch behind `/ws/recitation`, rerun the Surah 4 diagnostic capture against `fixtures/local_audio/004001.wav` with `scope=4&diagnostics=1`, and confirm seq 9 progresses from `4:1:10` to `4:1:11`.
+
+
 ### Session 086
 
 - Date: 2026-06-07
