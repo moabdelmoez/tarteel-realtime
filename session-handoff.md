@@ -2,7 +2,13 @@
 
 ## Verified Now
 
-- Latest slice: replay-based visual diagnostics bundle generation for realtime recitation performance analysis, completed locally on 2026-06-07.
+- Latest slice: scoped tolerant initial-lock progression fix, completed locally on 2026-06-07 in `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression`.
+- Fixed the Surah 4 scoped diagnostic finding where a confirmed `tolerant_match` locked at `4:1:7` with `consumed_words=0` and kept `next_expected_ref=4:1:7`.
+- Added a deterministic session-transition regression for seq 5 `يَا وَالنَّاسُتَّ`, seq 6 waiting, and seq 7 `وَالنَّاسُتَّ اتَّقُوا رَبَّكُ`.
+- The fixed locked event still starts at `4:1:7`, reports `reason=tolerant_match`, now consumes the locator candidate span (`consumed_words=3`), and advances to `next_expected_ref=4:1:10`.
+- Implementation is narrow: confirmed initial `tolerant_match` with zero aligner-consumed words advances from the locator candidate span; locator scoring, scope filtering, and tolerant confirmation policy are unchanged.
+- Existing unscoped noisy/tolerant safety behavior remains covered by the focused session tests.
+- Previous slice: replay-based visual diagnostics bundle generation for realtime recitation performance analysis, completed locally on 2026-06-07.
 - Design spec: `docs/superpowers/specs/2026-06-06-visual-diagnostics-tool.md`.
 - Implementation plan: `docs/superpowers/plans/2026-06-06-visual-diagnostics-tool.md`.
 - V1 runtime scope: opt-in `/ws/recitation?diagnostics=1` trace envelopes plus `tarteel_realtime.diagnostics_capture`, which replays a WAV and writes an ignored static HTML bundle under `diagnostics/sessions/`.
@@ -63,6 +69,15 @@
 
 ## Verification
 
+- Scoped tolerant initial-lock progression checks passed:
+  - Red check first failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_confirmed_tolerant_initial_lock_advances_by_locator_span` with `AssertionError: 0 != 3`.
+  - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v`
+  - Result: 18 tests.
+  - `uv run python -B -m unittest tests.test_session tests.test_session_transitions tests.test_alignment -v`
+  - Result: 43 tests.
+  - `uv run python -B -m unittest discover -s tests -v`
+  - Result: 283 tests.
+  - `uv run python -m compileall -q tarteel_realtime tests`
 - macOS live-recitation timeline UX checks passed:
   - Red check first failed as expected: `swift test --filter RecitationViewModelTests` failed because repeated `uncertain` and repeated same-ayah `progress` events still created multiple rows.
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`

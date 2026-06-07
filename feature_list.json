@@ -97,13 +97,15 @@
             "status": "passing",
             "verification": [
                 "uv run python -B -m unittest tests.test_recognition tests.test_session",
+                "uv run python -B -m unittest tests.test_session tests.test_session_transitions tests.test_alignment -v",
                 "uv run python -B -m unittest discover"
             ],
             "evidence": [
                 "Implemented in tarteel_realtime/recognition.py and tarteel_realtime/session.py.",
                 "Session tests verify lock, progress, wrong, uncertain, locating, and ambiguous candidate flows.",
                 "Post-recognition transition policy now lives in tarteel_realtime/session_transitions.py, keeping RecitationSession as the recognizer adapter.",
-                "Latest full deterministic suite after session transition policy extraction and ASR runtime wiring cleanup: 200 tests passed."
+                "Confirmed tolerant initial locks with noisy zero-consumed alignment now advance by the trusted locator span; the scoped Surah 4 regression locks at 4:1:7, consumes 3 words, and advances to 4:1:10.",
+                "Red check first failed with consumed_words 0 before the fix. Focused session/alignment suite passed with 43 tests, full deterministic suite passed with 283 tests, and compile check passed."
             ],
             "notes": "This is the core state machine that the iPhone/WebSocket client will eventually consume."
         },

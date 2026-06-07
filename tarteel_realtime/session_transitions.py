@@ -144,10 +144,18 @@ class RecitationTransitionPolicy:
         self._initial_transcript_context.clear()
         self._ordered_transcript_context.clear()
         self._has_locked = True
-        next_expected_ref = self._progression.mark_initial_lock(
-            ayah_ref=locked_candidate.ayah_ref,
-            alignment_decision=alignment_decision,
-        )
+        consumed_words = alignment_decision.consumed_words
+        if _should_advance_initial_lock_from_locator_span(
+            locator_decision,
+            alignment_decision,
+        ):
+            next_expected_ref = self._progression.mark_candidate_match(locked_candidate)
+            consumed_words = locked_candidate.matched_words
+        else:
+            next_expected_ref = self._progression.mark_initial_lock(
+                ayah_ref=locked_candidate.ayah_ref,
+                alignment_decision=alignment_decision,
+            )
         return locked_event(
             transcript=recognition_for_location.transcript,
             confidence=recognition_for_location.confidence,
@@ -155,7 +163,7 @@ class RecitationTransitionPolicy:
             reason=locator_decision.reason,
             candidate=locked_candidate,
             next_expected_ref=next_expected_ref,
-            consumed_words=alignment_decision.consumed_words,
+            consumed_words=consumed_words,
         )
 
     def _recognition_and_decision_for_initial_location(
@@ -595,6 +603,16 @@ def _is_tolerant_decision(decision: LocatorDecision) -> bool:
 
 def _is_tolerant_span_decision(decision: LocatorDecision) -> bool:
     return decision.reason == "tolerant_span_match"
+
+
+def _should_advance_initial_lock_from_locator_span(
+    locator_decision: LocatorDecision,
+    alignment_decision: AlignmentDecision,
+) -> bool:
+    return (
+        locator_decision.reason == "tolerant_match"
+        and alignment_decision.consumed_words == 0
+    )
 
 
 def _confirmation_candidate_decision(decision: LocatorDecision) -> LocatorDecision:

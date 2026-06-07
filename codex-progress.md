@@ -23,6 +23,29 @@
 ## Session Log
 
 
+### Session 086
+
+- Date: 2026-06-07
+- Goal: Fix scoped tolerant initial-lock progression so live app sessions do not get stuck on the lock start word after noisy ASR.
+- Completed:
+  - Created isolated worktree `.worktrees/scoped-tolerant-lock-progression` on branch `codex/scoped-tolerant-lock-progression` from `main`.
+  - Added a session-transition regression for the scoped Surah 4 diagnostic finding: seq 5 `يَا وَالنَّاسُتَّ`, seq 6 waiting, seq 7 `وَالنَّاسُتَّ اتَّقُوا رَبَّكُ`.
+  - Confirmed the regression failed first because the locked event reported `consumed_words=0` and stayed at `next_expected_ref=4:1:7`.
+  - Updated initial lock progression so a confirmed `tolerant_match` with zero aligner-consumed words advances from the trusted locator candidate span.
+  - The fixed locked event still starts at `4:1:7`, but now reports `consumed_words=3` and advances to `next_expected_ref=4:1:10`.
+  - Left locator scoring, scoping, and tolerant confirmation policy unchanged; existing unscoped noisy/tolerant safety tests remain covered.
+- Verification run:
+  - Red check failed as expected: `uv run python -B -m unittest tests.test_session_transitions -v` failed on `test_confirmed_tolerant_initial_lock_advances_by_locator_span` with `AssertionError: 0 != 3`.
+  - After the fix, `uv run python -B -m unittest tests.test_session_transitions -v` passed with 18 tests.
+  - Focused user-requested suite passed: `uv run python -B -m unittest tests.test_session tests.test_session_transitions tests.test_alignment -v` with 43 tests.
+  - Full deterministic suite passed: `uv run python -B -m unittest discover -s tests -v` with 283 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- Known risk or unresolved issue:
+  - The fix is deterministic and source/test verified locally, but the original Modal scoped replay has not been rerun against a deployed backend containing this branch.
+  - Real ASR can still produce noisy transcripts; this slice prevents one stale expected-word failure mode after a trusted scoped tolerant lock.
+- Next best step: deploy or run this branch behind `/ws/recitation`, then rerun the Surah 4 diagnostic capture against `fixtures/local_audio/004001.wav` with `scope=4&diagnostics=1` to confirm live event mix improves.
+
+
 ### Session 085
 
 - Date: 2026-06-07

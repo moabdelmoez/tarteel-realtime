@@ -16,6 +16,12 @@ SAMPLE_TANZIL_LINES = [
     "114|2|مَلِكِ النَّاسِ",
 ]
 
+SURAH_4_1_TANZIL_LINE = (
+    "4|1|بسم الله الرحمن الرحيم يا أيها الناس اتقوا ربكم الذي خلقكم من نفس واحدة "
+    "وخلق منها زوجها وبث منهما رجالا كثيرا ونساء ۚ واتقوا الله الذي تساءلون به "
+    "والأرحام ۚ إن الله كان عليكم رقيبا"
+)
+
 
 class RecitationTransitionPolicyTests(unittest.TestCase):
     def setUp(self):
@@ -126,6 +132,48 @@ class RecitationTransitionPolicyTests(unittest.TestCase):
         self.assertEqual(second_event.type, SessionEventType.LOCKED)
         self.assertEqual(second_event.reason, "tolerant_match")
         self.assertEqual(second_event.ayah_ref, QuranRef(surah=108, ayah=1))
+
+    def test_confirmed_tolerant_initial_lock_advances_by_locator_span(self):
+        corpus = QuranCorpus.from_tanzil_lines([SURAH_4_1_TANZIL_LINE])
+        policy = RecitationTransitionPolicy(
+            corpus=corpus,
+            minimum_lock_words=3,
+            recitation_scope=parse_recitation_scope("4", corpus=corpus),
+        )
+
+        first_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="يَا وَالنَّاسُتَّ",
+                confidence=1.0,
+                chunk_sequence=5,
+            )
+        )
+        waiting_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="",
+                confidence=0.0,
+                is_final=False,
+                chunk_sequence=6,
+            )
+        )
+        locked_event = policy.handle_recognition(
+            RecognitionResult(
+                transcript="وَالنَّاسُتَّ اتَّقُوا رَبَّكُ",
+                confidence=1.0,
+                chunk_sequence=7,
+            )
+        )
+
+        self.assertEqual(first_event.type, SessionEventType.LOCK_CANDIDATE)
+        self.assertEqual(first_event.reason, "insufficient_context")
+        self.assertEqual(waiting_event.type, SessionEventType.LOCATING)
+        self.assertEqual(waiting_event.reason, "waiting_for_audio_buffer")
+        self.assertEqual(locked_event.type, SessionEventType.LOCKED)
+        self.assertEqual(locked_event.reason, "tolerant_match")
+        self.assertEqual(locked_event.ayah_ref, QuranRef(surah=4, ayah=1))
+        self.assertEqual(locked_event.start_ref, QuranRef(surah=4, ayah=1, word_index=7))
+        self.assertEqual(locked_event.consumed_words, 3)
+        self.assertEqual(locked_event.next_expected_ref, QuranRef(surah=4, ayah=1, word_index=10))
 
     def test_stale_pre_lock_context_does_not_block_current_unique_lock(self):
         policy = RecitationTransitionPolicy(
