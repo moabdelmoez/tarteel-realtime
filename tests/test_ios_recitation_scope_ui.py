@@ -28,6 +28,7 @@ class IOSRecitationScopeUITests(unittest.TestCase):
 
     def test_content_view_keeps_recitation_controls_on_home_screen(self) -> None:
         source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
+        app_source = (APP_ROOT / "TarteelPrototypeApp.swift").read_text(encoding="utf-8")
 
         self.assertIn("Picker(\"Recitation\"", source)
         self.assertIn("selectRecitationMode", source)
@@ -44,6 +45,15 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn('Image("quran_logo")', source)
         self.assertIn("QuranLogoMark", source)
         self.assertIn("DebugStatusPanel(", source)
+        self.assertIn("RoutingBackendSocketClient", app_source)
+        self.assertIn("CoreMLFastConformerSocketClient", app_source)
+
+    def test_content_view_allows_runtime_errors_to_wrap(self) -> None:
+        source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("if let errorMessage = viewModel.errorMessage", source)
+        self.assertIn(".fixedSize(horizontal: false, vertical: true)", source)
+        self.assertIn(".frame(maxWidth: .infinity)", source)
 
 
 if __name__ == "__main__":

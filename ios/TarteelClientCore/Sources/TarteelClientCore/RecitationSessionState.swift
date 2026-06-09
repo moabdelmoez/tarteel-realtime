@@ -92,12 +92,14 @@ public struct RecitationSessionState: Equatable, Sendable {
                 lastChunkSequence: event.chunkSequence
             )
         case .progress:
+            let progressAyahRef = event.ayahRef ?? currentAyahRef
+            let progressAyahText = event.ayahText ?? currentAyahText
             return RecitationSessionState(
                 phase: .listening,
-                currentAyahRef: currentAyahRef,
-                currentAyahText: currentAyahText,
+                currentAyahRef: progressAyahRef,
+                currentAyahText: progressAyahText,
                 headline: "Continue",
-                detail: currentAyahText ?? event.transcript,
+                detail: progressAyahText ?? event.transcript,
                 lastEventType: event.type,
                 lastEventReason: event.reason,
                 lastTranscript: event.transcript,

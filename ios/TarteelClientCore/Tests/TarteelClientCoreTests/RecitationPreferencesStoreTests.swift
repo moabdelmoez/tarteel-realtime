@@ -32,6 +32,41 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedSurahID, 108)
     }
 
+    func testCanUseCoreMLSelectedSurahFallbackValuesWhenNoValuesArePersisted() {
+        let defaults = UserDefaults(suiteName: "RecitationPreferencesStoreTests.coreMLFallback")!
+        defaults.removePersistentDomain(forName: "RecitationPreferencesStoreTests.coreMLFallback")
+        let store = UserDefaultsRecitationPreferencesStore(
+            defaults: defaults,
+            fallbackValues: .coreMLSelectedSurah108
+        )
+
+        XCTAssertEqual(store.backendPreset, .coreML)
+        XCTAssertEqual(store.customBackendProvider, .runPod)
+        XCTAssertEqual(store.customBackendURLText, "")
+        XCTAssertEqual(store.recitationMode, .selectedSurah)
+        XCTAssertEqual(store.selectedSurahID, 108)
+    }
+
+    func testVolatileStoreKeepsDeveloperReplayPreferencesInMemory() {
+        var store = VolatileRecitationPreferencesStore(
+            defaults: RecitationPreferencesDefaults(
+                backendPreset: .coreML,
+                recitationMode: .selectedSurah,
+                selectedSurahID: 108
+            )
+        )
+
+        XCTAssertEqual(store.backendPreset, .coreML)
+        XCTAssertEqual(store.recitationMode, .selectedSurah)
+        XCTAssertEqual(store.selectedSurahID, 108)
+
+        store.selectedSurahID = 4
+        store.backendPreset = .custom
+
+        XCTAssertEqual(store.selectedSurahID, 4)
+        XCTAssertEqual(store.backendPreset, .custom)
+    }
+
     func testPersistedValuesOverrideModalFallbackValues() {
         let defaults = UserDefaults(suiteName: "RecitationPreferencesStoreTests.persistedOverride")!
         defaults.removePersistentDomain(forName: "RecitationPreferencesStoreTests.persistedOverride")

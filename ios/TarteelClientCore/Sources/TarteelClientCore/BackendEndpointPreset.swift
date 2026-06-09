@@ -2,6 +2,7 @@ import Foundation
 
 public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable, Sendable {
     case simulator
+    case coreML = "coreml"
     case custom
 
     public var id: String { rawValue }
@@ -10,6 +11,8 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
         switch self {
         case .simulator:
             return "Simulator"
+        case .coreML:
+            return "CoreML"
         case .custom:
             return "Custom"
         }
@@ -19,6 +22,8 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
         switch self {
         case .simulator:
             return "ws://127.0.0.1:8000/ws/recitation"
+        case .coreML:
+            return "coreml://fastconformer-quran-streaming"
         case .custom:
             return ""
         }
@@ -26,7 +31,7 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
 
     public var allowsURLTextEditing: Bool {
         switch self {
-        case .simulator:
+        case .simulator, .coreML:
             return false
         case .custom:
             return true
@@ -35,7 +40,7 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
 
     public func urlText(currentCustomURLText: String) -> String {
         switch self {
-        case .simulator:
+        case .simulator, .coreML:
             return defaultURLText
         case .custom:
             return currentCustomURLText
@@ -92,6 +97,8 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
         let urlText: String
         switch self {
         case .simulator:
+            urlText = defaultURLText
+        case .coreML:
             urlText = defaultURLText
         case .custom:
             urlText = Self.webSocketURLText(from: currentURLText, provider: provider)

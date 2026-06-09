@@ -60,8 +60,9 @@ struct ContentView: View {
                         .font(.footnote)
                         .foregroundStyle(AppTheme.warning)
                         .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.82)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
                 }
 
                 Button(action: { viewModel.toggleRecording() }) {
@@ -251,8 +252,8 @@ private struct DebugStatusRow: View {
             Text(value)
                 .font(.caption.monospaced())
                 .foregroundStyle(isError ? AppTheme.warning : AppTheme.ink)
-                .lineLimit(2)
-                .minimumScaleFactor(0.78)
+                .lineLimit(isError ? 4 : 2)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .multilineTextAlignment(.trailing)
         }

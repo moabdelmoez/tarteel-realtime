@@ -12,9 +12,17 @@ let package = Package(
             name: "TarteelClientCore",
             targets: ["TarteelClientCore"]
         ),
+        .executable(
+            name: "coreml-fixture-runner",
+            targets: ["CoreMLFixtureRunner"]
+        ),
     ],
     targets: [
         .target(name: "TarteelClientCore"),
+        .executableTarget(
+            name: "CoreMLFixtureRunner",
+            dependencies: ["TarteelClientCore"]
+        ),
         .testTarget(
             name: "TarteelClientCoreTests",
             dependencies: ["TarteelClientCore"]

@@ -62,7 +62,7 @@ public struct RecitationEvent: Codable, Equatable, Sendable {
     }
 
     public var isWaitingForAudioBuffer: Bool {
-        reason == "waiting_for_audio_buffer"
+        reason == "waiting_for_audio_buffer" || reason == "waiting_for_coreml_audio_buffer"
     }
 
     private enum CodingKeys: String, CodingKey {

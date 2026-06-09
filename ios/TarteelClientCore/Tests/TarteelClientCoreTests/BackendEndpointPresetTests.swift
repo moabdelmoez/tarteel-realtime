@@ -7,6 +7,17 @@ struct BackendEndpointPresetTests {
         #expect(BackendEndpointPreset.simulator.defaultURLText == "ws://127.0.0.1:8000/ws/recitation")
     }
 
+    @Test func coreMLPresetUsesLocalModelURL() {
+        #expect(BackendEndpointPreset.coreML.defaultURLText == "coreml://fastconformer-quran-streaming")
+        #expect(
+            BackendEndpointPreset.coreML.recordingURLText(
+                currentURLText: "wss://example.test/ws/recitation",
+                recitationScope: .selectedSurah(id: 108)
+            )
+                == "coreml://fastconformer-quran-streaming?scope=108"
+        )
+    }
+
     @Test func customPresetKeepsRunPodWebSocketURL() {
         let runpodWebSocketURL = "wss://0qudx1ctbmw1xc-8000.proxy.runpod.net/ws/recitation"
 
@@ -110,6 +121,7 @@ struct BackendEndpointPresetTests {
 
     @Test func onlyCustomPresetAllowsURLTextEditing() {
         #expect(!BackendEndpointPreset.simulator.allowsURLTextEditing)
+        #expect(!BackendEndpointPreset.coreML.allowsURLTextEditing)
         #expect(BackendEndpointPreset.custom.allowsURLTextEditing)
     }
 

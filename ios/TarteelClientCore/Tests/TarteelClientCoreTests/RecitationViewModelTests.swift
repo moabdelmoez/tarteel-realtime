@@ -64,6 +64,74 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(audio.didStart)
     }
 
+    func testStartingRecordingConnectsToScopedCoreMLURLWithoutBearerToken() async throws {
+        let socket = FakeSocket()
+        let audio = FakeAudioStreamer()
+        let vad = FakeVoiceActivityDetector()
+        let preferences = FakePreferencesStore(
+            backendPreset: .coreML,
+            recitationMode: .selectedSurah,
+            selectedSurahID: 108
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: vad,
+            preferencesStore: preferences
+        )
+        viewModel.backendBearerTokenText = "ignored-token"
+
+        await viewModel.startRecording()
+
+        XCTAssertEqual(
+            socket.connectedURL?.absoluteString,
+            "coreml://fastconformer-quran-streaming?scope=108"
+        )
+        XCTAssertNil(socket.authorizationToken)
+        XCTAssertTrue(audio.didStart)
+    }
+
+    func testCoreMLFixtureReplayThroughViewModelLocksSelectedSurah() async throws {
+        let modelDirectoryURL = try localCoreMLModelDirectoryURL()
+        let audioURL = try localAudioFixtureURL(named: "108001.wav")
+        let socket = CoreMLFastConformerSocketClient(modelDirectoryURL: modelDirectoryURL)
+        let audio = try FixtureAudioStreamer(audioURL: audioURL)
+        let vad = SpeechFixtureVoiceActivityDetector()
+        let preferences = FakePreferencesStore(
+            backendPreset: .coreML,
+            recitationMode: .selectedSurah,
+            selectedSurahID: 108
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: vad,
+            preferencesStore: preferences
+        )
+
+        await viewModel.startRecording()
+        await audio.replay()
+        await waitForViewModelState(timeoutSeconds: 8) {
+            viewModel.state.currentAyahRef == "108:1"
+        }
+        await waitForAsyncCondition(timeoutSeconds: 8) {
+            await vad.processCount() == audio.emittedChunkCount
+        }
+
+        let vadProcessCount = await vad.processCount()
+
+        XCTAssertEqual(viewModel.state.phase, RecitationPhase.listening)
+        XCTAssertEqual(viewModel.state.currentAyahRef, "108:1")
+        XCTAssertEqual(viewModel.state.currentAyahText, "إنا أعطيناك الكوثر")
+        XCTAssertEqual(viewModel.state.lastEventType, RecitationEventType.locked)
+        XCTAssertEqual(viewModel.connectionStatus, "Receiving events")
+        XCTAssertTrue(viewModel.recentEventHistory.contains { $0.typeText == "locked" && $0.ayahRef == "108:1" })
+        XCTAssertGreaterThan(vadProcessCount, 0)
+        XCTAssertEqual(vadProcessCount, audio.emittedChunkCount)
+
+        await viewModel.stopRecording()
+    }
+
     func testLoadsStoredBearerTokenForInitialCustomProvider() {
         let tokenStore = FakeBearerTokenStore(tokens: [.modal: "stored-modal-token"])
         let viewModel = RecitationViewModel(
@@ -310,6 +378,29 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isRecording)
         XCTAssertEqual(viewModel.connectionStatus, "Streaming")
         XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(socket.disconnectCount, 1)
+    }
+
+    func testCoreMLInvalidModelOutputShowsActionableError() async throws {
+        let socket = FailingCoreMLSendSocket(error: CoreMLFastConformerError.invalidModelOutput)
+        let audio = FakeAudioStreamer()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(backendPreset: .coreML)
+        )
+
+        await viewModel.startRecording()
+        await audio.emit(pcm: Data([0x01, 0x02]), sampleRate: 16_000)
+        await drainScheduledTasks()
+
+        XCTAssertFalse(viewModel.isRecording)
+        XCTAssertEqual(viewModel.connectionStatus, "Error")
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            "CoreML ASR returned invalid model output. On iOS, run this model on a physical Apple Neural Engine device rather than Simulator."
+        )
         XCTAssertEqual(socket.disconnectCount, 1)
     }
 
@@ -658,6 +749,85 @@ private final class FakeAudioStreamer: AudioStreaming, @unchecked Sendable {
     }
 }
 
+private final class FixtureAudioStreamer: AudioStreaming, @unchecked Sendable {
+    private let chunks: [Data]
+    private(set) var emittedChunkCount = 0
+    private var onChunk: (@Sendable (Data, Int) -> Void)?
+
+    init(audioURL: URL) throws {
+        let audio = try CoreMLFastConformerFixtureAudio.loadWAV(from: audioURL)
+        let pcm16 = audio.resampled16KPCM16
+        let chunkByteCount = CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples * 2
+        var offset = 0
+        var chunks: [Data] = []
+        while offset < pcm16.count {
+            let end = min(offset + chunkByteCount, pcm16.count)
+            chunks.append(pcm16.subdata(in: offset..<end))
+            offset = end
+        }
+        self.chunks = chunks
+    }
+
+    func start(onChunk: @escaping @Sendable (Data, Int) -> Void) async throws {
+        self.onChunk = onChunk
+    }
+
+    func stop() {}
+
+    func replay() async {
+        for chunk in chunks {
+            onChunk?(chunk, 16_000)
+            emittedChunkCount += 1
+            await drainScheduledTasks()
+        }
+    }
+}
+
+@MainActor
+private final class FailingCoreMLSendSocket: BackendSocketing {
+    private let error: Error
+    private(set) var disconnectCount = 0
+
+    init(error: Error) {
+        self.error = error
+    }
+
+    func connect(
+        url: URL,
+        authorizationToken: String?,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async throws {}
+
+    func send(_ payload: AudioChunkPayload) async throws {
+        throw error
+    }
+
+    func disconnect() {
+        disconnectCount += 1
+    }
+}
+
+private actor SpeechFixtureVoiceActivityDetector: VoiceActivityDetecting {
+    private var count = 0
+
+    func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload? {
+        count += 1
+        return VoiceActivityPayload(
+            probability: 0.95,
+            isSpeechActive: true,
+            event: count == 1 ? .speechStart : nil
+        )
+    }
+
+    func reset() async {
+        count = 0
+    }
+
+    func processCount() -> Int {
+        count
+    }
+}
+
 @MainActor
 private final class FailingSuspendedSendSocket: BackendSocketing {
     private(set) var disconnectCount = 0
@@ -833,6 +1003,74 @@ private func drainScheduledTasks() async {
         await Task.yield()
     }
     try? await Task.sleep(nanoseconds: 1_000_000)
+}
+
+@MainActor
+private func waitForViewModelState(
+    timeoutSeconds: TimeInterval,
+    condition: () -> Bool
+) async {
+    let deadline = Date().addingTimeInterval(timeoutSeconds)
+    while Date() < deadline {
+        if condition() {
+            return
+        }
+        await drainScheduledTasks()
+    }
+}
+
+@MainActor
+private func waitForAsyncCondition(
+    timeoutSeconds: TimeInterval,
+    condition: @escaping @MainActor () async -> Bool
+) async {
+    let deadline = Date().addingTimeInterval(timeoutSeconds)
+    while Date() < deadline {
+        if await condition() {
+            return
+        }
+        await drainScheduledTasks()
+    }
+}
+
+private func packageWorktreeRootURL() -> URL {
+    var url = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 {
+        url.deleteLastPathComponent()
+    }
+    return url
+}
+
+private func localCoreMLModelDirectoryURL() throws -> URL {
+    let root = packageWorktreeRootURL()
+    let candidates = [
+        root.appendingPathComponent(".models/fastconformer-quran-coreml-streaming"),
+        root
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(".models/fastconformer-quran-coreml-streaming"),
+    ]
+    for url in candidates where FileManager.default.fileExists(
+        atPath: url.appendingPathComponent("tokens.txt").path
+    ) {
+        return url
+    }
+    throw XCTSkip("Local gated CoreML model artifacts are not available.")
+}
+
+private func localAudioFixtureURL(named filename: String) throws -> URL {
+    let root = packageWorktreeRootURL()
+    let candidates = [
+        root.appendingPathComponent("fixtures/local_audio/\(filename)"),
+        root
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("fixtures/local_audio/\(filename)"),
+    ]
+    for url in candidates where FileManager.default.fileExists(atPath: url.path) {
+        return url
+    }
+    throw XCTSkip("Local audio fixture \(filename) is not available.")
 }
 
 private struct FakePreferencesStore: RecitationPreferencesStoring {

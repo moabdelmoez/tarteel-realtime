@@ -30,6 +30,14 @@ public struct RecitationPreferencesDefaults: Equatable, Sendable {
         recitationMode: .autoDetect,
         selectedSurahID: 108
     )
+
+    public static let coreMLSelectedSurah108 = RecitationPreferencesDefaults(
+        backendPreset: .coreML,
+        customBackendProvider: .runPod,
+        customBackendURLText: "",
+        recitationMode: .selectedSurah,
+        selectedSurahID: 108
+    )
 }
 
 public protocol RecitationPreferencesStoring {
@@ -38,6 +46,22 @@ public protocol RecitationPreferencesStoring {
     var customBackendURLText: String { get set }
     var recitationMode: RecitationMode { get set }
     var selectedSurahID: Int { get set }
+}
+
+public struct VolatileRecitationPreferencesStore: RecitationPreferencesStoring {
+    public var backendPreset: BackendEndpointPreset
+    public var customBackendProvider: BackendProvider
+    public var customBackendURLText: String
+    public var recitationMode: RecitationMode
+    public var selectedSurahID: Int
+
+    public init(defaults: RecitationPreferencesDefaults = .simulator) {
+        backendPreset = defaults.backendPreset
+        customBackendProvider = defaults.customBackendProvider
+        customBackendURLText = defaults.customBackendURLText
+        recitationMode = defaults.recitationMode
+        selectedSurahID = defaults.selectedSurahID
+    }
 }
 
 public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStoring {

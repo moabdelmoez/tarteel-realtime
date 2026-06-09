@@ -146,6 +146,8 @@ public final class RecitationViewModel: ObservableObject {
         switch storedPreset {
         case .simulator:
             backendURLText = storedPreset.defaultURLText
+        case .coreML:
+            backendURLText = storedPreset.defaultURLText
         case .custom:
             backendURLText = storedCustomURLText
         }
@@ -169,6 +171,8 @@ public final class RecitationViewModel: ObservableObject {
         preferencesStore.backendPreset = preset
         switch preset {
         case .simulator:
+            backendURLText = preset.defaultURLText
+        case .coreML:
             backendURLText = preset.defaultURLText
         case .custom:
             backendURLText = customBackendURLText
@@ -323,7 +327,7 @@ public final class RecitationViewModel: ObservableObject {
                 recitationScope: recitationScopeSelection,
                 provider: customBackendProvider
             )
-            guard Self.isValidWebSocketURLText(urlText) else {
+            guard backendPreset == .coreML || Self.isValidWebSocketURLText(urlText) else {
                 backendURLValidationMessage = Self.invalidBackendURLMessage
                 throw RecitationViewModelError.invalidBackendURL
             }
@@ -452,6 +456,11 @@ public final class RecitationViewModel: ObservableObject {
     }
 
     public func validateBackendURLText() {
+        guard backendPreset != .coreML else {
+            backendURLValidationMessage = nil
+            return
+        }
+
         guard backendPreset == .custom else {
             backendURLValidationMessage = nil
             return
@@ -521,6 +530,9 @@ public final class RecitationViewModel: ObservableObject {
             currentURLText: backendURLText,
             provider: customBackendProvider
         )
+        if backendPreset == .coreML {
+            return normalized
+        }
         guard Self.isValidWebSocketURLText(normalized) else { return nil }
         return normalized
     }
@@ -550,6 +562,12 @@ public final class RecitationViewModel: ObservableObject {
     private static let invalidBackendURLMessage = "Enter a valid backend URL."
 
     private func errorMessage(for error: Error, backendPreset: BackendEndpointPreset) -> String {
+        if backendPreset == .coreML,
+           let coreMLError = error as? CoreMLFastConformerError,
+           coreMLError == .invalidModelOutput {
+            return "CoreML ASR returned invalid model output. On iOS, run this model on a physical Apple Neural Engine device rather than Simulator."
+        }
+
         let message = error.localizedDescription
         guard backendPreset == .simulator else {
             return message

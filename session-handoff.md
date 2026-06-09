@@ -2,7 +2,79 @@
 
 ## Verified Now
 
-- Latest slice: Quran logo app-icon fix for the Apple prototypes, completed locally on 2026-06-07.
+- Latest slice: CoreML default app fallback, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `RecitationPreferencesDefaults.coreMLSelectedSurah108`; normal iPhone and macOS app entrypoints now use `UserDefaultsRecitationPreferencesStore(fallbackValues: .coreMLSelectedSurah108)` when no replay arguments are present.
+- Fresh app installs now default to CoreML + selected Surah 108 for local testing. Existing saved preferences still override the fallback; reset app preferences or manually choose CoreML if an installed app keeps an older preset.
+- Red Swift/Python default guardrails failed before the fallback and app wiring existed; focused default checks then passed.
+- Focused Apple/CoreML Python guardrails passed with 22 tests; focused Swift CoreML/preferences/view-model checks passed with 33 XCTest tests plus 16 Swift Testing tests, including the real `108001.wav` view-model CoreML replay locking `108:1`.
+- `TarteelPrototypeCoreMLReplay` generic `iphoneos` build passed after the default change, and `TarteelPrototypeMac` macOS build passed after the default change.
+- Latest slice: shared physical-device CoreML replay scheme, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `ios/TarteelPrototype/TarteelPrototype.xcodeproj/xcshareddata/xcschemes/TarteelPrototypeCoreMLReplay.xcscheme`; it builds and launches the iPhone `TarteelPrototype.app` target with `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108`.
+- Red Python guardrail first failed because the scheme was missing, then `uv run python -B -m unittest tests.test_macos_app_project.MacOSAppProjectTests.test_project_has_shared_coreml_replay_scheme_for_physical_device_testing -v` passed.
+- Xcode now lists the shared scheme: `xcodebuild -list -project ios/TarteelPrototype/TarteelPrototype.xcodeproj` listed `TarteelPrototypeCoreMLReplay` and `TarteelPrototypeMac`.
+- Generic physical-device build passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO -disableAutomaticPackageResolution build`; output ended with `** BUILD SUCCEEDED **` and copied six local audio replay fixtures into the `Debug-iphoneos` app bundle.
+- Focused Apple/CoreML guardrails passed with 21 tests: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_coreml_fixture_runner -v`.
+- `xcrun xctrace list devices` shows no connected physical iPhone, only the Mac under Devices and iPhones under Simulators; real iOS CoreML ASR acceptance still requires connecting a physical Apple Neural Engine device and running this scheme.
+- Latest slice: actionable CoreML invalid-output UI and replay recheck, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- `RecitationViewModel` now maps `CoreMLFastConformerError.invalidModelOutput` under the `CoreML` preset to a user-facing message that explicitly says to test iOS on a physical Apple Neural Engine device rather than Simulator.
+- The iPhone `ContentView` runtime error text now wraps vertically; XcodeBuildMCP screenshot `/var/folders/b1/_3ms4wf1765fjddl0nb083580000gn/T/screenshot_optimized_33821a39-cb8c-41fc-a02f-c362421485df.jpg` shows the bottom error message fully readable on the iPhone 17 Pro Simulator.
+- Fresh iOS Simulator replay with `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108` produced the expected invalid-output evidence in OSLog `/Users/mostafa/Library/Developer/XcodeBuildMCP/workspaces/tarteel-realtime-a36863963df4/logs/dev.mostafa.TarteelPrototype_oslog_2026-06-09T13-57-39-451Z_helperpid27333_ownerpid44328_3a5c356a.log`: `coreml_asr_model_loaded`, buffering, `coreml_asr_invalid_output reason=nonfinite_logprobs detail=timestep=0 nonfinite_values=1025`, disconnect, and reset.
+- Fresh macOS/CoreML runner proof still works: `swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio/108001.wav --manifest /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/fixtures/local_audio_manifest.json` produced final transcript `أَعْطَيْنَاكَ الْكَوْثَرَ` and normalized word score `0.667`.
+- Latest focused checks passed: Swift CoreML/preferences/view-model filters with 32 XCTest tests plus 16 Swift Testing tests, and `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_coreml_fixture_runner -v` with 20 tests.
+- Latest broad checks passed: full Swift client core with 32 XCTest tests plus 46 Swift Testing tests, full deterministic Python suite with 293 tests, `uv run python -m compileall -q tarteel_realtime tests`, and macOS app xcodebuild.
+- Previous slice: iOS Simulator CoreML replay diagnosis and invalid-output guard, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- iOS Simulator replay with `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108` now launches through XcodeBuildMCP, loads the bundled FastConformer model, buffers real replay chunks, and then fails loudly with `coreml_asr_invalid_output reason=nonfinite_logprobs detail=timestep=0 nonfinite_values=1025` instead of silently emitting blank transcript windows.
+- Temporary instrumentation showed the iOS Simulator path receives non-silent samples and nonzero log-mel features, but the raw Float16 `logprobs` buffer from the Simulator-compiled model starts with `FE00` and is nonfinite. The model metadata/README describe this streaming model as fixed-shape fp16 and ANE-specialized, so physical Apple Neural Engine hardware is the required iOS acceptance environment.
+- `CoreMLFastConformerTranscriber` now reports unexpected/nonfinite model tensors through `coreml_asr_invalid_output` and throws `CoreMLFastConformerError.invalidModelOutput`; the failed `.cpuOnly` Simulator experiment and `[DEBUG-iosblank]` probes were removed.
+- macOS fixture replay still works after the guard: `swift run coreml-fixture-runner --model-dir ../../.models/fastconformer-quran-coreml-streaming --audio /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio/108001.wav` produced final transcript `أَعْطَيْنَاكَ الْكَوْثَرَ`.
+- Previous slice: CoreML FastConformer app-owned local audio replay, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `VolatileRecitationPreferencesStore` so developer replay can force `.coreML` + `.selectedSurah` without writing those choices to normal app preferences.
+- `TarteelPrototypeApp` and `TarteelPrototypeMacApp` now parse `--tarteel-replay-audio <wav>` and optional `--tarteel-replay-surah <id>`, resolve the audio from absolute paths or bundled `local_audio/`, inject `LocalAudioReplayStreamer`, auto-start `RecitationViewModel.startRecording()`, and replay chunks through the same queued audio, real VAD metadata, CoreML socket, and local locator path.
+- Added `ios/TarteelPrototype/Scripts/copy-local-audio-fixtures.sh` and `Copy Local Audio Fixtures` phases for both app targets. When ignored local root WAV fixtures exist under `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio`, both app builds copy them into bundled `local_audio/`; fresh checkouts without those fixtures remove stale copies and continue to build.
+- Bundle inspection found all six WAV fixtures in both built apps: `004001.wav`, `004002.wav`, `004003.wav`, `108001.wav`, `108002.wav`, and `108003.wav`. Root, iOS-bundled, and macOS-bundled `108001.wav` all matched SHA-256 `86b655403b3da9e2baed9b0f2ba230b0dafe4ee7ec9c4b67cc0eee1ae36a4789`.
+- Launched the built macOS app with `open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args --tarteel-replay-audio 108001.wav --tarteel-replay-surah 108`; unified logs from `TarteelPrototypeMac` showed `coreml_asr_connect url=coreml://fastconformer-quran-streaming?scope=108`, model load, real CoreML transcript windows, and cumulative transcript ending at `أَعْطَيْنَاكَ الْكَوْثَرَ`.
+- Previous slice: CoreML FastConformer app-build Tanzil resource bundling, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `ios/TarteelPrototype/Scripts/copy-local-tanzil-resource.sh` and `Copy Local Tanzil Quran` shell-script phases for both `TarteelPrototype` and `TarteelPrototypeMac`.
+- When the ignored local root file `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/data/tanzil/quran-simple-clean.txt` exists, both app builds copy it into their app bundle resources as `quran-simple-clean.txt`; fresh checkouts without the file keep the CoreML local session's MVP fallback behavior.
+- Bundle inspection found `quran-simple-clean.txt` in both `/private/tmp/tarteel-xcode-derived/Build/Products/Debug-iphonesimulator/TarteelPrototype.app/` and `/private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app/Contents/Resources/`, both 794,313 bytes with SHA-256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`.
+- Previous slice: CoreML FastConformer Tanzil-format local corpus loading, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `CoreMLLocalQuranCorpus.ayahs(fromTanzilText:)` / `ayahs(fromTanzilURL:)` and `CoreMLLocalQuranCorpusError` so the Swift CoreML local locator can parse Tanzil `surah|ayah|text` data without committing the ignored full Quran text into source.
+- `CoreMLFastConformerEngine` now builds its local Quran session from `quran-simple-clean.txt` when that file is bundled in the app or present beside a local model directory; if absent, it preserves the existing MVP Surah 108 / local Surah 4 fallback corpus.
+- New Swift coverage proves a Tanzil-backed corpus can lock Surah 114:2 beyond the hard-coded MVP ayahs, malformed rows fail loudly, and the local pinned full file parses to 6,236 ayahs when present.
+- Previous slice: CoreML FastConformer app-level fixture replay, completed locally on 2026-06-09 in `.worktrees/coreml-fastconformer-spike` on branch `codex/coreml-fastconformer-spike`.
+- Added `CoreMLFastConformerSocketClient(modelDirectoryURL:)` so Swift tests/tools can load the local gated model directory without changing the iOS/macOS app bundle path.
+- Added an opt-in `RecitationViewModel` replay test for `108001.wav`: fixture audio is emitted as live-sized 16 kHz chunks, every queued chunk passes through the VAD metadata seam, the real CoreML socket runs inference, and shared app state locks on `108:1` with canonical ayah text.
+- Previous slice: CoreML FastConformer app-side locator MVP, completed locally on 2026-06-08 in `.worktrees/coreml-fastconformer-spike`.
+- The CoreML route now preserves selected Surah scope in `coreml://fastconformer-quran-streaming?scope=<surah-id>` and maps cumulative CoreML transcripts through a minimal local Swift Quran session before sending events to the shared app reducer.
+- Added a tiny MVP local corpus for Surah 108 plus the local Surah 4 fixture ayahs. It emits compatible `locked` / `progress` events with canonical `ayah_ref`, `ayah_text`, `start_ref`, `next_expected_ref`, and `consumed_words`.
+- The reducer can now update visible ayah state from progress events that carry ayah metadata, and CoreML-specific buffering events use the existing gathering-audio state.
+- Real fixture smoke after this slice still produced `108001.wav -> أَعْطَيْنَاكَ الْكَوْثَرَ`, normalized word score `0.667`, average inference `25.5ms/window`.
+- Previous slice: CoreML FastConformer local WAV fixture scoring gate, completed locally on 2026-06-08.
+- Added committed benchmark metadata at `fixtures/local_audio_manifest.json`; the audio remains ignored/local under `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio`.
+- `coreml-fixture-runner` now accepts `--manifest <path>` in addition to `--model-dir`, `--audio-dir`, repeated `--audio`, `--json`, and `--no-pad-final-window`.
+- Added `CoreMLFastConformerFixtureManifest`, `CoreMLFastConformerFixtureExpectation`, and `CoreMLFastConformerFixtureScore`; scored reports now show normalized expected/actual text, word score, WER, CER, missing words, extra words, substitutions, and average inference latency.
+- Scored fixture baseline: `108001=0.667`, `108002=0.333`, `108003=1.000`, `004001=0.517`, `004002=0.312`, `004003=0.214` normalized word score. Short Surah 108 is still the promising path; long Surah 4 remains too noisy for correction UX.
+- Previous slice: CoreML FastConformer local WAV fixture harness, completed locally on 2026-06-08.
+- Added SwiftPM executable `coreml-fixture-runner` under `ios/TarteelClientCore`; it loads the local gated model artifacts from `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming` and replays local WAV fixtures from `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio`.
+- Added `CoreMLFastConformerFixtureAudio` for PCM16 WAV parsing, stereo downmix, and whole-file 16 kHz resampling; added structured fixture window/report output with per-window transcript, cumulative transcript, confidence, token count, and inference timing.
+- Previous slice: CoreML FastConformer streaming transcript stitching for the Apple prototypes, completed locally on 2026-06-07.
+- The manual macOS recitation proved CoreML inference was running and produced Al-Ikhlas-like fragments, but the log output was per-window only.
+- The model README documents fixed non-overlapping `112` mel-frame chunks with cache carryover; do not add raw audio overlap without stronger model-level evidence.
+- `CoreMLFastConformerCTCDecoder.decode` now supports `trimsWhitespace: false`, and the transcriber preserves SentencePiece word-boundary spaces after the first cumulative transcript text.
+- `coreml_asr_transcript` now includes `cumulative_transcript` beside the per-window `transcript` so manual recitation quality can be checked directly from unified logs.
+- Previous slice: CoreML FastConformer ASR diagnostics for the Apple prototypes, completed locally on 2026-06-07.
+- Added `CoreMLFastConformerDiagnostics` with unified-log markers `coreml_asr_connect`, `coreml_asr_model_loaded`, `coreml_asr_reset`, `coreml_asr_buffering`, `coreml_asr_blank`, `coreml_asr_transcript`, and `coreml_asr_disconnect`.
+- Each prediction window now logs `chunk_sequence`, `window_index`, `inference_ms`, `confidence`, emitted token count, transcript text when present, and cumulative transcript text when present.
+- Buffering logs are throttled to chunk 0 and every 10 chunks; transcript logs are public in this local developer prototype so the agent can inspect ASR output after manual tests.
+- Previous slice: local CoreML FastConformer ASR spike for the Apple prototypes, completed locally on 2026-06-07.
+- The Hugging Face model repo is gated-public; the initial fine-grained token attempt fetched only the README/cache metadata until public gated repository access was enabled for the token.
+- The model artifacts now live locally under `.models/fastconformer-quran-coreml-streaming`, and the CoreML spike worktree uses a `.models` symlink to that ignored root model directory.
+- Added `BackendEndpointPreset.coreML` with URL `coreml://fastconformer-quran-streaming`; it is selectable like other presets but does not expose manual URL editing or require WebSocket URL validation.
+- Added `RoutingBackendSocketClient`, which preserves normal `BackendWebSocketClient` behavior for `ws://` and `wss://` URLs while routing `coreml://` URLs to `CoreMLFastConformerSocketClient`.
+- Added the local CoreML FastConformer client/engine in `ios/TarteelClientCore`: it loads the bundled model and `tokens.txt`, buffers/resamples PCM to 16 kHz, computes 80x112 log-mel windows, carries streaming caches, runs CoreML prediction, CTC-decodes transcripts, and now maps matched local transcripts into compatible Quran `locked` / `progress` events for the MVP local corpus.
+- The iPhone and macOS app initializers both inject `RoutingBackendSocketClient(coreML: CoreMLFastConformerSocketClient(bundle: .main))`.
+- The Xcode project bundles `fastconformer-quran-streaming.mlpackage`, `pronunciation-head.mlpackage`, `tokenizer.model`, and `tokens.txt` into both `TarteelPrototype` and `TarteelPrototypeMac`; Xcode compiles the model packages into `.mlmodelc`.
+- Previous slice: Quran logo app-icon fix for the Apple prototypes, completed locally on 2026-06-07.
 - Root cause: the previous logo slice bundled and rendered `quran_logo.png` inside the app, but the project still had no `Assets.xcassets/AppIcon.appiconset` or `ASSETCATALOG_COMPILER_APPICON_NAME`, so the iOS simulator home screen used the default placeholder icon.
 - Added `ios/TarteelPrototype/TarteelPrototype/Assets.xcassets/AppIcon.appiconset` with opaque iPhone, iOS marketing, and macOS icon renditions generated from the provided logo.
 - Added `Assets.xcassets` to both `TarteelPrototype` and `TarteelPrototypeMac` resource phases and set `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` for both targets.
@@ -87,6 +159,138 @@
 
 ## Verification
 
+- CoreML actionable invalid-output UI checks passed:
+  - Red Swift view-model test first failed on generic CoreML error copy; after the mapping change, `testCoreMLInvalidModelOutputShowsActionableError` passed.
+  - Red Python source guardrail first failed on missing wrapped runtime error modifiers; after the `ContentView` update, `test_content_view_allows_runtime_errors_to_wrap` passed.
+  - XcodeBuildMCP `build_run_sim` with `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108` succeeded and captured OSLog `/Users/mostafa/Library/Developer/XcodeBuildMCP/workspaces/tarteel-realtime-a36863963df4/logs/dev.mostafa.TarteelPrototype_oslog_2026-06-09T13-57-39-451Z_helperpid27333_ownerpid44328_3a5c356a.log`; the log contains `coreml_asr_invalid_output reason=nonfinite_logprobs detail=timestep=0 nonfinite_values=1025`.
+  - Screenshot `/var/folders/b1/_3ms4wf1765fjddl0nb083580000gn/T/screenshot_optimized_33821a39-cb8c-41fc-a02f-c362421485df.jpg` shows the user-visible bottom error fully readable.
+  - Focused Swift checks passed with 32 XCTest tests plus 16 Swift Testing tests; focused Python Apple/CoreML guardrails passed with 20 tests.
+  - Fresh `108001.wav` CoreML runner replay passed with final transcript `أَعْطَيْنَاكَ الْكَوْثَرَ` and normalized word score `0.667`.
+  - Full Swift client core passed with 32 XCTest tests plus 46 Swift Testing tests; full Python passed with 293 tests; compileall passed; macOS xcodebuild passed.
+- CoreML iOS Simulator replay diagnosis / invalid-output guard checks passed:
+  - Red project guardrail first failed because `coreml_asr_invalid_output`, `nonfinite_logprobs`, and `isFinite` handling were absent from `CoreMLFastConformerClient.swift`.
+  - Focused guardrail passed: `uv run python -B -m unittest tests.test_macos_app_project.MacOSAppProjectTests.test_coreml_client_reports_nonfinite_model_output -v`.
+  - macOS SwiftPM replay still passed after the guard: `swift run coreml-fixture-runner --model-dir ../../.models/fastconformer-quran-coreml-streaming --audio /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio/108001.wav`, final transcript `أَعْطَيْنَاكَ الْكَوْثَرَ`.
+  - iOS Simulator app replay launched with XcodeBuildMCP `build_run_sim` and launch args `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108`; OSLog path `/Users/mostafa/Library/Developer/XcodeBuildMCP/workspaces/tarteel-realtime-a36863963df4/logs/dev.mostafa.TarteelPrototype_oslog_2026-06-09T13-13-39-567Z_helperpid4252_ownerpid44328_a6e07c82.log` showed `coreml_asr_model_loaded`, buffering, and `coreml_asr_invalid_output reason=nonfinite_logprobs detail=timestep=0 nonfinite_values=1025`.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_coreml_fixture_runner -v` with 19 tests.
+  - Focused Swift checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests --filter RecitationViewModelTests --filter RecitationPreferencesStoreTests` with 31 XCTest tests plus 16 Swift Testing tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - Full Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 31 XCTest tests plus 46 Swift Testing tests.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 292 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Harness checks passed: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, no temporary debug-probe code strings remained in `CoreMLFastConformerClient.swift` / `tests/test_macos_app_project.py`, and `git diff --check` passed.
+- CoreML app-owned local audio replay checks passed:
+  - Red Swift preference guardrail first failed because `VolatileRecitationPreferencesStore` did not exist.
+  - Red Python app guardrail first failed because `copy-local-audio-fixtures.sh` was missing and app entrypoints did not mention `LocalAudioReplayConfiguration`.
+  - Focused replay/preferences Swift checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter RecitationPreferencesStoreTests/testVolatileStoreKeepsDeveloperReplayPreferencesInMemory --filter CoreMLFastConformerTests/localAudioReplayStreamerEmitsLiveSized16KChunks --filter CoreMLFastConformerTests/localAudioReplayConfigurationParsesFixtureLaunchArguments`.
+  - Focused app guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project.MacOSAppProjectTests.test_project_includes_shared_core_files_in_both_app_targets tests.test_macos_app_project.MacOSAppProjectTests.test_project_conditionally_bundles_local_audio_replay_fixtures tests.test_macos_app_project.MacOSAppProjectTests.test_apps_support_developer_coreml_audio_replay_launch_argument -v`.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_coreml_fixture_runner -v` with 18 tests.
+  - Focused Swift CoreML/preferences/view-model checks passed with 31 XCTest tests plus 16 Swift Testing tests.
+  - iOS simulator build passed via XcodeBuildMCP `build_sim` for `TarteelPrototype` on `iPhone 17 Pro`; the build log showed `Copied 6 local audio replay fixture(s)`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`; the build log showed `Copied 6 local audio replay fixture(s)`.
+  - Bundle inspection passed: iOS and macOS bundles both contain `004001.wav`, `004002.wav`, `004003.wav`, `108001.wav`, `108002.wav`, and `108003.wav` under `local_audio/`; `108001.wav` SHA-256 matched the root local fixture at `86b655403b3da9e2baed9b0f2ba230b0dafe4ee7ec9c4b67cc0eee1ae36a4789`.
+  - macOS app-binary replay passed: launching `TarteelPrototypeMac.app` with `--tarteel-replay-audio 108001.wav --tarteel-replay-surah 108` produced `coreml_asr_transcript` logs ending at cumulative transcript `أَعْطَيْنَاكَ الْكَوْثَرَ`.
+  - Full Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 31 XCTest tests plus 46 Swift Testing tests.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 291 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+  - Whitespace check passed: `git diff --check`.
+- CoreML app-build local Tanzil resource bundling checks passed:
+  - Red Python guardrail first failed because `ios/TarteelPrototype/Scripts/copy-local-tanzil-resource.sh` did not exist.
+  - Focused project guardrail passed: `uv run python -B -m unittest tests.test_macos_app_project.MacOSAppProjectTests.test_project_conditionally_bundles_local_tanzil_quran_text -v`.
+  - iOS simulator build passed via XcodeBuildMCP `build_sim` using project `/Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/ios/TarteelPrototype/TarteelPrototype.xcodeproj`, scheme `TarteelPrototype`, simulator `iPhone 17 Pro`, derived data `/private/tmp/tarteel-xcode-derived`, and `CODE_SIGNING_ALLOWED=NO`.
+  - iOS build log showed the copy phase and `Copied local Tanzil Quran text from .../../../../../data/tanzil/quran-simple-clean.txt`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - macOS build log showed the same copy phase and local Tanzil source path.
+  - Bundle inspection passed: the iPhone simulator and macOS app bundles both contain `quran-simple-clean.txt` at 794,313 bytes with SHA-256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`, matching the pinned local root file.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_coreml_fixture_runner -v` with 16 tests.
+  - Focused CoreML/view-model checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests --filter RecitationViewModelTests` with 24 XCTest tests plus 14 Swift Testing tests.
+  - Final Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 30 XCTest tests plus 44 Swift Testing tests.
+  - Final harness checks passed: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, `git diff --check`, and `uv run python -m tarteel_realtime.quran_data --check-manifest` reported the pinned 6,236-ayah Tanzil file and SHA-256 `054b3d9f79c0c2e44df7f9ddf42561797b3b5cb4fbdafbf2e99c805ccf1a6b49`.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 289 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- CoreML Tanzil-format corpus loading checks passed:
+  - Red Swift checks first failed because `CoreMLLocalQuranCorpus` and `CoreMLLocalQuranCorpusError` did not exist.
+  - Focused CoreML tests passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 14 Swift Testing tests, including the opt-in 6,236-ayah local full-file parse.
+  - App-level CoreML replay still passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter RecitationViewModelTests/testCoreMLFixtureReplayThroughViewModelLocksSelectedSurah`.
+  - Focused CoreML/view-model checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests --filter RecitationViewModelTests` with 24 XCTest tests plus 14 Swift Testing tests.
+  - Full Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 30 XCTest tests plus 44 Swift Testing tests.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 15 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- CoreML app-level fixture replay checks passed:
+  - Red Swift replay test first failed because `CoreMLFastConformerSocketClient(modelDirectoryURL:)` did not exist and `CoreMLFastConformerFixtureAudio.resampled16KPCM16` was `fileprivate`.
+  - Focused app-level replay passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter RecitationViewModelTests/testCoreMLFixtureReplayThroughViewModelLocksSelectedSurah`.
+  - Focused CoreML/view-model checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests --filter RecitationViewModelTests` with 24 XCTest tests plus 11 Swift Testing tests.
+  - Full Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 30 XCTest tests plus 41 Swift Testing tests.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 15 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- CoreML app-side locator MVP checks passed:
+  - Red Swift tracer failed as expected: `swift test --filter CoreMLFastConformerTests` failed because `CoreMLLocalQuranSession` did not exist.
+  - Focused CoreML/preset/state/view-model checks passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests --filter BackendEndpointPresetTests --filter RecitationSessionStateTests --filter RecitationViewModelTests` with 23 XCTest tests plus 34 Swift Testing tests.
+  - Full Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 29 XCTest tests plus 41 Swift Testing tests.
+  - Focused Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 15 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+  - Real single-fixture CoreML replay passed after an escalated rerun because sandboxed SwiftPM manifest compilation was blocked: `swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio/108001.wav --manifest /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/fixtures/local_audio_manifest.json`, final transcript `أَعْطَيْنَاكَ الْكَوْثَرَ`, normalized word score `0.667`.
+  - Harness docs checks passed: `uv run python -B -m json.tool feature_list.json`, active-feature sanity returned `[]`, and `git diff --check` passed.
+  - Full deterministic Python suite passed: `uv run python -B -m unittest discover -s tests -v` with 288 tests.
+  - Compile check passed: `uv run python -m compileall -q tarteel_realtime tests`.
+- CoreML scored fixture gate checks passed:
+  - Red Swift check failed as expected because `CoreMLFastConformerFixtureScore`, `CoreMLFastConformerFixtureExpectation`, `CoreMLFastConformerFixtureManifest`, and `CoreMLFastConformerFixtureReport.scored(with:)` did not exist.
+  - Red Python guardrail failed as expected because `coreml-fixture-runner` had no `--manifest` handling and `fixtures/local_audio_manifest.json` did not exist.
+  - Focused Swift CoreML tests passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 10 tests.
+  - Focused Python CLI/manifest guardrail passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner -v` with 3 tests.
+  - Manifest JSON validation passed: `uv run python -B -m json.tool fixtures/local_audio_manifest.json`.
+  - Full scored fixture directory replay passed: `swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio --manifest /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/fixtures/local_audio_manifest.json`.
+  - Single scored `004002.wav` replay passed to capture its untruncated score: `0.312`.
+  - iOS and macOS app builds initially failed because the hand-authored Xcode project included `CoreMLFastConformerClient.swift` but not its new `CoreMLFastConformerFixtureScoring.swift` dependency.
+  - Added a Python project guardrail requiring `CoreMLFastConformerFixtureScoring.swift` in both app targets; the guardrail failed red, then passed after updating `project.pbxproj`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- CoreML local WAV fixture harness checks passed:
+  - Red Swift check failed as expected because `CoreMLFastConformerFixtureAudio`, `CoreMLFastConformerFixtureReport`, and `CoreMLFastConformerFixtureWindow` did not exist yet.
+  - Red Python guardrail failed as expected because `Package.swift` had no `coreml-fixture-runner` executable and `Sources/CoreMLFixtureRunner/main.swift` did not exist.
+  - Focused Swift CoreML tests passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 7 tests.
+  - Focused Python CLI guardrail passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner -v` with 2 tests.
+  - Real single-fixture replay passed: `swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio/108001.wav`.
+  - Full fixture directory replay passed: `swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio`.
+  - Full Swift client core passed with 28 XCTest tests plus 35 Swift Testing tests.
+  - Focused Python Apple/CoreML guardrails passed: `uv run python -B -m unittest tests.test_coreml_fixture_runner tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 14 tests.
+  - `uv run python -B -m json.tool feature_list.json` passed.
+  - `git diff --check` passed.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- CoreML streaming transcript stitching checks passed:
+  - Red Swift check failed as expected: `swift test --filter CoreMLFastConformerTests` failed because `trimsWhitespace` did not exist yet.
+  - Focused Swift CoreML tests passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 5 tests.
+  - Full Swift client core passed with 28 XCTest tests plus 33 Swift Testing tests.
+  - Focused Apple guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 12 tests.
+  - `uv run python -B -m json.tool feature_list.json` passed.
+  - `git diff --check` passed.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- CoreML ASR diagnostics checks passed:
+  - First manual macOS recitation log inspection before this slice showed model load, Silero VAD load, microphone capture, 48 kHz Float32 to 16 kHz Int16 conversion, and clean audio-engine stop, but no transcript or inference timing logs.
+  - Focused Swift CoreML tests passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 4 tests.
+  - Full Swift client core passed with 28 XCTest tests plus 32 Swift Testing tests.
+  - Focused Apple guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 12 tests.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - iOS simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`.
+- Local CoreML FastConformer spike checks passed:
+  - Red Swift check first failed as expected: `swift test --filter CoreMLFastConformerTests` failed because `BackendEndpointPreset.coreML`, `CoreMLFastConformerCTCDecoder`, and `RoutingBackendSocketClient` were missing.
+  - CoreML compiler check passed: `xcrun coremlcompiler compile .models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage /private/tmp/tarteel-coreml-compile-check`.
+  - Focused Swift CoreML tests passed: `swift test --filter CoreMLFastConformerTests` with 3 tests.
+  - Endpoint preset tests passed: `swift test --filter BackendEndpointPresetTests` with 13 tests.
+  - Full Swift client core passed from `ios/TarteelClientCore`: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 28 XCTest tests plus 31 Swift Testing tests.
+  - Focused Apple guardrails passed: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui -v` with 11 tests.
+  - XcodeBuildMCP `build_run_sim` with `CODE_SIGNING_ALLOWED=NO` passed for scheme `TarteelPrototype` on `iPhone 17 Pro`, installed and launched `dev.mostafa.TarteelPrototype`, and captured `/var/folders/b1/_3ms4wf1765fjddl0nb083580000gn/T/screenshot_optimized_7dcbd6e4-d31c-4398-a942-e970fd279ff8.jpg`.
+  - iPhone bundle inspection found `fastconformer-quran-streaming.mlmodelc`, `pronunciation-head.mlmodelc`, `tokens.txt`, and `tokenizer.model`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`.
+  - macOS bundle inspection found the same CoreML/tokenizer resources under `TarteelPrototypeMac.app/Contents/Resources`.
+  - CoreML runtime smoke loaded the built macOS `fastconformer-quran-streaming.mlmodelc`, ran one zeroed prediction, and returned output shapes `[1, 13, 1025]` and `[1, 17, 70, 512]`.
+  - macOS GUI launch smoke succeeded with `open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app`.
+  - Broad pre-doc checks passed: `uv run python -B -m unittest discover -s tests -v` with 284 tests, `uv run python -m compileall -q tarteel_realtime tests`, and `git diff --check`.
 - Quran logo app-icon checks passed:
   - Red check first failed as expected: `uv run python -B -m unittest tests.test_macos_app_project -v` failed because `Assets.xcassets` was missing from the app resource phases.
   - After the fix, `uv run python -B -m unittest tests.test_macos_app_project -v`
@@ -206,6 +410,14 @@
 
 ## Current Risks
 
+- CoreML diagnostic logging is source/build/app-replay verified, but a fresh manual microphone recitation has not yet been run after adding the new markers and app replay path.
+- CoreML transcript logs are public in local unified logs for developer diagnosis; this is useful for the prototype but is not an acceptable production privacy default.
+- The local CoreML path is source/build/runtime-smoke/scored-fixture/app-replay/local-locator verified, but real microphone accuracy, memory use, thermal behavior, and end-to-end UX are still unverified.
+- The new macOS app-binary replay uses a fixture audio streamer but does pass through the real `VoiceActivityDetector` and CoreML/local-locator path. It proves app-owned replay mechanics, not the actual microphone streamer cadence. The iOS replay path is now simulator-launched with arguments, but Simulator produces nonfinite model output for this ANE-specialized model and is not success evidence.
+- The CoreML local locator/session can now load Tanzil-format `quran-simple-clean.txt` from the app bundle or model directory, and local iPhone/macOS app builds now bundle the ignored full Quran text when present; production packaging/licensing/distribution for that resource is still undecided.
+- The Swift local matcher is still an MVP exact/span plus compact-character tolerant locator. It does not fully port the Python locator/session/progression engine, and full-corpus auto-detect performance still needs dedicated tuning.
+- The Swift log-mel preprocessing was implemented from the model card and common ASR conventions; scored fixtures now show mixed quality, but this still needs decoder/preprocessing tuning before accepting transcript quality.
+- `.models/fastconformer-quran-coreml-streaming` remains ignored and local-only. A fresh checkout or worktree needs that directory or symlink before Apple app builds that include the model resources.
 - The post-lock overlap progression fix is locally source/test verified, but the Modal scoped Surah 4 replay has not been rerun against a backend containing this branch.
 - The aggregate Modal event mix still needs fresh diagnostics after this second scoped Surah 4 fix; broader ASR noise remains model/audio dependent.
 - The new app-icon set is generated from a 512x512 source, so 1024px slots are upsampled; use a native 1024px logo export before production distribution if sharper artwork is needed.
@@ -222,7 +434,9 @@
 
 ## Next Best Step
 
-Use `/private/tmp/tarteel-appicon-home.png` as the current simulator visual reference. If sharper production artwork becomes available, regenerate `Assets.xcassets/AppIcon.appiconset` from a native 1024px source.
+Install and run the CoreML preset on a physical iPhone with selected Surah 108, then recite Al-Kawthar and capture either `coreml_asr_transcript` progress/lock evidence or `coreml_asr_invalid_output` device logs. Simulator evidence is no longer the iOS acceptance gate for this model. In parallel, rebuild/run the macOS app normally from `.worktrees/coreml-fastconformer-spike`, select `CoreML`, choose selected Surah 108, recite Al-Kawthar, and confirm the app moves from gathering audio to `Locked on 108:1` and then progress/visible ayah updates. Inspect unified logs for `coreml_asr_transcript`, `coreml_asr_blank`, and `coreml_asr_buffering` to compare live microphone behavior against the automated `108001.wav` app replay and scored fixture baseline.
+
+After that manual E2E proof, decide whether the Swift local path should keep the lightweight matcher with selected-Surah scoping or port the Python locator/session/progression engine, then use the scored fixture gate to tune the `108002` word-boundary/fusion failure without regressing `108003`.
 
 Open the rebuilt iPhone and macOS apps and visually confirm the Quran logo sizing and placement in the home/recitation headers, ideally in light and dark appearances.
 

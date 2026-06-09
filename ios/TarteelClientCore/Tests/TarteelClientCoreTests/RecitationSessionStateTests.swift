@@ -112,6 +112,31 @@ struct RecitationSessionStateTests {
         #expect(state.debugTranscriptText == "none")
     }
 
+    @Test func preLockCoreMLBufferingEventUsesGatheringAudioState() {
+        let event = RecitationEvent(
+            type: .locating,
+            transcript: "",
+            confidence: 0.0,
+            chunkSequence: 0,
+            reason: "waiting_for_coreml_audio_buffer",
+            candidateRefs: [],
+            ayahText: nil,
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: nil,
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let state = RecitationSessionState().applying(event)
+
+        #expect(state.phase == .connecting)
+        #expect(state.headline == "Gathering audio")
+        #expect(state.detail == "Keep reciting")
+    }
+
     @Test func postLockBufferingEventKeepsListeningState() {
         let event = RecitationEvent(
             type: .uncertain,
@@ -219,6 +244,40 @@ struct RecitationSessionStateTests {
         #expect(state.headline == "Listening")
         #expect(state.detail == "ثم لترونها عين اليقين")
         #expect(state.lastTranscript == "بل ستنت نفعل")
+    }
+
+    @Test func progressEventCanAdvanceDisplayedAyahWhenMetadataIsPresent() {
+        let event = RecitationEvent(
+            type: .progress,
+            transcript: "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّرََبِّكَ وَانْحَرْ",
+            confidence: 0.88,
+            chunkSequence: 15,
+            reason: "coreml_local_tolerant_match",
+            candidateRefs: ["108:2"],
+            ayahText: "فصل لربك وانحر",
+            ayahRef: "108:2",
+            startRef: "108:2:1",
+            nextExpectedRef: "108:3:1",
+            consumedWords: 3,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+        let lockedState = RecitationSessionState(
+            phase: .listening,
+            currentAyahRef: "108:1",
+            currentAyahText: "إنا أعطيناك الكوثر",
+            headline: "Locked on 108:1",
+            detail: "إنا أعطيناك الكوثر"
+        )
+
+        let state = lockedState.applying(event)
+
+        #expect(state.phase == .listening)
+        #expect(state.currentAyahRef == "108:2")
+        #expect(state.currentAyahText == "فصل لربك وانحر")
+        #expect(state.detail == "فصل لربك وانحر")
+        #expect(state.lastTranscript == "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّرََبِّكَ وَانْحَرْ")
     }
 
     @Test func repeatedPreLockBufferingDoesNotHideLastMeaningfulDiagnostic() {

@@ -3,6 +3,7 @@ from pathlib import Path
 import plistlib
 import re
 import unittest
+import xml.etree.ElementTree as ET
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,26 @@ MODEL_NAME = "silero-vad-unified-256ms-v6.0.0.mlmodelc"
 QURAN_LOGO_NAME = "quran_logo.png"
 ASSETS_CATALOG_NAME = "Assets.xcassets"
 APP_ICON_NAME = "AppIcon"
+COREML_CLIENT_NAME = "CoreMLFastConformerClient.swift"
+COREML_SCORING_NAME = "CoreMLFastConformerFixtureScoring.swift"
+LOCAL_AUDIO_REPLAY_NAME = "LocalAudioReplayStreamer.swift"
+COREML_REPLAY_SCHEME_NAME = "TarteelPrototypeCoreMLReplay"
+FASTCONFORMER_STREAMING_MODEL_NAME = "fastconformer-quran-streaming.mlpackage"
+FASTCONFORMER_PRONUNCIATION_HEAD_NAME = "pronunciation-head.mlpackage"
+FASTCONFORMER_TOKENIZER_NAME = "tokenizer.model"
+FASTCONFORMER_TOKENS_NAME = "tokens.txt"
+TANZIL_RESOURCE_NAME = "quran-simple-clean.txt"
+TANZIL_COPY_SCRIPT = "copy-local-tanzil-resource.sh"
+LOCAL_AUDIO_COPY_SCRIPT = "copy-local-audio-fixtures.sh"
+COREML_REPLAY_SCHEME_PATH = (
+    REPO_ROOT
+    / "ios"
+    / "TarteelPrototype"
+    / "TarteelPrototype.xcodeproj"
+    / "xcshareddata"
+    / "xcschemes"
+    / f"{COREML_REPLAY_SCHEME_NAME}.xcscheme"
+)
 
 
 class MacOSAppProjectTests(unittest.TestCase):
@@ -99,6 +120,9 @@ class MacOSAppProjectTests(unittest.TestCase):
             "AudioChunkPayload.swift",
             "BackendEndpointPreset.swift",
             "BackendWebSocketClient.swift",
+            COREML_CLIENT_NAME,
+            COREML_SCORING_NAME,
+            LOCAL_AUDIO_REPLAY_NAME,
             "RecitationClientProtocols.swift",
             "RecitationEvent.swift",
             "RecitationMode.swift",
@@ -123,6 +147,14 @@ class MacOSAppProjectTests(unittest.TestCase):
 
         self.assertIn(MODEL_NAME, iphone_resources)
         self.assertIn(MODEL_NAME, mac_resources)
+        self.assertIn(FASTCONFORMER_STREAMING_MODEL_NAME, iphone_resources)
+        self.assertIn(FASTCONFORMER_STREAMING_MODEL_NAME, mac_resources)
+        self.assertIn(FASTCONFORMER_PRONUNCIATION_HEAD_NAME, iphone_resources)
+        self.assertIn(FASTCONFORMER_PRONUNCIATION_HEAD_NAME, mac_resources)
+        self.assertIn(FASTCONFORMER_TOKENIZER_NAME, iphone_resources)
+        self.assertIn(FASTCONFORMER_TOKENIZER_NAME, mac_resources)
+        self.assertIn(FASTCONFORMER_TOKENS_NAME, iphone_resources)
+        self.assertIn(FASTCONFORMER_TOKENS_NAME, mac_resources)
         self.assertIn(QURAN_LOGO_NAME, iphone_resources)
         self.assertIn(QURAN_LOGO_NAME, mac_resources)
         self.assertIn(ASSETS_CATALOG_NAME, iphone_resources)
@@ -139,6 +171,148 @@ class MacOSAppProjectTests(unittest.TestCase):
         filenames = {image.get("filename") for image in contents["images"]}
         self.assertIn("app-icon-60@3x.png", filenames)
         self.assertIn("app-icon-1024.png", filenames)
+
+    def test_coreml_client_emits_asr_diagnostics(self) -> None:
+        source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / COREML_CLIENT_NAME
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("import OSLog", source)
+        self.assertIn("CoreMLFastConformerDiagnostics", source)
+        self.assertIn("coreml_asr_connect", source)
+        self.assertIn("coreml_asr_model_loaded", source)
+        self.assertIn("coreml_asr_buffering", source)
+        self.assertIn("coreml_asr_blank", source)
+        self.assertIn("coreml_asr_transcript", source)
+        self.assertIn("inference_ms", source)
+        self.assertIn("confidence", source)
+        self.assertIn("emitted_tokens", source)
+        self.assertIn("cumulative_transcript", source)
+
+    def test_coreml_client_reports_nonfinite_model_output(self) -> None:
+        source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / COREML_CLIENT_NAME
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("coreml_asr_invalid_output", source)
+        self.assertIn("nonfinite_logprobs", source)
+        self.assertIn("isFinite", source)
+        self.assertIn("throw CoreMLFastConformerError.invalidModelOutput", source)
+
+    def test_project_conditionally_bundles_local_tanzil_quran_text(self) -> None:
+        project = PROJECT_PATH.read_text(encoding="utf-8")
+        script_path = REPO_ROOT / "ios" / "TarteelPrototype" / "Scripts" / TANZIL_COPY_SCRIPT
+        self.assertTrue(script_path.exists(), f"Missing {script_path}")
+        script = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("data/tanzil", script)
+        self.assertIn("TARGET_BUILD_DIR", script)
+        self.assertIn("UNLOCALIZED_RESOURCES_FOLDER_PATH", script)
+        self.assertIn(TANZIL_RESOURCE_NAME, script)
+        self.assertIn("[ -f", script)
+
+        for target_name in ["TarteelPrototype", "TarteelPrototypeMac"]:
+            phase = self._target_phase_body(project, target_name, "Copy Local Tanzil Quran")
+            self.assertIn("PBXShellScriptBuildPhase", phase)
+            self.assertIn(TANZIL_COPY_SCRIPT, phase)
+
+    def test_project_conditionally_bundles_local_audio_replay_fixtures(self) -> None:
+        project = PROJECT_PATH.read_text(encoding="utf-8")
+        script_path = REPO_ROOT / "ios" / "TarteelPrototype" / "Scripts" / LOCAL_AUDIO_COPY_SCRIPT
+        self.assertTrue(script_path.exists(), f"Missing {script_path}")
+        script = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("fixtures/local_audio", script)
+        self.assertIn("TARGET_BUILD_DIR", script)
+        self.assertIn("UNLOCALIZED_RESOURCES_FOLDER_PATH", script)
+        self.assertIn("local_audio", script)
+        self.assertIn("*.wav", script)
+        self.assertIn("[ -d", script)
+
+        for target_name in ["TarteelPrototype", "TarteelPrototypeMac"]:
+            phase = self._target_phase_body(project, target_name, "Copy Local Audio Fixtures")
+            self.assertIn("PBXShellScriptBuildPhase", phase)
+            self.assertIn(LOCAL_AUDIO_COPY_SCRIPT, phase)
+
+    def test_apps_support_developer_coreml_audio_replay_launch_argument(self) -> None:
+        iphone_source = (APP_ROOT := REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototype" / "App" / "TarteelPrototypeApp.swift").read_text(encoding="utf-8")
+        mac_source = (MAC_APP_SOURCE_ROOT / "TarteelPrototypeMacApp.swift").read_text(encoding="utf-8")
+        replay_path = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / LOCAL_AUDIO_REPLAY_NAME
+        )
+        self.assertTrue(replay_path.exists(), f"Missing {replay_path}")
+        replay_source = replay_path.read_text(encoding="utf-8")
+
+        for source in [iphone_source, mac_source]:
+            self.assertIn("LocalAudioReplayConfiguration", source)
+            self.assertIn("LocalAudioReplayStreamer", source)
+            self.assertIn("startReplayIfNeeded", source)
+            self.assertIn("replayConfiguration", source)
+            self.assertIn(".coreML", source)
+            self.assertIn(".selectedSurah", source)
+
+        self.assertIn("--tarteel-replay-audio", replay_source)
+        self.assertIn("--tarteel-replay-surah", replay_source)
+        self.assertIn("local_audio", replay_source)
+        self.assertIn("func replay()", replay_source)
+
+    def test_apple_apps_default_to_coreml_selected_surah_for_local_testing(self) -> None:
+        iphone_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelPrototype"
+            / "TarteelPrototype"
+            / "App"
+            / "TarteelPrototypeApp.swift"
+        ).read_text(encoding="utf-8")
+        mac_source = (MAC_APP_SOURCE_ROOT / "TarteelPrototypeMacApp.swift").read_text(encoding="utf-8")
+
+        for source in [iphone_source, mac_source]:
+            self.assertIn(
+                "UserDefaultsRecitationPreferencesStore(fallbackValues: .coreMLSelectedSurah108)",
+                source,
+            )
+
+    def test_project_has_shared_coreml_replay_scheme_for_physical_device_testing(self) -> None:
+        self.assertTrue(COREML_REPLAY_SCHEME_PATH.exists(), f"Missing {COREML_REPLAY_SCHEME_PATH}")
+        scheme = ET.parse(COREML_REPLAY_SCHEME_PATH).getroot()
+        self.assertEqual(scheme.tag, "Scheme")
+
+        buildable_refs = scheme.findall(".//BuildableReference")
+        iphone_refs = [
+            ref for ref in buildable_refs
+            if ref.get("BlueprintName") == "TarteelPrototype"
+        ]
+        self.assertGreaterEqual(len(iphone_refs), 2)
+        for ref in iphone_refs:
+            self.assertEqual(ref.get("BuildableName"), "TarteelPrototype.app")
+            self.assertEqual(ref.get("BlueprintIdentifier"), "100000000000000000000050")
+            self.assertEqual(ref.get("ReferencedContainer"), "container:TarteelPrototype.xcodeproj")
+
+        enabled_arguments = [
+            argument.get("argument")
+            for argument in scheme.findall(".//LaunchAction/CommandLineArguments/CommandLineArgument")
+            if argument.get("isEnabled") == "YES"
+        ]
+        self.assertEqual(
+            enabled_arguments,
+            ["--tarteel-replay-audio", "108001.wav", "--tarteel-replay-surah", "108"],
+        )
 
     def test_macos_info_plist_is_not_ios_plist(self) -> None:
         with MAC_PLIST_PATH.open("rb") as file:
@@ -164,8 +338,10 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("@main", app_source)
         self.assertIn("Settings", app_source)
         self.assertIn("MacContentView", app_source)
+        self.assertIn("RoutingBackendSocketClient", app_source)
+        self.assertIn("CoreMLFastConformerSocketClient", app_source)
         self.assertIn('CommandMenu("Recitation")', app_source)
-        self.assertIn("UserDefaultsRecitationPreferencesStore(fallbackValues: .modalPrimary)", app_source)
+        self.assertIn("UserDefaultsRecitationPreferencesStore(fallbackValues: .coreMLSelectedSurah108)", app_source)
         self.assertIn("KeychainBackendBearerTokenStore()", app_source)
         self.assertIn('Image("quran_logo")', content_source)
         self.assertIn("QuranLogoMark", content_source)
