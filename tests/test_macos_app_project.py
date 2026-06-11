@@ -109,7 +109,7 @@ class MacOSAppProjectTests(unittest.TestCase):
             self.assertIn("SDKROOT = macosx;", config_body)
             self.assertIn("MACOSX_DEPLOYMENT_TARGET = 14.0;", config_body)
             self.assertIn("PRODUCT_BUNDLE_IDENTIFIER = dev.mostafa.TarteelPrototypeMac;", config_body)
-            self.assertIn('SUPPORTED_PLATFORMS = "macosx";', config_body)
+            self.assertRegex(config_body, r'SUPPORTED_PLATFORMS = "?macosx"?;')
 
     def test_project_includes_shared_core_files_in_both_app_targets(self) -> None:
         project = PROJECT_PATH.read_text(encoding="utf-8")
@@ -193,6 +193,16 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("confidence", source)
         self.assertIn("emitted_tokens", source)
         self.assertIn("cumulative_transcript", source)
+        self.assertIn("coreml_asr_quran_corpus", source)
+        self.assertIn("coreml_asr_locator_event", source)
+        self.assertIn("coreml_asr_audio_window", source)
+        self.assertIn("rms", source)
+        self.assertIn("peak", source)
+        self.assertIn("near_silence_ratio", source)
+        self.assertIn("vad_probability", source)
+        self.assertIn("vad_speech_chunks", source)
+        self.assertIn("next_expected_ref", source)
+        self.assertIn("consumed_words", source)
 
     def test_coreml_client_reports_nonfinite_model_output(self) -> None:
         source = (
@@ -271,6 +281,45 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("local_audio", replay_source)
         self.assertIn("func replay()", replay_source)
 
+    def test_apps_support_developer_live_audio_capture_launch_argument(self) -> None:
+        iphone_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelPrototype"
+            / "TarteelPrototype"
+            / "App"
+            / "TarteelPrototypeApp.swift"
+        ).read_text(encoding="utf-8")
+        mac_source = (MAC_APP_SOURCE_ROOT / "TarteelPrototypeMacApp.swift").read_text(encoding="utf-8")
+        replay_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / LOCAL_AUDIO_REPLAY_NAME
+        ).read_text(encoding="utf-8")
+        coreml_source = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelClientCore"
+            / "Sources"
+            / "TarteelClientCore"
+            / COREML_CLIENT_NAME
+        ).read_text(encoding="utf-8")
+
+        for source in [iphone_source, mac_source]:
+            self.assertIn("LocalAudioCaptureConfiguration", source)
+            self.assertIn("captureConfiguration", source)
+            self.assertIn("CapturingAudioStreamer", source)
+
+        self.assertIn("--tarteel-capture-audio", replay_source)
+        self.assertIn("LocalAudioCaptureWriter", replay_source)
+        self.assertIn("Captured audio must be 16-bit PCM", replay_source)
+        self.assertIn("coreml_asr_audio_capture_started", coreml_source)
+        self.assertIn("coreml_asr_audio_capture_finished", coreml_source)
+        self.assertIn("coreml_asr_audio_capture_failed", coreml_source)
+
     def test_apple_apps_default_to_coreml_selected_surah_for_local_testing(self) -> None:
         iphone_source = (
             REPO_ROOT
@@ -345,11 +394,19 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn("KeychainBackendBearerTokenStore()", app_source)
         self.assertIn('Image("quran_logo")', content_source)
         self.assertIn("QuranLogoMark", content_source)
+        self.assertIn("MacCanonicalAyahWordsView", content_source)
+        self.assertIn("viewModel.state.currentAyahWords", content_source)
+        self.assertIn("viewModel.state.completedWordCount", content_source)
+        self.assertIn("if !viewModel.state.currentAyahWords.isEmpty", content_source)
+        self.assertNotIn("Text(viewModel.state.detail)", content_source)
         self.assertIn("MacSettingsView", settings_source)
         self.assertIn("EventHistoryPanel", content_source)
         self.assertIn("SettingsLink", content_source)
         self.assertIn("AVCaptureDevice.requestAccess", audio_source)
         self.assertIn("AVAudioEngine", audio_source)
+        self.assertIn("CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples", audio_source)
+        self.assertIn("pendingPCM.append(data)", audio_source)
+        self.assertIn("pendingPCM.removeFirst(chunkByteCount)", audio_source)
         self.assertNotIn("AVAudioSession", audio_source)
         self.assertIn("import Security", keychain_source)
         self.assertIn("SecItemCopyMatching", keychain_source)

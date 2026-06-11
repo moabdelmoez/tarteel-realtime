@@ -55,6 +55,17 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn(".fixedSize(horizontal: false, vertical: true)", source)
         self.assertIn(".frame(maxWidth: .infinity)", source)
 
+    def test_content_view_renders_canonical_ayah_words_as_primary_surface(self) -> None:
+        source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("CanonicalAyahWordsView", source)
+        self.assertIn("viewModel.state.currentAyahWords", source)
+        self.assertIn("viewModel.state.completedWordCount", source)
+        self.assertIn("if !viewModel.state.currentAyahWords.isEmpty", source)
+        self.assertNotIn("Text(viewModel.state.detail)", source)
+        self.assertIn("highlightedText", source)
+        self.assertIn("item.offset < completedWordCount", source)
+
 
 if __name__ == "__main__":
     unittest.main()

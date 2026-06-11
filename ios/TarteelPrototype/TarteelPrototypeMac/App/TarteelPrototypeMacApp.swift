@@ -7,16 +7,20 @@ struct TarteelPrototypeMacApp: App {
 
     private let replayConfiguration: LocalAudioReplayConfiguration?
     private let replayStreamer: LocalAudioReplayStreamer?
+    private let captureConfiguration: LocalAudioCaptureConfiguration?
 
     init() {
         let replayConfiguration = LocalAudioReplayConfiguration()
         let replayStreamer = Self.makeReplayStreamer(replayConfiguration: replayConfiguration)
+        let captureConfiguration = LocalAudioCaptureConfiguration()
         self.replayConfiguration = replayConfiguration
         self.replayStreamer = replayStreamer
+        self.captureConfiguration = captureConfiguration
         _viewModel = StateObject(
             wrappedValue: Self.makeViewModel(
                 replayConfiguration: replayConfiguration,
-                replayStreamer: replayStreamer
+                replayStreamer: replayStreamer,
+                captureConfiguration: captureConfiguration
             )
         )
     }
@@ -62,9 +66,13 @@ struct TarteelPrototypeMacApp: App {
 
     private static func makeViewModel(
         replayConfiguration: LocalAudioReplayConfiguration?,
-        replayStreamer: LocalAudioReplayStreamer?
+        replayStreamer: LocalAudioReplayStreamer?,
+        captureConfiguration: LocalAudioCaptureConfiguration?
     ) -> RecitationViewModel {
-        let audioStreamer: AudioStreaming = replayStreamer ?? MacMicrophoneAudioStreamer()
+        let audioStreamer = Self.makeAudioStreamer(
+            replayStreamer: replayStreamer,
+            captureConfiguration: captureConfiguration
+        )
         let preferencesStore: RecitationPreferencesStoring
         let backendBearerTokenStore: BackendBearerTokenStoring
         if let replayConfiguration {
@@ -89,6 +97,20 @@ struct TarteelPrototypeMacApp: App {
             voiceActivityDetector: VoiceActivityDetector(),
             preferencesStore: preferencesStore,
             backendBearerTokenStore: backendBearerTokenStore
+        )
+    }
+
+    private static func makeAudioStreamer(
+        replayStreamer: LocalAudioReplayStreamer?,
+        captureConfiguration: LocalAudioCaptureConfiguration?
+    ) -> AudioStreaming {
+        let baseAudioStreamer: AudioStreaming = replayStreamer ?? MacMicrophoneAudioStreamer()
+        guard let captureConfiguration else {
+            return baseAudioStreamer
+        }
+        return CapturingAudioStreamer(
+            upstream: baseAudioStreamer,
+            outputURL: captureConfiguration.outputURL
         )
     }
 

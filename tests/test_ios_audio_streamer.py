@@ -23,6 +23,18 @@ class IOSAudioStreamerSourceTests(unittest.TestCase):
         self.assertIn("format: nil", tap_call.group(0))
         self.assertNotIn("format: inputFormat", tap_call.group(0))
 
+    def test_streamer_coalesces_microphone_callbacks_to_coreml_live_chunks(self) -> None:
+        source = STREAMER_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples",
+            source,
+        )
+        self.assertIn("pendingPCM.append(data)", source)
+        self.assertIn("let chunkByteCount = outputChunkSampleCount * MemoryLayout<Int16>.size", source)
+        self.assertIn("pendingPCM.removeFirst(chunkByteCount)", source)
+        self.assertIn("onChunk(chunk, sampleRate)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

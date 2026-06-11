@@ -4,7 +4,9 @@ import Foundation
 final class MacMicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let sampleRate = 16_000
+    private let outputChunkSampleCount = CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples
     private var isTapInstalled = false
+    private var pendingPCM = Data()
 
     func start(onChunk: @escaping @Sendable (Data, Int) -> Void) async throws {
         stop()
@@ -63,7 +65,7 @@ final class MacMicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
             guard error == nil, let data = converted.pcm16Data else {
                 return
             }
-            onChunk(data, self.sampleRate)
+            self.emitCoalescedChunks(from: data, onChunk: onChunk)
         }
         isTapInstalled = true
 
@@ -77,6 +79,20 @@ final class MacMicrophoneAudioStreamer: AudioStreaming, @unchecked Sendable {
             isTapInstalled = false
         }
         engine.stop()
+        pendingPCM.removeAll(keepingCapacity: true)
+    }
+
+    private func emitCoalescedChunks(
+        from data: Data,
+        onChunk: @escaping @Sendable (Data, Int) -> Void
+    ) {
+        pendingPCM.append(data)
+        let chunkByteCount = outputChunkSampleCount * MemoryLayout<Int16>.size
+        while pendingPCM.count >= chunkByteCount {
+            let chunk = Data(pendingPCM.prefix(chunkByteCount))
+            pendingPCM.removeFirst(chunkByteCount)
+            onChunk(chunk, sampleRate)
+        }
     }
 
     private static func requestMicrophonePermission() async -> Bool {

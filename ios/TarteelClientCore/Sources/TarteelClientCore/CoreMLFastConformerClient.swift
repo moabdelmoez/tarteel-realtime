@@ -37,6 +37,23 @@ enum CoreMLFastConformerDiagnostics {
         )
     }
 
+    static func logAudioWindow(
+        chunkSequence: Int,
+        windowIndex: Int,
+        metrics: CoreMLFastConformerAudioWindowMetrics
+    ) {
+        let rmsText = String(format: "%.5f", metrics.rmsAmplitude)
+        let peakText = String(format: "%.5f", metrics.peakAmplitude)
+        let nearSilenceText = String(format: "%.3f", metrics.nearSilenceRatio)
+        let vadProbabilityText = metrics.voiceActivityMeanProbability.map {
+            String(format: "%.3f", $0)
+        } ?? "none"
+        let vadEventText = metrics.voiceActivityLatestEvent?.rawValue ?? "none"
+        logger.notice(
+            "coreml_asr_audio_window chunk_sequence=\(chunkSequence, privacy: .public) window_index=\(windowIndex, privacy: .public) sample_count=\(metrics.sampleCount, privacy: .public) rms=\(rmsText, privacy: .public) peak=\(peakText, privacy: .public) near_silence_ratio=\(nearSilenceText, privacy: .public) vad_probability=\(vadProbabilityText, privacy: .public) vad_speech_chunks=\(metrics.voiceActivitySpeechChunkCount, privacy: .public) vad_observations=\(metrics.voiceActivityObservationCount, privacy: .public) vad_event=\(vadEventText, privacy: .public)"
+        )
+    }
+
     static func logWindow(
         chunkSequence: Int,
         windowIndex: Int,
@@ -65,6 +82,80 @@ enum CoreMLFastConformerDiagnostics {
 
     static func logInvalidOutput(reason: String, detail: String) {
         logger.error("coreml_asr_invalid_output reason=\(reason, privacy: .public) detail=\(detail, privacy: .public)")
+    }
+
+    static func logCorpusLoaded(source: String, ayahCount: Int) {
+        logger.notice("coreml_asr_quran_corpus source=\(source, privacy: .public) ayahs=\(ayahCount, privacy: .public)")
+    }
+
+    static func logAudioCaptureStarted(url: URL) {
+        logger.notice("coreml_asr_audio_capture_started path=\(url.path, privacy: .public)")
+    }
+
+    static func logAudioCaptureFinished(url: URL, pcmBytes: Int) {
+        logger.notice("coreml_asr_audio_capture_finished path=\(url.path, privacy: .public) pcm_bytes=\(pcmBytes, privacy: .public)")
+    }
+
+    static func logAudioCaptureFailed(url: URL, error: Error) {
+        logger.error("coreml_asr_audio_capture_failed path=\(url.path, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+    }
+
+    static func logLocalQuranEvent(_ event: RecitationEvent) {
+        let confidenceText = String(format: "%.4f", event.confidence)
+        logger.notice(
+            "coreml_asr_locator_event type=\(event.type.rawValue, privacy: .public) reason=\(event.reason ?? "none", privacy: .public) ayah_ref=\(event.ayahRef ?? "none", privacy: .public) start_ref=\(event.startRef ?? "none", privacy: .public) next_expected_ref=\(event.nextExpectedRef ?? "none", privacy: .public) consumed_words=\(event.consumedWords, privacy: .public) chunk_sequence=\(event.chunkSequence ?? -1, privacy: .public) confidence=\(confidenceText, privacy: .public)"
+        )
+    }
+}
+
+struct CoreMLFastConformerAudioWindowMetrics: Equatable, Sendable {
+    static let defaultNearSilenceThreshold: Float = 0.005
+
+    let sampleCount: Int
+    let rmsAmplitude: Double
+    let peakAmplitude: Double
+    let nearSilenceRatio: Double
+    let voiceActivityObservationCount: Int
+    let voiceActivitySpeechChunkCount: Int
+    let voiceActivityLatestEvent: VoiceActivityEvent?
+    let voiceActivityMeanProbability: Double?
+
+    init(
+        samples: [Float],
+        voiceActivity: [VoiceActivityPayload],
+        nearSilenceThreshold: Float = Self.defaultNearSilenceThreshold
+    ) {
+        sampleCount = samples.count
+        if samples.isEmpty {
+            rmsAmplitude = 0
+            peakAmplitude = 0
+            nearSilenceRatio = 0
+        } else {
+            var squaredSum = 0.0
+            var peak = 0.0
+            var nearSilenceCount = 0
+            for sample in samples {
+                let amplitude = Double(abs(sample))
+                squaredSum += amplitude * amplitude
+                peak = max(peak, amplitude)
+                if amplitude < Double(nearSilenceThreshold) {
+                    nearSilenceCount += 1
+                }
+            }
+            rmsAmplitude = sqrt(squaredSum / Double(samples.count))
+            peakAmplitude = peak
+            nearSilenceRatio = Double(nearSilenceCount) / Double(samples.count)
+        }
+
+        voiceActivityObservationCount = voiceActivity.count
+        voiceActivitySpeechChunkCount = voiceActivity.filter(\.isSpeechActive).count
+        voiceActivityLatestEvent = voiceActivity.reversed().compactMap(\.event).first
+        if voiceActivity.isEmpty {
+            voiceActivityMeanProbability = nil
+        } else {
+            let probabilitySum = voiceActivity.reduce(0.0) { $0 + $1.probability }
+            voiceActivityMeanProbability = probabilitySum / Double(voiceActivity.count)
+        }
     }
 }
 
@@ -190,18 +281,21 @@ actor CoreMLFastConformerEngine {
         let result = try transcriber.accept(
             pcm: payload.pcm,
             sampleRateHz: payload.sampleRateHz,
-            chunkSequence: payload.sequenceNumber
+            chunkSequence: payload.sequenceNumber,
+            voiceActivity: payload.voiceActivity
         )
 
         guard let result else {
             return RecitationEvent.coreMLWaiting(chunkSequence: payload.sequenceNumber)
         }
 
-        return localSession.event(
+        let event = localSession.event(
             transcript: result.transcript,
             confidence: result.confidence,
             chunkSequence: payload.sequenceNumber
         )
+        CoreMLFastConformerDiagnostics.logLocalQuranEvent(event)
+        return event
     }
 
     private static func scopeSelection(from url: URL) -> RecitationScopeSelection {
@@ -577,7 +671,7 @@ private struct WAVFormat {
 }
 
 public struct CoreMLFastConformerFixtureRunner {
-    public static let defaultLiveChunkSamples = 1_360
+    public static let defaultLiveChunkSamples = 2_560
     public static let modelChunkSamples = 112 * 160
 
     private let modelDirectoryURL: URL
@@ -661,9 +755,31 @@ public struct CoreMLFastConformerFixtureRunner {
 struct CoreMLLocalQuranSession: Sendable {
     private static let minimumRecognizedWords = 2
     private static let tolerantMatchThreshold = 0.78
+    private static let anchorWordSimilarityThreshold = 0.74
+    private static let minimumAnchorMatches = 5
+    private static let minimumAnchorCoverage = 0.30
+    private static let minimumAnchorWordCharacters = 3
+    private static let sequenceAnchorMinimumMatches = 3
+    private static let sequenceAnchorMinimumCoveredAyahs = 2
+    private static let sequenceAnchorMaximumLookaheadAyahs = 8
+    private static let prefixLockMinimumF1 = 0.72
+    private static let prefixLockMinimumActualCoverage = 0.78
+    private static let prefixLockMinimumExpectedCoverage = 0.60
+    private static let prefixLockMinimumStartAyahCoverage = 0.45
+    private static let prefixLockMaximumLookbackAyahs = 3
+    private static let prefixLockMinimumCharacters = 16
+    private static let forwardProgressLookaheadAyahs = 8
+    private static let forwardProgressMaximumRecentWords = 5
+    private static let forwardProgressMinimumF1 = 0.60
+    private static let forwardProgressMinimumExpectedCoverage = 0.70
+    private static let orderedAnchorProgressMaximumWords = 6
+    private static let orderedAnchorProgressMinimumStrongMatches = 2
 
     private let ayahs: [CoreMLLocalQuranAyah]
+    private let allowsAnchorLock: Bool
     private var currentAyahIndex: Int?
+    private var nextExpectedRef: CoreMLLocalQuranWordRef?
+    private var lastRecognizedWords: [String] = []
 
     init(
         scope: RecitationScopeSelection = .autoDetect,
@@ -672,13 +788,17 @@ struct CoreMLLocalQuranSession: Sendable {
         switch scope {
         case .autoDetect:
             ayahs = corpus
+            allowsAnchorLock = false
         case .selectedSurah(let id):
             ayahs = corpus.filter { $0.surahID == id }
+            allowsAnchorLock = true
         }
     }
 
     mutating func reset() {
         currentAyahIndex = nil
+        nextExpectedRef = nil
+        lastRecognizedWords = []
     }
 
     mutating func event(
@@ -688,6 +808,70 @@ struct CoreMLLocalQuranSession: Sendable {
     ) -> RecitationEvent {
         let normalizedTranscript = CoreMLArabicTextNormalizer.normalize(transcript)
         let recognizedWords = Self.words(in: normalizedTranscript)
+        defer {
+            if !recognizedWords.isEmpty {
+                lastRecognizedWords = recognizedWords
+            }
+        }
+
+        if currentAyahIndex != nil,
+           let match = orderedProgressMatch(
+            normalizedTranscript: normalizedTranscript,
+            recognizedWords: recognizedWords
+           ) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .progress,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex != nil,
+           let match = orderedAnchorProgressMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .progress,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex != nil,
+           let match = orderedForwardProgressMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .progress,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex != nil {
+            return RecitationEvent.coreMLTranscript(
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                reason: recognizedWords.isEmpty ? "coreml_local_no_words" : "coreml_local_ordered_no_match",
+                candidateRefs: orderedCandidateRefs()
+            )
+        }
+
         guard recognizedWords.count >= Self.minimumRecognizedWords else {
             return RecitationEvent.coreMLTranscript(
                 transcript: transcript,
@@ -702,7 +886,8 @@ struct CoreMLLocalQuranSession: Sendable {
                 ayah: ayah,
                 ayahIndex: index,
                 normalizedTranscript: normalizedTranscript,
-                recognizedWords: recognizedWords
+                recognizedWords: recognizedWords,
+                minimumStartWordIndex: nil
             )
         }
         let forwardMatches = matches
@@ -725,57 +910,935 @@ struct CoreMLLocalQuranSession: Sendable {
             return lhs.score > rhs.score
         }
 
-        guard let match = viableMatches.first else {
-            return RecitationEvent.coreMLTranscript(
+        if currentAyahIndex == nil,
+           allowsAnchorLock,
+           let laterMatch = viableMatches.first,
+           let prefixMatch = selectedSurahPrefixMatch(
+            normalizedTranscript: normalizedTranscript,
+            before: laterMatch
+           ) {
+            currentAyahIndex = prefixMatch.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: prefixMatch)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .locked,
                 transcript: transcript,
                 confidence: confidence,
                 chunkSequence: chunkSequence,
-                reason: "coreml_local_no_match",
-                candidateRefs: matches.prefix(3).map(\.ayah.ref)
+                match: prefixMatch,
+                nextExpectedRef: nextExpectedRef?.rawValue
             )
         }
 
-        let eventType: RecitationEventType = currentAyahIndex == nil ? .locked : .progress
-        currentAyahIndex = match.ayahIndex
-        return RecitationEvent.coreMLLocated(
-            type: eventType,
+        if let match = viableMatches.first {
+            let eventType: RecitationEventType = currentAyahIndex == nil ? .locked : .progress
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: eventType,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex == nil,
+           allowsAnchorLock,
+           let match = selectedSurahSequenceAnchorMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .locked,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex == nil,
+           allowsAnchorLock,
+           let match = selectedSurahAnchorMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .locked,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        return RecitationEvent.coreMLTranscript(
             transcript: transcript,
             confidence: confidence,
             chunkSequence: chunkSequence,
-            match: match,
-            nextExpectedRef: nextExpectedRef(after: match)
+            reason: "coreml_local_no_match",
+            candidateRefs: matches.prefix(3).map(\.ayah.ref)
         )
+    }
+
+    private func selectedSurahAnchorMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        ayahs.enumerated()
+            .compactMap { index, ayah in
+                Self.anchorMatch(
+                    ayah: ayah,
+                    ayahIndex: index,
+                    recognizedWords: recognizedWords,
+                    minimumStartWordIndex: nil
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score {
+                    return lhs.score > rhs.score
+                }
+                if lhs.matchedWords != rhs.matchedWords {
+                    return lhs.matchedWords > rhs.matchedWords
+                }
+                if lhs.startWordIndex != rhs.startWordIndex {
+                    return lhs.startWordIndex < rhs.startWordIndex
+                }
+                return lhs.ayahIndex < rhs.ayahIndex
+            }
+            .first
+    }
+
+    private func selectedSurahSequenceAnchorMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        guard ayahs.count > 1 else { return nil }
+        let lastAyahIndex = ayahs.index(before: ayahs.endIndex)
+        let candidates = ayahs.indices.flatMap { startIndex -> [CoreMLLocalQuranSequenceAnchorCandidate] in
+            let maximumEndIndex = min(
+                ayahs.index(
+                    startIndex,
+                    offsetBy: Self.sequenceAnchorMaximumLookaheadAyahs,
+                    limitedBy: lastAyahIndex
+                ) ?? lastAyahIndex,
+                lastAyahIndex
+            )
+            guard startIndex < maximumEndIndex else { return [] }
+            return (startIndex...maximumEndIndex).compactMap { endIndex in
+                Self.sequenceAnchorCandidate(
+                    ayahs: ayahs,
+                    startIndex: startIndex,
+                    endIndex: endIndex,
+                    recognizedWords: recognizedWords
+                )
+            }
+        }
+
+        guard let candidate = candidates.sorted(by: Self.isBetterSequenceAnchorCandidate).first else {
+            return nil
+        }
+        let ayah = ayahs[candidate.startAyahIndex]
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: candidate.startAyahIndex,
+            score: candidate.score,
+            reason: "coreml_local_sequence_anchor_lock",
+            startWordIndex: 1,
+            matchedWords: Self.words(in: ayah.normalizedText).count,
+            nextExpectedRefOverride: nextExpectedRef(afterAyahIndex: candidate.endAyahIndex)
+        )
+    }
+
+    private func selectedSurahPrefixMatch(
+        normalizedTranscript: String,
+        before laterMatch: CoreMLLocalQuranMatch
+    ) -> CoreMLLocalQuranMatch? {
+        guard laterMatch.ayahIndex > ayahs.startIndex else { return nil }
+        let actualCharacters = Self.compactCharacters(normalizedTranscript)
+        guard actualCharacters.count >= Self.prefixLockMinimumCharacters else { return nil }
+
+        let lowerBound = max(
+            ayahs.startIndex,
+            laterMatch.ayahIndex - Self.prefixLockMaximumLookbackAyahs
+        )
+        let candidates = (lowerBound..<laterMatch.ayahIndex).compactMap { startIndex in
+            Self.prefixCandidate(
+                ayahs: ayahs,
+                startIndex: startIndex,
+                endIndex: laterMatch.ayahIndex,
+                actualCharacters: actualCharacters
+            )
+        }
+
+        guard let candidate = candidates.sorted(by: Self.isBetterPrefixCandidate).first else {
+            return nil
+        }
+        let ayah = ayahs[candidate.startAyahIndex]
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: candidate.startAyahIndex,
+            score: candidate.score,
+            reason: "coreml_local_prefix_lock",
+            startWordIndex: 1,
+            matchedWords: Self.words(in: ayah.normalizedText).count,
+            nextExpectedRefOverride: nextExpectedRef(afterAyahIndex: candidate.endAyahIndex)
+        )
+    }
+
+    private static func prefixCandidate(
+        ayahs: [CoreMLLocalQuranAyah],
+        startIndex: Int,
+        endIndex: Int,
+        actualCharacters: [Character]
+    ) -> CoreMLLocalQuranPrefixCandidate? {
+        guard ayahs.indices.contains(startIndex),
+              ayahs.indices.contains(endIndex),
+              startIndex < endIndex,
+              !actualCharacters.isEmpty else {
+            return nil
+        }
+
+        let expectedText = ayahs[startIndex...endIndex]
+            .map(\.normalizedText)
+            .joined(separator: " ")
+        let expectedCharacters = compactCharacters(expectedText)
+        guard !expectedCharacters.isEmpty else { return nil }
+
+        let spanLCS = longestCommonSubsequenceLength(expectedCharacters, actualCharacters)
+        let actualCoverage = Double(spanLCS) / Double(actualCharacters.count)
+        let expectedCoverage = Double(spanLCS) / Double(expectedCharacters.count)
+        let f1 = (2.0 * Double(spanLCS)) / Double(expectedCharacters.count + actualCharacters.count)
+
+        let startAyahCharacters = compactCharacters(ayahs[startIndex].normalizedText)
+        let startAyahLCS = longestCommonSubsequenceLength(startAyahCharacters, actualCharacters)
+        let startAyahCoverage = startAyahCharacters.isEmpty
+            ? 0.0
+            : Double(startAyahLCS) / Double(startAyahCharacters.count)
+
+        guard f1 >= prefixLockMinimumF1,
+              actualCoverage >= prefixLockMinimumActualCoverage,
+              expectedCoverage >= prefixLockMinimumExpectedCoverage,
+              startAyahCoverage >= prefixLockMinimumStartAyahCoverage else {
+            return nil
+        }
+
+        return CoreMLLocalQuranPrefixCandidate(
+            startAyahIndex: startIndex,
+            endAyahIndex: endIndex,
+            score: f1,
+            actualCoverage: actualCoverage,
+            expectedCoverage: expectedCoverage,
+            startAyahCoverage: startAyahCoverage
+        )
+    }
+
+    private static func isBetterPrefixCandidate(
+        lhs: CoreMLLocalQuranPrefixCandidate,
+        rhs: CoreMLLocalQuranPrefixCandidate
+    ) -> Bool {
+        if lhs.startAyahIndex != rhs.startAyahIndex {
+            return lhs.startAyahIndex < rhs.startAyahIndex
+        }
+        if lhs.score != rhs.score {
+            return lhs.score > rhs.score
+        }
+        if lhs.startAyahCoverage != rhs.startAyahCoverage {
+            return lhs.startAyahCoverage > rhs.startAyahCoverage
+        }
+        if lhs.expectedCoverage != rhs.expectedCoverage {
+            return lhs.expectedCoverage > rhs.expectedCoverage
+        }
+        return lhs.actualCoverage > rhs.actualCoverage
+    }
+
+    private static func sequenceAnchorCandidate(
+        ayahs: [CoreMLLocalQuranAyah],
+        startIndex: Int,
+        endIndex: Int,
+        recognizedWords: [String]
+    ) -> CoreMLLocalQuranSequenceAnchorCandidate? {
+        guard ayahs.indices.contains(startIndex),
+              ayahs.indices.contains(endIndex),
+              startIndex < endIndex,
+              !recognizedWords.isEmpty else {
+            return nil
+        }
+        let expectedAnchors = (startIndex...endIndex).flatMap { ayahIndex in
+            words(in: ayahs[ayahIndex].normalizedText).map { (ayahIndex: ayahIndex, word: $0) }
+        }
+        let eligibleAnchorCount = expectedAnchors.filter { isAnchorWord($0.word) }.count
+        guard eligibleAnchorCount >= sequenceAnchorMinimumMatches else { return nil }
+
+        let candidates = expectedAnchors.indices.flatMap { expectedStartIndex in
+            recognizedWords.indices.compactMap { actualStartIndex in
+                sequenceAnchorCandidate(
+                    expectedAnchors: expectedAnchors,
+                    recognizedWords: recognizedWords,
+                    expectedStartIndex: expectedStartIndex,
+                    actualStartIndex: actualStartIndex,
+                    eligibleAnchorCount: eligibleAnchorCount
+                )
+            }
+        }
+        return candidates.sorted(by: isBetterSequenceAnchorCandidate).first
+    }
+
+    private static func sequenceAnchorCandidate(
+        expectedAnchors: [(ayahIndex: Int, word: String)],
+        recognizedWords: [String],
+        expectedStartIndex: Int,
+        actualStartIndex: Int,
+        eligibleAnchorCount: Int
+    ) -> CoreMLLocalQuranSequenceAnchorCandidate? {
+        guard expectedAnchors.indices.contains(expectedStartIndex),
+              recognizedWords.indices.contains(actualStartIndex),
+              isAnchorWord(expectedAnchors[expectedStartIndex].word) else {
+            return nil
+        }
+        let firstScore = anchorWordSimilarity(
+            expected: expectedAnchors[expectedStartIndex].word,
+            actual: recognizedWords[actualStartIndex]
+        )
+        guard firstScore >= anchorWordSimilarityThreshold else { return nil }
+
+        var matches: [(expectedIndex: Int, score: Double)] = [
+            (expectedStartIndex, firstScore),
+        ]
+        var expectedCursor = expectedStartIndex + 1
+        if actualStartIndex + 1 < recognizedWords.count {
+            for actualWord in recognizedWords[(actualStartIndex + 1)...] {
+                guard isAnchorWord(actualWord),
+                      expectedCursor < expectedAnchors.count,
+                      let match = firstSequenceAnchorMatch(
+                        actualWord: actualWord,
+                        expectedAnchors: expectedAnchors,
+                        lowerBound: expectedCursor
+                      ) else {
+                    continue
+                }
+                matches.append((match.expectedIndex, match.score))
+                expectedCursor = match.expectedIndex + 1
+            }
+        }
+
+        return makeSequenceAnchorCandidate(
+            matches: matches,
+            expectedAnchors: expectedAnchors,
+            eligibleAnchorCount: eligibleAnchorCount
+        )
+    }
+
+    private static func firstSequenceAnchorMatch(
+        actualWord: String,
+        expectedAnchors: [(ayahIndex: Int, word: String)],
+        lowerBound: Int
+    ) -> (expectedIndex: Int, score: Double)? {
+        guard lowerBound < expectedAnchors.count else { return nil }
+        for expectedIndex in lowerBound..<expectedAnchors.count {
+            let expected = expectedAnchors[expectedIndex]
+            guard isAnchorWord(expected.word) else { continue }
+            let score = anchorWordSimilarity(expected: expected.word, actual: actualWord)
+            if score >= anchorWordSimilarityThreshold {
+                return (expectedIndex, score)
+            }
+        }
+        return nil
+    }
+
+    private static func makeSequenceAnchorCandidate(
+        matches: [(expectedIndex: Int, score: Double)],
+        expectedAnchors: [(ayahIndex: Int, word: String)],
+        eligibleAnchorCount: Int
+    ) -> CoreMLLocalQuranSequenceAnchorCandidate? {
+        guard matches.count >= sequenceAnchorMinimumMatches,
+              let first = matches.first,
+              let last = matches.last,
+              expectedAnchors.indices.contains(first.expectedIndex),
+              expectedAnchors.indices.contains(last.expectedIndex),
+              eligibleAnchorCount > 0 else {
+            return nil
+        }
+        let coveredAyahs = Set(matches.map { expectedAnchors[$0.expectedIndex].ayahIndex })
+        guard coveredAyahs.count >= sequenceAnchorMinimumCoveredAyahs else { return nil }
+
+        let meanSimilarity = matches.reduce(0.0) { $0 + $1.score } / Double(matches.count)
+        let coverage = Double(matches.count) / Double(eligibleAnchorCount)
+        let countScore = min(Double(matches.count) / Double(sequenceAnchorMinimumMatches * 2), 1.0)
+        let ayahCoverage = min(Double(coveredAyahs.count) / Double(sequenceAnchorMinimumCoveredAyahs + 1), 1.0)
+        let score = (countScore * 0.35) + (meanSimilarity * 0.35) + (coverage * 0.15) + (ayahCoverage * 0.15)
+        return CoreMLLocalQuranSequenceAnchorCandidate(
+            startAyahIndex: expectedAnchors[first.expectedIndex].ayahIndex,
+            endAyahIndex: expectedAnchors[last.expectedIndex].ayahIndex,
+            anchorCount: matches.count,
+            coveredAyahCount: coveredAyahs.count,
+            coverage: coverage,
+            score: score
+        )
+    }
+
+    private static func isBetterSequenceAnchorCandidate(
+        lhs: CoreMLLocalQuranSequenceAnchorCandidate,
+        rhs: CoreMLLocalQuranSequenceAnchorCandidate
+    ) -> Bool {
+        if lhs.anchorCount != rhs.anchorCount {
+            return lhs.anchorCount > rhs.anchorCount
+        }
+        if lhs.coveredAyahCount != rhs.coveredAyahCount {
+            return lhs.coveredAyahCount > rhs.coveredAyahCount
+        }
+        if lhs.startAyahIndex != rhs.startAyahIndex {
+            return lhs.startAyahIndex < rhs.startAyahIndex
+        }
+        if lhs.endAyahIndex != rhs.endAyahIndex {
+            return lhs.endAyahIndex > rhs.endAyahIndex
+        }
+        if lhs.coverage != rhs.coverage {
+            return lhs.coverage > rhs.coverage
+        }
+        return lhs.score > rhs.score
+    }
+
+    private static func anchorMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        recognizedWords: [String],
+        minimumStartWordIndex: Int?
+    ) -> CoreMLLocalQuranMatch? {
+        let expectedWords = words(in: ayah.normalizedText)
+        let minimumStartIndex = max((minimumStartWordIndex ?? 1) - 1, 0)
+        let searchableExpectedWords = expectedWords.indices.contains(minimumStartIndex)
+            ? Array(expectedWords[minimumStartIndex...])
+            : []
+        let anchorExpectedIndices = searchableExpectedWords.indices
+            .filter { isAnchorWord(searchableExpectedWords[$0]) }
+        guard anchorExpectedIndices.count >= minimumAnchorMatches else { return nil }
+
+        let candidates = anchorExpectedIndices.flatMap { expectedStartIndex in
+            recognizedWords.indices.compactMap { actualStartIndex in
+                anchorCandidate(
+                    expectedWords: searchableExpectedWords,
+                    recognizedWords: recognizedWords,
+                    expectedStartIndex: expectedStartIndex,
+                    actualStartIndex: actualStartIndex,
+                    eligibleAnchorCount: anchorExpectedIndices.count
+                )
+            }
+        }
+        guard let candidate = candidates.sorted(by: isBetterAnchorCandidate).first else {
+            return nil
+        }
+        guard candidate.anchorCount >= minimumAnchorMatches,
+              candidate.coverage >= minimumAnchorCoverage else {
+            return nil
+        }
+
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: candidate.score,
+            reason: "coreml_local_anchor_lock",
+            startWordIndex: minimumStartIndex + candidate.startWordIndex + 1,
+            matchedWords: candidate.matchedWords
+        )
+    }
+
+    private static func anchorCandidate(
+        expectedWords: [String],
+        recognizedWords: [String],
+        expectedStartIndex: Int,
+        actualStartIndex: Int,
+        eligibleAnchorCount: Int
+    ) -> CoreMLLocalQuranAnchorCandidate? {
+        guard expectedWords.indices.contains(expectedStartIndex),
+              recognizedWords.indices.contains(actualStartIndex),
+              isAnchorWord(expectedWords[expectedStartIndex]) else {
+            return nil
+        }
+        let firstScore = anchorWordSimilarity(
+            expected: expectedWords[expectedStartIndex],
+            actual: recognizedWords[actualStartIndex]
+        )
+        guard firstScore >= anchorWordSimilarityThreshold else { return nil }
+
+        var matches: [(expectedIndex: Int, score: Double)] = [
+            (expectedStartIndex, firstScore),
+        ]
+        var expectedCursor = expectedStartIndex + 1
+        guard actualStartIndex + 1 < recognizedWords.count else {
+            return makeAnchorCandidate(matches: matches, eligibleAnchorCount: eligibleAnchorCount)
+        }
+
+        for actualWord in recognizedWords[(actualStartIndex + 1)...] {
+            guard isAnchorWord(actualWord),
+                  expectedCursor < expectedWords.count,
+                  let match = firstAnchorWordMatch(
+                    actualWord: actualWord,
+                    expectedWords: expectedWords,
+                    lowerBound: expectedCursor
+                  ) else {
+                continue
+            }
+            matches.append((match.expectedIndex, match.score))
+            expectedCursor = match.expectedIndex + 1
+        }
+
+        return makeAnchorCandidate(matches: matches, eligibleAnchorCount: eligibleAnchorCount)
+    }
+
+    private static func makeAnchorCandidate(
+        matches: [(expectedIndex: Int, score: Double)],
+        eligibleAnchorCount: Int
+    ) -> CoreMLLocalQuranAnchorCandidate? {
+        guard let first = matches.first,
+              let last = matches.last,
+              eligibleAnchorCount > 0 else {
+            return nil
+        }
+        let meanSimilarity = matches.reduce(0.0) { $0 + $1.score } / Double(matches.count)
+        let coverage = Double(matches.count) / Double(eligibleAnchorCount)
+        let spanWordCount = last.expectedIndex - first.expectedIndex + 1
+        let countScore = min(Double(matches.count) / Double(minimumAnchorMatches * 2), 1.0)
+        let score = (countScore * 0.45) + (meanSimilarity * 0.35) + (coverage * 0.20)
+        return CoreMLLocalQuranAnchorCandidate(
+            startWordIndex: first.expectedIndex,
+            matchedWords: spanWordCount,
+            anchorCount: matches.count,
+            coverage: coverage,
+            score: score
+        )
+    }
+
+    private static func firstAnchorWordMatch(
+        actualWord: String,
+        expectedWords: [String],
+        lowerBound: Int
+    ) -> (expectedIndex: Int, score: Double)? {
+        guard lowerBound < expectedWords.count else { return nil }
+        for expectedIndex in lowerBound..<expectedWords.count {
+            let expectedWord = expectedWords[expectedIndex]
+            guard isAnchorWord(expectedWord) else { continue }
+            let score = anchorWordSimilarity(expected: expectedWord, actual: actualWord)
+            if score >= anchorWordSimilarityThreshold {
+                return (expectedIndex, score)
+            }
+        }
+        return nil
+    }
+
+    private static func isBetterAnchorCandidate(
+        lhs: CoreMLLocalQuranAnchorCandidate,
+        rhs: CoreMLLocalQuranAnchorCandidate
+    ) -> Bool {
+        if lhs.anchorCount != rhs.anchorCount {
+            return lhs.anchorCount > rhs.anchorCount
+        }
+        if lhs.coverage != rhs.coverage {
+            return lhs.coverage > rhs.coverage
+        }
+        if lhs.matchedWords != rhs.matchedWords {
+            return lhs.matchedWords > rhs.matchedWords
+        }
+        if lhs.score != rhs.score {
+            return lhs.score > rhs.score
+        }
+        return lhs.startWordIndex < rhs.startWordIndex
+    }
+
+    private static func isAnchorWord(_ word: String) -> Bool {
+        compactCharacters(word).count >= minimumAnchorWordCharacters
+    }
+
+    private static func anchorWordSimilarity(expected: String, actual: String) -> Double {
+        let expectedCharacters = compactCharacters(expected)
+        let actualCharacters = compactCharacters(actual)
+        guard !expectedCharacters.isEmpty, !actualCharacters.isEmpty else { return 0 }
+        let expectedVariants = anchorWordSimilarityVariants(expectedCharacters)
+        let actualVariants = anchorWordSimilarityVariants(actualCharacters)
+        var best = 0.0
+        for expectedVariant in expectedVariants {
+            for actualVariant in actualVariants {
+                best = max(best, similarity(expected: expectedVariant, actual: actualVariant))
+            }
+        }
+        return best
+    }
+
+    private static func anchorWordSimilarityVariants(_ characters: [Character]) -> [[Character]] {
+        var variants = [characters]
+        if let first = characters.first,
+           (first == "و" || first == "ف"),
+           characters.count > minimumAnchorWordCharacters {
+            variants.append(Array(characters.dropFirst()))
+        }
+        return variants
+    }
+
+    private func orderedProgressMatch(
+        normalizedTranscript: String,
+        recognizedWords: [String]
+    ) -> CoreMLLocalQuranMatch? {
+        guard let nextExpectedRef else { return nil }
+        let progressWords = incrementalWords(from: recognizedWords)
+        guard !progressWords.isEmpty else { return nil }
+
+        let progressTranscript = progressWords.joined(separator: " ")
+        let allowedIndices = orderedAyahIndices(from: nextExpectedRef)
+        let matches = allowedIndices.compactMap { ayahIndex -> CoreMLLocalQuranMatch? in
+            let ayah = ayahs[ayahIndex]
+            let minimumStartWordIndex = ayah.ref == nextExpectedRef.ayahRef
+                ? nextExpectedRef.wordIndex
+                : 1
+            let match = Self.match(
+                ayah: ayah,
+                ayahIndex: ayahIndex,
+                normalizedTranscript: progressTranscript.isEmpty ? normalizedTranscript : progressTranscript,
+                recognizedWords: progressWords,
+                minimumStartWordIndex: minimumStartWordIndex
+            )
+            guard match.score >= Self.tolerantMatchThreshold || match.reason == "coreml_local_span_match" else {
+                return nil
+            }
+            return match.with(reason: "coreml_local_ordered_progress")
+        }
+        return matches
+            .sorted { lhs, rhs in
+                if lhs.ayahIndex != rhs.ayahIndex {
+                    return lhs.ayahIndex < rhs.ayahIndex
+                }
+                if lhs.startWordIndex != rhs.startWordIndex {
+                    return lhs.startWordIndex < rhs.startWordIndex
+                }
+                return lhs.score > rhs.score
+            }
+            .first
+    }
+
+    private func orderedAnchorProgressMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        guard let nextExpectedRef,
+              allowsAnchorLock,
+              !recognizedWords.isEmpty else {
+            return nil
+        }
+
+        let progressWords = incrementalWords(from: recognizedWords)
+        let candidateWords = progressWords.isEmpty ? recognizedWords : progressWords
+        let allowedIndices = orderedAyahIndices(from: nextExpectedRef)
+        let candidates = allowedIndices.compactMap { ayahIndex -> CoreMLLocalQuranMatch? in
+            let ayah = ayahs[ayahIndex]
+            let minimumStartWordIndex = ayah.ref == nextExpectedRef.ayahRef
+                ? nextExpectedRef.wordIndex
+                : 1
+            return Self.orderedAnchorProgressMatch(
+                ayah: ayah,
+                ayahIndex: ayahIndex,
+                recognizedWords: candidateWords,
+                minimumStartWordIndex: minimumStartWordIndex
+            )
+        }
+
+        return candidates
+            .sorted { lhs, rhs in
+                if lhs.ayahIndex != rhs.ayahIndex {
+                    return lhs.ayahIndex < rhs.ayahIndex
+                }
+                if lhs.score != rhs.score {
+                    return lhs.score > rhs.score
+                }
+                if lhs.matchedWords != rhs.matchedWords {
+                    return lhs.matchedWords > rhs.matchedWords
+                }
+                return lhs.startWordIndex < rhs.startWordIndex
+            }
+            .first
+    }
+
+    private func orderedForwardProgressMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        guard let nextExpectedRef,
+              allowsAnchorLock,
+              !recognizedWords.isEmpty else {
+            return nil
+        }
+
+        let candidateIndices = orderedForwardAyahIndices(from: nextExpectedRef)
+        let candidates = candidateIndices.compactMap { ayahIndex -> CoreMLLocalQuranMatch? in
+            let ayah = ayahs[ayahIndex]
+            let minimumStartWordIndex = ayah.ref == nextExpectedRef.ayahRef
+                ? nextExpectedRef.wordIndex
+                : 1
+            return Self.forwardProgressMatch(
+                ayah: ayah,
+                ayahIndex: ayahIndex,
+                recognizedWords: recognizedWords,
+                minimumStartWordIndex: minimumStartWordIndex
+            )
+        }
+
+        return candidates
+            .sorted { lhs, rhs in
+                if lhs.ayahIndex != rhs.ayahIndex {
+                    return lhs.ayahIndex < rhs.ayahIndex
+                }
+                if lhs.score != rhs.score {
+                    return lhs.score > rhs.score
+                }
+                return lhs.startWordIndex < rhs.startWordIndex
+            }
+            .first
+    }
+
+    private static func orderedAnchorProgressMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        recognizedWords: [String],
+        minimumStartWordIndex: Int?
+    ) -> CoreMLLocalQuranMatch? {
+        let expectedWords = words(in: ayah.normalizedText)
+        let minimumStartIndex = max((minimumStartWordIndex ?? 1) - 1, 0)
+        let searchableExpectedWords = expectedWords.indices.contains(minimumStartIndex)
+            ? Array(expectedWords[minimumStartIndex...])
+            : []
+        guard searchableExpectedWords.count >= orderedAnchorProgressMinimumStrongMatches,
+              recognizedWords.count >= orderedAnchorProgressMinimumStrongMatches else {
+            return nil
+        }
+
+        let candidates = searchableExpectedWords.indices.flatMap { expectedStartIndex in
+            recognizedWords.indices.compactMap { actualStartIndex in
+                orderedAnchorProgressCandidate(
+                    expectedWords: searchableExpectedWords,
+                    recognizedWords: recognizedWords,
+                    expectedStartIndex: expectedStartIndex,
+                    actualStartIndex: actualStartIndex
+                )
+            }
+        }
+        guard let candidate = candidates.sorted(by: isBetterOrderedAnchorProgressCandidate).first else {
+            return nil
+        }
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: candidate.score,
+            reason: "coreml_local_ordered_anchor_progress",
+            startWordIndex: minimumStartIndex + candidate.startWordIndex + 1,
+            matchedWords: candidate.matchedWords
+        )
+    }
+
+    private static func orderedAnchorProgressCandidate(
+        expectedWords: [String],
+        recognizedWords: [String],
+        expectedStartIndex: Int,
+        actualStartIndex: Int
+    ) -> CoreMLLocalQuranOrderedAnchorProgressCandidate? {
+        var expectedCursor = expectedStartIndex
+        var actualCursor = actualStartIndex
+        var strongMatches = 0
+        var matchedWords = 0
+        var scoreTotal = 0.0
+
+        while expectedCursor < expectedWords.count,
+              actualCursor < recognizedWords.count,
+              matchedWords < orderedAnchorProgressMaximumWords {
+            let expectedWord = expectedWords[expectedCursor]
+            let actualWord = recognizedWords[actualCursor]
+            let score = anchorWordSimilarity(expected: expectedWord, actual: actualWord)
+            if score >= anchorWordSimilarityThreshold {
+                strongMatches += 1
+                scoreTotal += score
+            } else if actualCursor == recognizedWords.index(before: recognizedWords.endIndex),
+                      strongMatches >= orderedAnchorProgressMinimumStrongMatches,
+                      isTrailingPrefixMatch(expected: expectedWord, actual: actualWord) {
+                scoreTotal += 0.60
+            } else {
+                break
+            }
+
+            expectedCursor += 1
+            actualCursor += 1
+            matchedWords += 1
+        }
+
+        guard strongMatches >= orderedAnchorProgressMinimumStrongMatches,
+              matchedWords >= orderedAnchorProgressMinimumStrongMatches else {
+            return nil
+        }
+        let meanScore = scoreTotal / Double(matchedWords)
+        let strongCoverage = Double(strongMatches) / Double(matchedWords)
+        return CoreMLLocalQuranOrderedAnchorProgressCandidate(
+            startWordIndex: expectedStartIndex,
+            matchedWords: matchedWords,
+            strongMatches: strongMatches,
+            score: (meanScore * 0.80) + (strongCoverage * 0.20)
+        )
+    }
+
+    private static func isBetterOrderedAnchorProgressCandidate(
+        lhs: CoreMLLocalQuranOrderedAnchorProgressCandidate,
+        rhs: CoreMLLocalQuranOrderedAnchorProgressCandidate
+    ) -> Bool {
+        if lhs.strongMatches != rhs.strongMatches {
+            return lhs.strongMatches > rhs.strongMatches
+        }
+        if lhs.matchedWords != rhs.matchedWords {
+            return lhs.matchedWords > rhs.matchedWords
+        }
+        if lhs.score != rhs.score {
+            return lhs.score > rhs.score
+        }
+        return lhs.startWordIndex < rhs.startWordIndex
+    }
+
+    private static func isTrailingPrefixMatch(expected: String, actual: String) -> Bool {
+        let expectedCharacters = compactCharacters(expected)
+        let actualCharacters = compactCharacters(actual)
+        guard !expectedCharacters.isEmpty, !actualCharacters.isEmpty else { return false }
+        return expectedCharacters.starts(with: actualCharacters)
+    }
+
+    private static func forwardProgressMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        recognizedWords: [String],
+        minimumStartWordIndex: Int?
+    ) -> CoreMLLocalQuranMatch? {
+        let expectedWords = words(in: ayah.normalizedText)
+        let minimumStartIndex = max((minimumStartWordIndex ?? 1) - 1, 0)
+        let searchableExpectedWords = expectedWords.indices.contains(minimumStartIndex)
+            ? Array(expectedWords[minimumStartIndex...])
+            : []
+        let expectedCharacters = compactCharacters(searchableExpectedWords.joined(separator: " "))
+        guard !expectedCharacters.isEmpty else { return nil }
+
+        let maximumWindowSize = min(forwardProgressMaximumRecentWords, recognizedWords.count)
+        var best: CoreMLLocalQuranForwardCandidate?
+        for windowSize in 1...maximumWindowSize {
+            let recentWords = Array(recognizedWords.suffix(windowSize))
+            let actualCharacters = compactCharacters(recentWords.joined(separator: " "))
+            guard !actualCharacters.isEmpty else { continue }
+            let lcs = longestCommonSubsequenceLength(expectedCharacters, actualCharacters)
+            let expectedCoverage = Double(lcs) / Double(expectedCharacters.count)
+            let f1 = (2.0 * Double(lcs)) / Double(expectedCharacters.count + actualCharacters.count)
+            guard f1 >= forwardProgressMinimumF1,
+                  expectedCoverage >= forwardProgressMinimumExpectedCoverage else {
+                continue
+            }
+            let candidate = CoreMLLocalQuranForwardCandidate(
+                score: f1,
+                expectedCoverage: expectedCoverage,
+                windowSize: windowSize
+            )
+            if let currentBest = best {
+                if isBetterForwardCandidate(candidate, than: currentBest) {
+                    best = candidate
+                }
+            } else {
+                best = candidate
+            }
+        }
+
+        guard let best else { return nil }
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: best.score,
+            reason: "coreml_local_ordered_forward_progress",
+            startWordIndex: minimumStartIndex + 1,
+            matchedWords: searchableExpectedWords.count
+        )
+    }
+
+    private static func isBetterForwardCandidate(
+        _ candidate: CoreMLLocalQuranForwardCandidate,
+        than other: CoreMLLocalQuranForwardCandidate
+    ) -> Bool {
+        if candidate.score != other.score {
+            return candidate.score > other.score
+        }
+        if candidate.expectedCoverage != other.expectedCoverage {
+            return candidate.expectedCoverage > other.expectedCoverage
+        }
+        return candidate.windowSize < other.windowSize
+    }
+
+    private func orderedCandidateRefs() -> [String] {
+        guard let nextExpectedRef else { return [] }
+        return orderedAyahIndices(from: nextExpectedRef).map { ayahs[$0].ref }
+    }
+
+    private func orderedAyahIndices(from ref: CoreMLLocalQuranWordRef) -> [Int] {
+        guard let currentIndex = ayahs.firstIndex(where: { $0.ref == ref.ayahRef }) else {
+            return []
+        }
+        let nextIndex = ayahs.index(after: currentIndex)
+        if ayahs.indices.contains(nextIndex) {
+            return [currentIndex, nextIndex]
+        }
+        return [currentIndex]
+    }
+
+    private func orderedForwardAyahIndices(from ref: CoreMLLocalQuranWordRef) -> [Int] {
+        guard let currentIndex = ayahs.firstIndex(where: { $0.ref == ref.ayahRef }) else {
+            return []
+        }
+        let upperBound = min(
+            ayahs.index(currentIndex, offsetBy: Self.forwardProgressLookaheadAyahs, limitedBy: ayahs.endIndex) ?? ayahs.endIndex,
+            ayahs.endIndex
+        )
+        guard currentIndex < upperBound else { return [currentIndex] }
+        return Array(currentIndex..<upperBound)
+    }
+
+    private func incrementalWords(from recognizedWords: [String]) -> [String] {
+        guard !recognizedWords.isEmpty, !lastRecognizedWords.isEmpty else {
+            return recognizedWords
+        }
+        let overlap = Self.overlapWordCount(previousWords: lastRecognizedWords, currentWords: recognizedWords)
+        guard overlap > 0 else {
+            return recognizedWords
+        }
+        return Array(recognizedWords.dropFirst(overlap))
     }
 
     private static func match(
         ayah: CoreMLLocalQuranAyah,
         ayahIndex: Int,
         normalizedTranscript: String,
-        recognizedWords: [String]
+        recognizedWords: [String],
+        minimumStartWordIndex: Int?
     ) -> CoreMLLocalQuranMatch {
         let expectedWords = words(in: ayah.normalizedText)
-        if let wordStartIndex = expectedWords.firstContiguousIndex(of: recognizedWords) {
+        let minimumStartIndex = max((minimumStartWordIndex ?? 1) - 1, 0)
+        let searchableExpectedWords = expectedWords.indices.contains(minimumStartIndex)
+            ? Array(expectedWords[minimumStartIndex...])
+            : []
+
+        if let wordStartIndex = searchableExpectedWords.firstContiguousIndex(of: recognizedWords) {
             return CoreMLLocalQuranMatch(
                 ayah: ayah,
                 ayahIndex: ayahIndex,
                 score: 1.0,
                 reason: "coreml_local_span_match",
-                startWordIndex: wordStartIndex + 1,
+                startWordIndex: minimumStartIndex + wordStartIndex + 1,
                 matchedWords: recognizedWords.count
             )
         }
-        if recognizedWords.firstContiguousIndex(of: expectedWords) != nil {
+        if !searchableExpectedWords.isEmpty,
+           recognizedWords.firstContiguousIndex(of: searchableExpectedWords) != nil {
             return CoreMLLocalQuranMatch(
                 ayah: ayah,
                 ayahIndex: ayahIndex,
                 score: 1.0,
                 reason: "coreml_local_span_match",
-                startWordIndex: 1,
-                matchedWords: expectedWords.count
+                startWordIndex: minimumStartIndex + 1,
+                matchedWords: searchableExpectedWords.count
             )
         }
 
-        let expectedCompact = compactCharacters(ayah.normalizedText)
+        let expectedText = searchableExpectedWords.isEmpty
+            ? ayah.normalizedText
+            : searchableExpectedWords.joined(separator: " ")
+        let expectedCompact = compactCharacters(expectedText)
         let actualCompact = compactCharacters(normalizedTranscript)
         let compactSimilarity = bestWindowSimilarity(
             expected: expectedCompact,
@@ -786,8 +1849,8 @@ struct CoreMLLocalQuranSession: Sendable {
             ayahIndex: ayahIndex,
             score: compactSimilarity,
             reason: "coreml_local_tolerant_match",
-            startWordIndex: 1,
-            matchedWords: expectedWords.count
+            startWordIndex: minimumStartIndex + 1,
+            matchedWords: searchableExpectedWords.isEmpty ? expectedWords.count : searchableExpectedWords.count
         )
     }
 
@@ -802,8 +1865,29 @@ struct CoreMLLocalQuranSession: Sendable {
         return "\(ayahs[nextAyahIndex].ref):1"
     }
 
+    private func nextExpectedRefValue(after match: CoreMLLocalQuranMatch) -> String? {
+        match.nextExpectedRefOverride ?? nextExpectedRef(after: match)
+    }
+
+    private func nextExpectedRef(afterAyahIndex ayahIndex: Int) -> String? {
+        let nextAyahIndex = ayahIndex + 1
+        guard ayahs.indices.contains(nextAyahIndex) else { return nil }
+        return "\(ayahs[nextAyahIndex].ref):1"
+    }
+
     private static func words(in normalizedText: String) -> [String] {
         normalizedText.split(separator: " ").map(String.init)
+    }
+
+    private static func overlapWordCount(previousWords: [String], currentWords: [String]) -> Int {
+        let maxOverlap = min(previousWords.count, currentWords.count)
+        guard maxOverlap > 0 else { return 0 }
+        for overlap in stride(from: maxOverlap, through: 1, by: -1) {
+            if Array(previousWords.suffix(overlap)) == Array(currentWords.prefix(overlap)) {
+                return overlap
+            }
+        }
+        return 0
     }
 
     private static func compactCharacters(_ normalizedText: String) -> [Character] {
@@ -858,6 +1942,23 @@ struct CoreMLLocalQuranSession: Sendable {
         }
         return previous[rhs.count]
     }
+
+    private static func longestCommonSubsequenceLength<T: Equatable>(_ lhs: [T], _ rhs: [T]) -> Int {
+        guard !lhs.isEmpty, !rhs.isEmpty else { return 0 }
+        var previous = Array(repeating: 0, count: rhs.count + 1)
+        var current = Array(repeating: 0, count: rhs.count + 1)
+        for lhsIndex in 1...lhs.count {
+            for rhsIndex in 1...rhs.count {
+                if lhs[lhsIndex - 1] == rhs[rhsIndex - 1] {
+                    current[rhsIndex] = previous[rhsIndex - 1] + 1
+                } else {
+                    current[rhsIndex] = max(previous[rhsIndex], current[rhsIndex - 1])
+                }
+            }
+            swap(&previous, &current)
+        }
+        return previous[rhs.count]
+    }
 }
 
 struct CoreMLLocalQuranAyah: Equatable, Sendable {
@@ -872,6 +1973,71 @@ struct CoreMLLocalQuranAyah: Equatable, Sendable {
     var normalizedText: String {
         CoreMLArabicTextNormalizer.normalize(text)
     }
+}
+
+private struct CoreMLLocalQuranWordRef: Equatable, Sendable {
+    let surahID: Int
+    let ayahID: Int
+    let wordIndex: Int
+
+    var ayahRef: String {
+        "\(surahID):\(ayahID)"
+    }
+
+    var rawValue: String {
+        "\(ayahRef):\(wordIndex)"
+    }
+
+    init(surahID: Int, ayahID: Int, wordIndex: Int) {
+        self.surahID = surahID
+        self.ayahID = ayahID
+        self.wordIndex = wordIndex
+    }
+
+    init?(rawValue: String) {
+        let parts = rawValue.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        self.init(surahID: parts[0], ayahID: parts[1], wordIndex: parts[2])
+    }
+}
+
+private struct CoreMLLocalQuranAnchorCandidate: Equatable, Sendable {
+    let startWordIndex: Int
+    let matchedWords: Int
+    let anchorCount: Int
+    let coverage: Double
+    let score: Double
+}
+
+private struct CoreMLLocalQuranPrefixCandidate: Equatable, Sendable {
+    let startAyahIndex: Int
+    let endAyahIndex: Int
+    let score: Double
+    let actualCoverage: Double
+    let expectedCoverage: Double
+    let startAyahCoverage: Double
+}
+
+private struct CoreMLLocalQuranSequenceAnchorCandidate: Equatable, Sendable {
+    let startAyahIndex: Int
+    let endAyahIndex: Int
+    let anchorCount: Int
+    let coveredAyahCount: Int
+    let coverage: Double
+    let score: Double
+}
+
+private struct CoreMLLocalQuranOrderedAnchorProgressCandidate: Equatable, Sendable {
+    let startWordIndex: Int
+    let matchedWords: Int
+    let strongMatches: Int
+    let score: Double
+}
+
+private struct CoreMLLocalQuranForwardCandidate: Equatable, Sendable {
+    let score: Double
+    let expectedCoverage: Double
+    let windowSize: Int
 }
 
 enum CoreMLLocalQuranCorpusError: LocalizedError, Equatable {
@@ -930,9 +2096,18 @@ enum CoreMLLocalQuranCorpus {
 
     static func preferredAyahs(for resourceLocation: CoreMLFastConformerResourceLocation) throws -> [CoreMLLocalQuranAyah] {
         guard let tanzilURL = tanzilURL(for: resourceLocation) else {
+            CoreMLFastConformerDiagnostics.logCorpusLoaded(
+                source: "mvp_fallback",
+                ayahCount: mvpAyahs.count
+            )
             return mvpAyahs
         }
-        return try ayahs(fromTanzilURL: tanzilURL)
+        let ayahs = try ayahs(fromTanzilURL: tanzilURL)
+        CoreMLFastConformerDiagnostics.logCorpusLoaded(
+            source: tanzilURL.path,
+            ayahCount: ayahs.count
+        )
+        return ayahs
     }
 
     static func ayahs(fromTanzilURL url: URL) throws -> [CoreMLLocalQuranAyah] {
@@ -1006,6 +2181,19 @@ private struct CoreMLLocalQuranMatch: Equatable, Sendable {
     let reason: String
     let startWordIndex: Int
     let matchedWords: Int
+    var nextExpectedRefOverride: String?
+
+    func with(reason: String) -> CoreMLLocalQuranMatch {
+        CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: score,
+            reason: reason,
+            startWordIndex: startWordIndex,
+            matchedWords: matchedWords,
+            nextExpectedRefOverride: nextExpectedRefOverride
+        )
+    }
 }
 
 private extension Array where Element: Equatable {
@@ -1032,7 +2220,8 @@ final class CoreMLFastConformerTranscriber {
     private var cacheLastChannel: MLMultiArray
     private var cacheLastTime: MLMultiArray
     private var cacheLastChannelLength: MLMultiArray
-    private var bufferedSamples: [Float] = []
+    private var bufferedAudioSegments: [CoreMLFastConformerBufferedAudioSegment] = []
+    private var bufferedSampleCount = 0
     private var transcript = ""
     private var previousTokenID: Int?
     private var processedWindowCount = 0
@@ -1081,7 +2270,8 @@ final class CoreMLFastConformerTranscriber {
     }
 
     func reset() {
-        bufferedSamples.removeAll(keepingCapacity: true)
+        bufferedAudioSegments.removeAll(keepingCapacity: true)
+        bufferedSampleCount = 0
         transcript = ""
         previousTokenID = nil
         processedWindowCount = 0
@@ -1091,16 +2281,22 @@ final class CoreMLFastConformerTranscriber {
         CoreMLFastConformerDiagnostics.logReset()
     }
 
-    func accept(pcm: Data, sampleRateHz: Int, chunkSequence: Int) throws -> CoreMLFastConformerTranscript? {
+    func accept(
+        pcm: Data,
+        sampleRateHz: Int,
+        chunkSequence: Int,
+        voiceActivity: VoiceActivityPayload? = nil
+    ) throws -> CoreMLFastConformerTranscript? {
         guard sampleRateHz > 0 else { throw CoreMLFastConformerError.invalidAudio }
-        bufferedSamples.append(
-            contentsOf: Self.samples(fromPCM16: pcm, sourceSampleRateHz: sampleRateHz)
+        appendBufferedAudio(
+            samples: Self.samples(fromPCM16: pcm, sourceSampleRateHz: sampleRateHz),
+            voiceActivity: voiceActivity
         )
-        if bufferedSamples.count < Self.chunkSamples,
+        if bufferedSampleCount < Self.chunkSamples,
            CoreMLFastConformerDiagnostics.shouldLogBuffering(chunkSequence: chunkSequence) {
             CoreMLFastConformerDiagnostics.logBuffering(
                 chunkSequence: chunkSequence,
-                bufferedSamples: bufferedSamples.count,
+                bufferedSamples: bufferedSampleCount,
                 requiredSamples: Self.chunkSamples,
                 sampleRateHz: sampleRateHz,
                 pcmByteCount: pcm.count
@@ -1109,11 +2305,20 @@ final class CoreMLFastConformerTranscriber {
 
         var latestConfidence = 0.0
         var emittedText = false
-        while bufferedSamples.count >= Self.chunkSamples {
-            let chunk = Array(bufferedSamples.prefix(Self.chunkSamples))
-            bufferedSamples.removeFirst(Self.chunkSamples)
+        while bufferedSampleCount >= Self.chunkSamples {
+            let window = popModelWindow()
+            let chunk = window.samples
             let windowIndex = processedWindowCount
             processedWindowCount += 1
+            let audioMetrics = CoreMLFastConformerAudioWindowMetrics(
+                samples: chunk,
+                voiceActivity: window.voiceActivity
+            )
+            CoreMLFastConformerDiagnostics.logAudioWindow(
+                chunkSequence: chunkSequence,
+                windowIndex: windowIndex,
+                metrics: audioMetrics
+            )
             let predictionStart = Date()
             let output = try predict(samples: chunk)
             let cumulativeTranscript = output.transcript.isEmpty
@@ -1151,6 +2356,43 @@ final class CoreMLFastConformerTranscriber {
             confidence: latestConfidence,
             emittedTokenIDs: []
         )
+    }
+
+    private func appendBufferedAudio(samples: [Float], voiceActivity: VoiceActivityPayload?) {
+        guard !samples.isEmpty else { return }
+        bufferedAudioSegments.append(
+            CoreMLFastConformerBufferedAudioSegment(
+                samples: samples,
+                voiceActivity: voiceActivity
+            )
+        )
+        bufferedSampleCount += samples.count
+    }
+
+    private func popModelWindow() -> (samples: [Float], voiceActivity: [VoiceActivityPayload]) {
+        var samples: [Float] = []
+        samples.reserveCapacity(Self.chunkSamples)
+        var voiceActivity: [VoiceActivityPayload] = []
+        var remainingSamples = Self.chunkSamples
+
+        while remainingSamples > 0, !bufferedAudioSegments.isEmpty {
+            var segment = bufferedAudioSegments.removeFirst()
+            let takeCount = min(remainingSamples, segment.samples.count)
+            samples.append(contentsOf: segment.samples.prefix(takeCount))
+            if let payload = segment.voiceActivity {
+                voiceActivity.append(payload)
+            }
+
+            if takeCount < segment.samples.count {
+                segment.samples.removeFirst(takeCount)
+                bufferedAudioSegments.insert(segment, at: 0)
+            }
+
+            bufferedSampleCount -= takeCount
+            remainingSamples -= takeCount
+        }
+
+        return (samples, voiceActivity)
     }
 
     private func predict(samples: [Float]) throws -> CoreMLFastConformerTranscript {
@@ -1318,6 +2560,11 @@ final class CoreMLFastConformerTranscriber {
         }
         memset(array.dataPointer, 0, array.count * bytesPerElement)
     }
+}
+
+private struct CoreMLFastConformerBufferedAudioSegment {
+    var samples: [Float]
+    let voiceActivity: VoiceActivityPayload?
 }
 
 struct CoreMLFastConformerFeatureExtractor {

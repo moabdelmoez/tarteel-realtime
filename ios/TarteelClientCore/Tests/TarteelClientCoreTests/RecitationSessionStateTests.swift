@@ -280,6 +280,32 @@ struct RecitationSessionStateTests {
         #expect(state.lastTranscript == "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّرََبِّكَ وَانْحَرْ")
     }
 
+    @Test func progressEventTracksCanonicalWordCompletionFromNextExpectedRef() {
+        let event = RecitationEvent(
+            type: .progress,
+            transcript: "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّ",
+            confidence: 0.88,
+            chunkSequence: 15,
+            reason: "coreml_local_ordered_progress",
+            candidateRefs: ["108:2"],
+            ayahText: "فصل لربك وانحر",
+            ayahRef: "108:2",
+            startRef: "108:2:1",
+            nextExpectedRef: "108:2:2",
+            consumedWords: 1,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let state = RecitationSessionState().applying(event)
+
+        #expect(state.currentAyahWords == ["فصل", "لربك", "وانحر"])
+        #expect(state.completedWordCount == 1)
+        #expect(state.nextExpectedRef == "108:2:2")
+        #expect(state.lastTranscript == "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّ")
+    }
+
     @Test func repeatedPreLockBufferingDoesNotHideLastMeaningfulDiagnostic() {
         let noMatchEvent = RecitationEvent(
             type: .locating,

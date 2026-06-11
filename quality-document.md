@@ -4,10 +4,10 @@ Rolling quality record for the Tarteel real-time Quran recitation MVP.
 
 ## Current Baseline
 
-- Date: 2026-06-09
+- Date: 2026-06-11
 - Overall status: good enough MVP, not production-grade
 - Initial quality score: 8.0 / 10
-- Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build/run evidence, WebSocket simulator verification, RunPod real-ASR proof paths, documented R2/GitHub bootstrap flow, and source/build/runtime-smoke/scored-fixture/app-replay/local-locator/Tanzil-loader/app-bundle/app-binary-replay plus iOS Simulator invalid-output diagnosis, actionable failure UI, shared physical-device replay scheme/build proof, and fresh-install CoreML default wiring for the experimental local CoreML FastConformer path.
+- Basis: deterministic Python suite, compile checks, Swift client tests, iOS simulator build evidence, WebSocket simulator verification, RunPod real-ASR proof paths, documented R2/GitHub bootstrap flow, and source/build/runtime-smoke/scored-fixture/app-replay/local-locator/Tanzil-loader/app-bundle/app-binary-replay plus live mic capture/replay, iOS Simulator invalid-output diagnosis, actionable failure UI, shared physical-device replay scheme/build proof, fresh-install CoreML default wiring, selected-Surah ordered CoreML locator state, selected-Surah noisy initial anchor lock, selected-Surah prefix-span first lock for cumulative basmala starts, selected-Surah sequence-anchor lock for skipped short middle ayahs, selected-Surah ordered-anchor post-lock recovery for omitted next-ayah openings, selected-Surah rolling suffix forward progression, canonical word highlighting, local locator/audio-window diagnostics, and fixed-divisor live chunk cadence for the experimental local CoreML FastConformer path.
 
 The MVP has strong harness discipline and a working real-ASR mobile path, but it still needs longer-session proof, physical-device validation, latency tuning, and more polished ordered-progression guidance.
 
@@ -32,7 +32,7 @@ The MVP has strong harness discipline and a working real-ASR mobile path, but it
 - Latency and chunking are tuned for MVP stability, not final user experience.
 - Ordered-progression guidance exists in backend behavior but still needs polished user-facing copy.
 - Real ASR can hallucinate or clip phrases; canonical ayah display mitigates UI truth, but correction confidence still needs more evidence.
-- The local CoreML FastConformer path now has a scoped Swift locator/session, Tanzil-format local corpus loading when `quran-simple-clean.txt` is bundled or beside local model artifacts, local iPhone/macOS app-build bundling of the ignored full Quran text and WAV replay fixtures when present, scored fixture evidence, an automated `RecitationViewModel` app replay that locks `108001.wav` to `108:1`, macOS app-binary replay logs for `108001.wav`, fresh-install default wiring to CoreML + selected Surah 108, a shared `TarteelPrototypeCoreMLReplay` scheme that is Xcode-visible and buildable for generic `iphoneos`, and explicit `coreml_asr_invalid_output` diagnostics for nonfinite model tensors. The iOS Simulator replay path is diagnosed as producing nonfinite Float16 `logprobs` for this ANE-specialized model, and the app now surfaces that as an actionable "use physical Apple Neural Engine device" message instead of a silent blank-ASR state. iOS acceptance must still use physical Apple Neural Engine hardware. Longer Surah 4 remains too noisy, and real microphone accuracy, thermal behavior, full-corpus performance, production packaging, and Swift preprocessing correctness still need more proof.
+- The local CoreML FastConformer path now has selected-Surah ordered Swift locator/session behavior, a selected-Surah-only ordered anchor fallback for noisy initial locks verified against the latest Surah 35:1 macOS log transcript, a selected-Surah prefix-span first lock verified against the Surah 80 cumulative basmala/ayah 1/ayah 2 macOS log transcript, a selected-Surah sequence-anchor first lock verified against the latest Surah 80 ASR-skipped-80:2 macOS log transcript, selected-Surah ordered-anchor post-lock recovery verified against the Surah 59 omitted-next-ayah-opening log shape, rolling suffix forward progression verified against the next Surah 80 post-lock lag pattern, Tanzil-format local corpus loading when `quran-simple-clean.txt` is bundled or beside local model artifacts, local iPhone/macOS app-build bundling of the ignored full Quran text and WAV replay fixtures when present, scored fixture evidence, an automated `RecitationViewModel` app replay that locks `108001.wav` to `108:1`, macOS app-binary replay logs for `108001.wav`, opt-in live mic capture to mono 16 kHz PCM16 WAV for deterministic replay, fresh-install default wiring to CoreML + selected Surah 108, canonical Tanzil word highlighting, 2,560-sample app chunk coalescing over the fixed 17,920-sample model window, local corpus/locator diagnostics, per-model-window `coreml_asr_audio_window` RMS/peak/near-silence/VAD diagnostics, a shared `TarteelPrototypeCoreMLReplay` scheme that is Xcode-visible and buildable for generic `iphoneos`, and explicit `coreml_asr_invalid_output` diagnostics for nonfinite model tensors. The iOS Simulator replay path is diagnosed as producing nonfinite Float16 `logprobs` for this ANE-specialized model, and the app now surfaces that as an actionable "use physical Apple Neural Engine device" message instead of a silent blank-ASR state. iOS acceptance must still use physical Apple Neural Engine hardware. Fresh live microphone capture/replay confirmation of the Surah 35 anchor lock, Surah 80 prefix/sequence/forward progression, Surah 59 ayah-boundary recovery, longer Surah 4, full-corpus performance, thermal behavior, production packaging, and Swift preprocessing correctness still need more proof.
 - Production privacy design for live microphone audio is not complete.
 - Modal and RunPod serverless paths are locally contract-verified but still need live endpoint timing, cost, idle shutdown, and real-ASR replay proof.
 
@@ -48,6 +48,67 @@ Before treating a future slice as passing:
 - Keep `feature_list.json` with at most one `in_progress` feature.
 
 ## Quality Log
+
+### 2026-06-11 - CoreML Live Mic Capture And Replay
+
+- Added an opt-in Apple app launch argument, `--tarteel-capture-audio <wav>`, that wraps the normal iPhone/macOS microphone streamer and writes the exact mono 16 kHz PCM16 chunks forwarded into the local CoreML route.
+- Captured WAVs can be replayed with the existing `--tarteel-replay-audio <wav> --tarteel-replay-surah <id>` path, so a poor manual run can be compared against deterministic replay through the same app queue, FluidAudio VAD metadata path, CoreML model, and local locator.
+- Unified logs now include `coreml_asr_audio_capture_started`, `coreml_asr_audio_capture_finished`, and `coreml_asr_audio_capture_failed`.
+- Verification passed through red/green Swift capture tests, Python app-project guardrails, full Swift client core, full Python, compileall, JSON/active-feature/diff checks, macOS xcodebuild, and iOS Simulator `TarteelPrototypeCoreMLReplay` build.
+- Release posture: much better reproducibility for live CoreML failures, but not an ASR quality fix by itself. The next quality gate is a captured manual mic WAV plus replay comparison.
+
+### 2026-06-10 - Selected-Surah CoreML Ayah-Boundary Recovery
+
+- Diagnosed the latest Surah 59 macOS manual run: audio-window metrics and VAD observations were healthy, the locator locked/progressed through `59:1`, then failed at the `59:2` boundary because ASR omitted `هو الذي` and resumed at `أخرج الذين ك`.
+- Added selected-Surah-only ordered-anchor post-lock recovery scoped to the current expected ayah and next ayah. It accepts ordered content-word anchors and one trailing prefix token, then emits `coreml_local_ordered_anchor_progress`.
+- Red/green Swift coverage proves the exact log-shaped cumulative transcript now recovers to `59:2` with `start_ref=59:2:3`, `next_expected_ref=59:2:6`, and `consumed_words=3`.
+- Verification passed through focused CoreML tests, full Swift client core, focused Apple/CoreML Python guardrails, full Python suite, compileall, macOS xcodebuild, and the shared iOS simulator scheme build.
+- Release posture: better locator resilience for missing next-ayah openings, but live ASR quality is still noisy and needs fresh manual mic proof before user-facing quality claims.
+
+### 2026-06-10 - CoreML Audio-Window Diagnostics
+
+- Diagnosed the latest poor macOS manual-test performance as ASR-starvation after initial lock, not obvious VAD gating: VAD is metadata-only on the local CoreML route, while the logs showed steady app chunks and model windows.
+- Added `coreml_asr_audio_window` logs for each fixed 17,920-sample CoreML window, reporting RMS, peak, near-silence ratio, mean VAD probability, speech-active VAD chunk count, VAD observation count, and latest VAD event.
+- Red/green coverage proves the metrics math and source log marker exist; focused CoreML tests, focused Apple/CoreML Python guardrails, full Swift client core, full Python suite, compileall, macOS build, and iOS simulator build passed.
+- Release posture: observability is improved, but ASR quality is not fixed yet. The next manual run should use these logs to decide between mic/preprocessing/gain work and decoder/model tuning.
+
+### 2026-06-10 - Selected-Surah CoreML Sequence Anchor Lock
+
+- Diagnosed the latest failed Surah 80 macOS manual test from unified logs: the app had the right scope, full Tanzil, and chunk cadence, but ASR skipped the short `80:2` phrase and the local locator stayed at `coreml_local_no_match`.
+- Added selected-Surah-only bounded sequence-anchor locking across multiple ayahs, plus clitic-tolerant anchor similarity for dropped leading `و` / `ف`.
+- Red/green Swift coverage proves the exact 18:48 transcript now locks to displayed `80:1` with `coreml_local_sequence_anchor_lock` and advances internally to `80:4:1`.
+- Verification passed through focused CoreML tests, full Swift client core, macOS xcodebuild, and the shared iOS simulator scheme build.
+- Release posture: better first-lock resilience for noisy Surah 80 live runs, but manual mic proof is still needed and further quality work should bias toward ASR/preprocessing if anchors are absent.
+
+### 2026-06-10 - Selected-Surah CoreML Forward Progression
+
+- Fixed the next Surah 80 manual-test failure mode after the prefix lock: cumulative ASR retained stale `80:2` text and mutated word boundaries, so post-lock matching could lag on `80:2` instead of tracking the later recitation.
+- Prefix locks now carry an internal next-expected override when the lock evidence spans multiple ayahs, and selected-Surah post-lock matching now has a bounded rolling-suffix forward fallback.
+- Red/green Swift coverage proves the noisy Surah 80 cumulative transcript now advances from displayed `80:1` to `80:8` with `coreml_local_ordered_forward_progress`, instead of re-consuming stale `80:2`.
+- Verification passed through focused CoreML tests, full Swift client core, focused Apple/CoreML Python guardrails, full Python with 297 tests, compileall, JSON/active-feature/diff/debug-grep checks, macOS xcodebuild, and the shared iOS simulator scheme build.
+- Release posture: better selected-Surah live tracking for short ayah sequences, but still requires fresh microphone evidence to judge UX quality and per-ayah timing.
+
+### 2026-06-10 - Selected-Surah CoreML Prefix Lock
+
+- Corrected the Surah 80 diagnosis: the pinned and bundled Tanzil rows include basmala; the bad lock came from single-ayah pre-lock scoring against cumulative ASR that spanned `80:1` into short `80:2`.
+- Added selected-Surah-only prefix-span first-lock matching. It can override a later short ayah when bounded ordered LCS coverage shows the cumulative transcript began earlier in the selected surah.
+- Red/green Swift coverage now proves the exact Surah 80 manual transcript no longer locks at `80:2`; it locks at `80:1` with `coreml_local_prefix_lock`, and a clean later start at `80:8` remains at `80:8`.
+- Release posture: fixes one concrete first-lock failure, but true multi-ayah span event modeling and noisy post-lock rolling progression remain follow-up work.
+
+### 2026-06-10 - Selected-Surah CoreML Anchor Lock
+
+- Added a selected-Surah-only ordered anchor fallback for initial CoreML local locks, after logs showed Surah 35:1 contained many canonical anchors but still emitted `coreml_local_no_match`.
+- Red/green Swift coverage now proves noisy preface-only text stays unlocked while the full noisy Surah 35:1 transcript locks with `coreml_local_anchor_lock` and advances `nextExpectedRef` to `35:2:1`.
+- Verification passed through focused CoreML tests, full Swift client core, focused Apple/CoreML Python guardrails, macOS xcodebuild, and the shared iOS simulator scheme build.
+- Release posture: improves first-lock robustness for selected-Surah live testing, but still requires a fresh macOS microphone run and physical iPhone proof before calling CoreML live recitation quality acceptable.
+
+### 2026-06-10 - Selected-Surah CoreML Locator And Chunk Cadence
+
+- Reworked the local CoreML selected-Surah path so post-lock matching advances in order across the current and next ayah instead of broad relocking. The state now carries `nextExpectedRef`, canonical ayah words, and completed word count for highlighted Tanzil display.
+- Kept the model contract fixed at 17,920 samples per inference window and coalesced app mic/replay callbacks to 2,560 samples, giving seven clean app chunks per CoreML window.
+- Diagnostics now log loaded Quran corpus source/count plus local locator events with ayah refs, start/next refs, consumed words, chunk sequence, reason, and confidence.
+- Verification passed red/green through focused Swift CoreML/state tests, focused Apple Python guardrails, full Swift client core, full Python with 297 tests, compileall, JSON validation, macOS xcodebuild, and the current shared iOS scheme build.
+- Release posture: stronger local developer UX and auditability, but still not a product ASR-quality claim. Manual macOS microphone evidence and physical iPhone CoreML evidence remain the next gates.
 
 ### 2026-06-09 - CoreML Default App Fallback
 

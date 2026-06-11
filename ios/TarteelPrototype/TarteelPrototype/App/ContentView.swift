@@ -41,12 +41,15 @@ struct ContentView: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.82)
 
-                    Text(viewModel.state.detail)
-                        .font(.title3)
-                        .foregroundStyle(AppTheme.muted)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(4)
-                        .minimumScaleFactor(0.8)
+                    Group {
+                        if !viewModel.state.currentAyahWords.isEmpty {
+                            CanonicalAyahWordsView(
+                                words: viewModel.state.currentAyahWords,
+                                completedWordCount: viewModel.state.completedWordCount
+                            )
+                        }
+                    }
+                    .frame(minHeight: 64)
 
                     RecitationControlPanel(viewModel: viewModel)
                 }
@@ -95,6 +98,28 @@ private struct QuranLogoMark: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .accessibilityLabel("Quran logo")
+    }
+}
+
+private struct CanonicalAyahWordsView: View {
+    let words: [String]
+    let completedWordCount: Int
+
+    var body: some View {
+        highlightedText
+            .font(.title3)
+            .multilineTextAlignment(.center)
+            .lineLimit(5)
+            .minimumScaleFactor(0.78)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var highlightedText: Text {
+        words.enumerated().reduce(Text("")) { partial, item in
+            let separator = item.offset == words.count - 1 ? "" : " "
+            let color = item.offset < completedWordCount ? AppTheme.teal : AppTheme.muted
+            return partial + Text(item.element + separator).foregroundColor(color)
+        }
     }
 }
 

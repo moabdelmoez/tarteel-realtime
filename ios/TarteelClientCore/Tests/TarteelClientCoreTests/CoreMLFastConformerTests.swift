@@ -39,6 +39,26 @@ struct CoreMLFastConformerTests {
         #expect(!CoreMLFastConformerDiagnostics.shouldLogBuffering(chunkSequence: 11))
     }
 
+    @Test func audioWindowMetricsSummarizeSignalLevelAndVAD() {
+        let metrics = CoreMLFastConformerAudioWindowMetrics(
+            samples: [0.0, 0.5, -0.5, 0.01],
+            voiceActivity: [
+                VoiceActivityPayload(probability: 0.2, isSpeechActive: false, event: .speechEnd),
+                VoiceActivityPayload(probability: 0.8, isSpeechActive: true, event: .speechStart),
+            ],
+            nearSilenceThreshold: 0.02
+        )
+
+        #expect(metrics.sampleCount == 4)
+        #expect(abs(metrics.rmsAmplitude - 0.3536) < 0.0001)
+        #expect(metrics.peakAmplitude == 0.5)
+        #expect(metrics.nearSilenceRatio == 0.5)
+        #expect(metrics.voiceActivityObservationCount == 2)
+        #expect(metrics.voiceActivitySpeechChunkCount == 1)
+        #expect(metrics.voiceActivityLatestEvent == .speechStart)
+        #expect(metrics.voiceActivityMeanProbability == 0.5)
+    }
+
     @Test func fixtureWAVLoaderDownmixesStereoPCM16() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -171,6 +191,90 @@ struct CoreMLFastConformerTests {
         #expect(emittedSampleRates == [16_000, 16_000, 16_000])
     }
 
+    @Test func localAudioCaptureWritesReplayableMono16KWAV() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("captured.wav")
+        let capture = try LocalAudioCaptureWriter(outputURL: url)
+
+        try capture.append(pcm16: pcm16Data([1_000, -1_000]), sampleRateHz: 16_000)
+        try capture.append(pcm16: pcm16Data([2_000, -2_000, 3_000]), sampleRateHz: 16_000)
+        try capture.finish()
+
+        let audio = try CoreMLFastConformerFixtureAudio.loadWAV(from: url)
+        #expect(audio.sampleRateHz == 16_000)
+        #expect(audio.sourceChannelCount == 1)
+        #expect(audio.frameCount == 5)
+        #expect(samples(fromPCM16: audio.pcm16Mono) == [1_000, -1_000, 2_000, -2_000, 3_000])
+    }
+
+    @Test func capturingAudioStreamerRecordsExactlyForwardedChunksForReplay() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("captured-replay.wav")
+        let source = ManualAudioStreamer()
+        let capture = try LocalAudioCaptureWriter(outputURL: url)
+        let streamer = CapturingAudioStreamer(upstream: source, captureWriter: capture)
+        nonisolated(unsafe) var forwardedSamples: [[Int16]] = []
+
+        try await streamer.start { data, _ in
+            forwardedSamples.append(samples(fromPCM16: data))
+        }
+        await source.emit(pcm: pcm16Data([1, 2]), sampleRate: 16_000)
+        await source.emit(pcm: pcm16Data([3, 4]), sampleRate: 16_000)
+        streamer.stop()
+
+        let replay = try LocalAudioReplayStreamer(audioURL: url, chunkSampleCount: 2)
+        nonisolated(unsafe) var replayedSamples: [[Int16]] = []
+        try await replay.start { data, _ in
+            replayedSamples.append(samples(fromPCM16: data))
+        }
+        await replay.replay()
+
+        #expect(forwardedSamples == [[1, 2], [3, 4]])
+        #expect(replayedSamples == [[1, 2], [3, 4]])
+    }
+
+    @Test func capturingAudioStreamerReopensOutputURLForEachRecording() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("captured-repeat.wav")
+        let source = ManualAudioStreamer()
+        let streamer = CapturingAudioStreamer(upstream: source, outputURL: url)
+
+        try await streamer.start { _, _ in }
+        await source.emit(pcm: pcm16Data([1, 2]), sampleRate: 16_000)
+        streamer.stop()
+
+        try await streamer.start { _, _ in }
+        await source.emit(pcm: pcm16Data([3, 4]), sampleRate: 16_000)
+        streamer.stop()
+
+        let audio = try CoreMLFastConformerFixtureAudio.loadWAV(from: url)
+        #expect(samples(fromPCM16: audio.pcm16Mono) == [3, 4])
+    }
+
+    @Test func localAudioCaptureConfigurationParsesDeveloperLaunchArgument() throws {
+        let configuration = try #require(LocalAudioCaptureConfiguration(arguments: [
+            "/Applications/TarteelPrototypeMac.app/TarteelPrototypeMac",
+            "--tarteel-capture-audio",
+            "~/Desktop/surah59-live.wav",
+        ]))
+
+        #expect(configuration.outputArgument == "~/Desktop/surah59-live.wav")
+        #expect(configuration.outputURL.path.hasSuffix("/Desktop/surah59-live.wav"))
+    }
+
+    @Test func liveChunkCadenceDividesCoreMLModelWindow() {
+        #expect(CoreMLFastConformerFixtureRunner.modelChunkSamples == 112 * 160)
+        #expect(CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples == 2_560)
+        #expect(CoreMLFastConformerFixtureRunner.modelChunkSamples % CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples == 0)
+        #expect(CoreMLFastConformerFixtureRunner.modelChunkSamples / CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples == 7)
+    }
+
     @Test func localAudioReplayConfigurationParsesFixtureLaunchArguments() throws {
         let configuration = try #require(LocalAudioReplayConfiguration(arguments: [
             "/Applications/TarteelPrototype.app/TarteelPrototype",
@@ -219,10 +323,265 @@ struct CoreMLFastConformerTests {
         #expect(locked.startRef == "108:1:2")
         #expect(locked.candidateRefs == ["108:1"])
         #expect(progressed.type == .progress)
-        #expect(progressed.reason == "coreml_local_tolerant_match")
+        #expect(progressed.reason == "coreml_local_ordered_progress")
         #expect(progressed.ayahRef == "108:2")
         #expect(progressed.ayahText == "فصل لربك وانحر")
         #expect(progressed.nextExpectedRef == "108:3:1")
+    }
+
+    @Test func localQuranSessionProgressesOneExpectedWordAfterLock() {
+        var session = CoreMLLocalQuranSession(scope: .selectedSurah(id: 108))
+
+        _ = session.event(
+            transcript: "أَعْطَيْنَاكَ الْكَوْثَرَ",
+            confidence: 0.91,
+            chunkSequence: 7
+        )
+        let progressed = session.event(
+            transcript: "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّ",
+            confidence: 0.88,
+            chunkSequence: 15
+        )
+
+        #expect(progressed.type == .progress)
+        #expect(progressed.reason == "coreml_local_ordered_progress")
+        #expect(progressed.ayahRef == "108:2")
+        #expect(progressed.ayahText == "فصل لربك وانحر")
+        #expect(progressed.startRef == "108:2:1")
+        #expect(progressed.nextExpectedRef == "108:2:2")
+        #expect(progressed.consumedWords == 1)
+    }
+
+    @Test func localQuranSessionLocksNoisySelectedSurahTranscript() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        99|1|إذا زلزلت الأرض زلزالها
+        99|2|وأخرجت الأرض أثقالها
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 99),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "وُلَّهِ ن الشَّيْطَ الرَّجِيمَِّ إِذَا زُلْزلَتِ الْأَرْض زلَْالَهَا",
+            confidence: 0.70,
+            chunkSequence: 131
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.ayahRef == "99:1")
+        #expect(locked.ayahText == "إذا زلزلت الأرض زلزالها")
+        #expect(locked.nextExpectedRef == "99:2:1")
+    }
+
+    @Test func localQuranSessionDoesNotLockOnNoisySurah35PrefaceAlone() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        35|1|الحمد لله فاطر السماوات والأرض جاعل الملائكة رسلا أولي أجنحة مثنى وثلاث ورباع يزيد في الخلق ما يشاء إن الله على كل شيء قدير
+        35|2|ما يفتح الله للناس من رحمة فلا ممسك لها وما يمسك فلا مرسل له من بعده وهو العزيز الحكيم
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 35),
+            corpus: corpus
+        )
+
+        let event = session.event(
+            transcript: "أَوْ لَيْنَ شَيْطًا رَِّيمٌحم",
+            confidence: 0.74,
+            chunkSequence: 41
+        )
+
+        #expect(event.type == .locating)
+        #expect(event.ayahRef == nil)
+        #expect(event.reason == "coreml_local_no_match")
+    }
+
+    @Test func localQuranSessionAnchorLocksNoisySurah35LiveTranscript() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        35|1|الحمد لله فاطر السماوات والأرض جاعل الملائكة رسلا أولي أجنحة مثنى وثلاث ورباع يزيد في الخلق ما يشاء إن الله على كل شيء قدير
+        35|2|ما يفتح الله للناس من رحمة فلا ممسك لها وما يمسك فلا مرسل له من بعده وهو العزيز الحكيم
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 35),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "أَوْ لَيْنَ شَيْطًا رَِّيمٌحم الْحَمْد لِ فَأاطِرِ سَّمَاوَاتِ وَالْأَرْضِ ج الْمَلَائِكَةِ رسَل أَجْمَحُلَاِيد الْخَلْقِ مَا يَشَاءُ إِنَّ اللَّهَ عَلَى كُلِّ شَيْء قَدِيرٌ",
+            confidence: 0.83,
+            chunkSequence: 167
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_anchor_lock")
+        #expect(locked.ayahRef == "35:1")
+        #expect(locked.ayahText == "الحمد لله فاطر السماوات والأرض جاعل الملائكة رسلا أولي أجنحة مثنى وثلاث ورباع يزيد في الخلق ما يشاء إن الله على كل شيء قدير")
+        #expect(locked.startRef == "35:1:1")
+        #expect(locked.nextExpectedRef == "35:2:1")
+    }
+
+    @Test func localQuranSessionPrefersEarlierSurah80BasmalaAnchorOverShortLaterAyah() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "عٌ للَّ شَُسْلِ الرَّحْمَنَّحِيم عَب وَوَلَّى أَزاءَهُ الْأَعْْمََى",
+            confidence: 0.7485,
+            chunkSequence: 62
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_prefix_lock")
+        #expect(locked.ayahRef == "80:1")
+        #expect(locked.ayahText == "بسم الله الرحمن الرحيم عبس وتولى")
+        #expect(locked.nextExpectedRef == "80:3:1")
+    }
+
+    @Test func localQuranSessionPrefixLockDoesNotDragCleanLaterSurah80StartBackward() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "وأما من جاءك يسعى",
+            confidence: 0.92,
+            chunkSequence: 104
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.ayahRef == "80:8")
+        #expect(locked.startRef == "80:8:1")
+        #expect(locked.nextExpectedRef == "80:9:1")
+    }
+
+    @Test func localQuranSessionLocksSurah80WhenASRSkipsShortMiddleAyah() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "َّ عَدَسََبَ تَوَلَّىَهُ يُدْرِيكَ لَعَلَّهُ يَزَّىكَّ",
+            confidence: 0.8446,
+            chunkSequence: 111
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_sequence_anchor_lock")
+        #expect(locked.ayahRef == "80:1")
+        #expect(locked.startRef == "80:1:1")
+        #expect(locked.nextExpectedRef == "80:4:1")
+    }
+
+    @Test func localQuranSessionProgressesForwardThroughNoisySurah80CumulativeTranscript() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "عٌ للَّ شَُسْلِ الرَّحْمَنَّحِيم عَب وَوَلَّى أَزاءَهُ الْأَعْْمََى",
+            confidence: 0.7485,
+            chunkSequence: 62
+        )
+        let progressed = session.event(
+            transcript: "عٌ للَّ شَُسْلِ الرَّحْمَنَّحِيم عَب وَوَلَّى أَزاءَهُ الْأَعْْمََىًَاَعَلَُّونََّكََّاءَكَ يَسْعَى",
+            confidence: 0.6656,
+            chunkSequence: 104
+        )
+
+        #expect(locked.ayahRef == "80:1")
+        #expect(progressed.type == .progress)
+        #expect(progressed.reason == "coreml_local_ordered_forward_progress")
+        #expect(progressed.ayahRef == "80:8")
+        #expect(progressed.startRef == "80:8:1")
+        #expect(progressed.nextExpectedRef == "80:9:1")
+    }
+
+    @Test func localQuranSessionRecoversLoggedSurah59NextAyahWhenASROmitsOpeningWords() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        59|1|بسم الله الرحمن الرحيم سبح لله ما في السماوات وما في الأرض وهو العزيز الحكيم
+        59|2|هو الذي أخرج الذين كفروا من أهل الكتاب من ديارهم لأول الحشر ما ظننتم أن يخرجوا وظنوا أنهم مانعتهم حصونهم من الله فأتاهم الله من حيث لم يحتسبوا وقذف في قلوبهم الرعب يخربون بيوتهم بأيديهم وأيدي المؤمنين فاعتبروا يا أولي الأبصار
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 59),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "بِسْمِ اللَّهِ",
+            confidence: 0.8494,
+            chunkSequence: 13
+        )
+        _ = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحِيبّحَ لِلَّهِ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ وَهُوَ الْعَزِيزُ الْحَك",
+            confidence: 0.8795,
+            chunkSequence: 55
+        )
+        _ = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحِيبّحَ لِلَّهِ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ وَهُوَ الْعَزِيزُ الْحَكِيمُ",
+            confidence: 0.9652,
+            chunkSequence: 62
+        )
+        let recovered = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحِيبّحَ لِلَّهِ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ وَهُوَ الْعَزِيزُ الْحَكِيمُ أَخْرَجَ الَّذِينَ ك",
+            confidence: 0.7621,
+            chunkSequence: 76
+        )
+
+        #expect(locked.ayahRef == "59:1")
+        #expect(recovered.type == .progress)
+        #expect(recovered.reason == "coreml_local_ordered_anchor_progress")
+        #expect(recovered.ayahRef == "59:2")
+        #expect(recovered.startRef == "59:2:3")
+        #expect(recovered.nextExpectedRef == "59:2:6")
+        #expect(recovered.consumedWords == 3)
     }
 
     @Test func localQuranSessionCanUseTanzilCorpusBeyondMVPAyahs() throws {
@@ -309,6 +668,23 @@ struct CoreMLFastConformerTests {
     }
 }
 
+private final class ManualAudioStreamer: AudioStreaming, @unchecked Sendable {
+    private var onChunk: (@Sendable (Data, Int) -> Void)?
+
+    func start(onChunk: @escaping @Sendable (Data, Int) -> Void) async throws {
+        self.onChunk = onChunk
+    }
+
+    func stop() {
+        onChunk = nil
+    }
+
+    func emit(pcm: Data, sampleRate: Int) async {
+        onChunk?(pcm, sampleRate)
+        await Task.yield()
+    }
+}
+
 @MainActor
 private final class CapturingSocket: BackendSocketing {
     private(set) var connectedURL: URL?
@@ -329,6 +705,14 @@ private final class CapturingSocket: BackendSocketing {
     }
 
     func disconnect() {}
+}
+
+private func pcm16Data(_ samples: [Int16]) -> Data {
+    var data = Data()
+    for sample in samples {
+        data.appendInt16LE(sample)
+    }
+    return data
 }
 
 private func makePCM16WAV(sampleRateHz: Int, channelCount: Int, frames: [[Int16]]) -> Data {
