@@ -327,6 +327,39 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(socket.sentPayloads.map(\.voiceActivity), expectedVoiceActivity)
     }
 
+    func testCoreMLAudioChunksCarryLocalLatencyTraceOnly() async throws {
+        let coreMLSocket = FakeSocket()
+        let coreMLAudio = FakeAudioStreamer()
+        let coreMLViewModel = RecitationViewModel(
+            socketClient: coreMLSocket,
+            audioStreamer: coreMLAudio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(backendPreset: .coreML)
+        )
+
+        await coreMLViewModel.startRecording()
+        await coreMLAudio.emit(pcm: Data([0x01, 0x02]), sampleRate: 16_000)
+
+        let trace = try XCTUnwrap(coreMLSocket.sentPayloads.first?.latencyTrace)
+        XCTAssertNotNil(trace.queuedForSendAtNanoseconds)
+        XCTAssertNotNil(trace.voiceActivityFinishedAtNanoseconds)
+        XCTAssertNil(trace.sendFinishedAtNanoseconds)
+
+        let remoteSocket = FakeSocket()
+        let remoteAudio = FakeAudioStreamer()
+        let remoteViewModel = RecitationViewModel(
+            socketClient: remoteSocket,
+            audioStreamer: remoteAudio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore()
+        )
+
+        await remoteViewModel.startRecording()
+        await remoteAudio.emit(pcm: Data([0x03, 0x04]), sampleRate: 16_000)
+
+        XCTAssertNil(remoteSocket.sentPayloads.first?.latencyTrace)
+    }
+
     func testAudioChunksWaitForPreviousVADAndKeepCaptureOrderSequences() async throws {
         let socket = FakeSocket()
         let audio = FakeAudioStreamer()

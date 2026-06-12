@@ -13,15 +13,194 @@
   - `uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran`
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio --manifest /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/fixtures/local_audio_manifest.json`
-- Current transport direction: WebSocket `/ws/recitation` remains the only backend transport. The Apple prototypes also have an experimental local `CoreML` preset that routes `coreml://fastconformer-quran-streaming` to a bundled streaming FastConformer model instead of opening a WebSocket; fresh iPhone/macOS app installs now default to CoreML + selected Surah 108 for local testing, while existing saved preferences still override that fallback. The local route maps scoped CoreML transcripts through a Swift Quran locator/session that can load Tanzil-format `quran-simple-clean.txt` from an app bundle or local model directory when present, and otherwise falls back to the MVP Surah 108 / local Surah 4 corpus. In selected-Surah mode, the Swift local session now locks inside the selected Surah, uses a conservative ordered-anchor fallback for noisy long-ayah first locks such as the Surah 35:1 live log, uses a selected-Surah prefix-span lock to prevent short later ayahs from stealing cumulative multi-ayah starts such as the Surah 80 basmala+80:1+80:2 log, uses selected-Surah sequence-anchor locking when ASR skips short middle ayahs but keeps ordered anchors across the Surah sequence, advances span locks internally past already-heard ayahs, then progresses by ordered current/next-ayah matching, bounded current/next ordered-anchor recovery when ASR omits opening words of the next ayah, plus a bounded selected-Surah rolling suffix fallback for noisy short-ayah sequences. The CoreML route now also logs `coreml_asr_audio_window` per 17,920-sample inference window with RMS, peak, near-silence ratio, and aggregated VAD observations, so manual microphone failures can distinguish weak captured audio from healthy audio with poor decoding. The iPhone and macOS app builds now conditionally copy the ignored local `data/tanzil/quran-simple-clean.txt` and ignored local WAV replay fixtures into their app bundles when they exist, without committing the text or audio. Local opt-in app launch paths now support both fixture replay (`--tarteel-replay-audio <wav> --tarteel-replay-surah <id>`) and live mic capture (`--tarteel-capture-audio <wav>`). Capture writes the exact mono 16 kHz PCM16 chunks forwarded to the CoreML route, and the captured WAV can be replayed through the same queued audio, real FluidAudio VAD metadata processing, real CoreML inference, and local locator; the launched macOS app produced the expected cumulative CoreML transcript for `108001.wav`, while the iOS Simulator launch path now surfaces an actionable invalid-output message for this ANE-specialized model instead of looking stuck.
+- Current transport direction: WebSocket `/ws/recitation` remains the only backend transport. The Apple prototypes also have an experimental local `CoreML` preset that routes `coreml://fastconformer-quran-streaming` to a bundled streaming FastConformer model instead of opening a WebSocket; fresh iPhone/macOS app installs now default to CoreML + selected Surah 108 for local testing, while existing saved preferences still override that fallback. The local route maps scoped CoreML transcripts through a Swift Quran locator/session that can load Tanzil-format `quran-simple-clean.txt` from an app bundle or local model directory when present, and otherwise falls back to the MVP Surah 108 / local Surah 4 corpus. In selected-Surah mode, the Swift local session now locks inside the selected Surah, ignores istiaza/startup preface and optional basmala when the selected Tanzil first ayah begins with basmala, blocks broad startup jumps while an opening preface is unresolved, bounds startup fuzzy/anchor matching to cheap exact spans and the opening ayahs instead of scanning the whole selected Surah, can recover sparse first-ayah content after istiaza, uses a conservative ordered-anchor fallback for noisy long-ayah first locks such as the Surah 35:1 live log, uses a selected-Surah prefix-span lock to prevent short later ayahs from stealing cumulative multi-ayah starts such as the Surah 80 basmala+80:1+80:2 log, and uses selected-Surah sequence-anchor locking when ASR skips short middle ayahs but keeps ordered anchors across the Surah sequence. Initial prefix/sequence locks now display the start ayah and do not secretly advance `nextExpectedRef` past intermediate ayahs. After lock, selected-Surah progression is gated on the current expected ayah: the matcher searches that current ayah only, rejects later-ayah evidence until the current ayah is complete, keeps no-match candidate refs current-only, uses bounded ordered-anchor recovery on the current expected ayah when ASR omits opening words, uses a selected-Surah short-ayah suffix fallback when ASR misses the opening word of a very short expected ayah such as Surah 18:3, and caps post-lock transcript-word matching so long cumulative ASR cannot create multi-second locator backlog. The CoreML route logs `coreml_asr_audio_window` per 17,920-sample inference window with RMS, peak, near-silence ratio, and aggregated VAD observations; can reset only the transcriber acoustic cache plus CTC previous-token state on VAD speech boundaries or post-transcript active-speech blank streaks, logging `coreml_asr_stream_reset` without resetting the local Quran session; and now emits explicit latency diagnostics across queue/VAD/send, model-window age/inference, transcriber/locator, and UI reducer checkpoints via `coreml_asr_latency_client_chunk`, `coreml_asr_latency_model_window`, `coreml_asr_latency_engine`, and `coreml_asr_latency_ui_event`. The iPhone and macOS app builds now conditionally copy the ignored local `data/tanzil/quran-simple-clean.txt` and ignored local WAV replay fixtures into their app bundles when they exist, without committing the text or audio. Local opt-in app launch paths now support both fixture replay (`--tarteel-replay-audio <wav> --tarteel-replay-surah <id>`) and live mic capture (`--tarteel-capture-audio <wav>`). Capture writes the exact mono 16 kHz PCM16 chunks forwarded to the CoreML route, and the captured WAV can be replayed through the same queued audio, real FluidAudio VAD metadata processing, real CoreML inference, and local locator; the launched macOS app produced the expected cumulative CoreML transcript for `108001.wav`, while the iOS Simulator launch path now surfaces an actionable invalid-output message for this ANE-specialized model instead of looking stuck.
 - Current iOS UI direction: the home screen is a light recitation surface. Backend preset, Custom provider, custom WebSocket URL, memory-only bearer token, and CoreML preset selection live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
 - Current macOS UI direction: the app uses a unified native toolbar with recording, Surah search, and Settings; supports Space/Command-R recording, Command-F search focus, URL/text backend drop-in, diagnostic drag-out, first-run onboarding, curated/collapsed recitation timeline, adaptive system colors/materials, Settings validation feedback, first-launch Custom/Modal defaults, Keychain persistence for selected Custom provider bearer tokens, and the experimental local CoreML FastConformer preset with unified-log ASR, locator, and audio-window diagnostics.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
-- Current highest-priority unfinished feature: manually verify the CoreML preset end to end in the macOS/iOS app with microphone audio, real FluidAudio VAD runtime, selected-Surah anchor lock, ordered locator state, canonical word highlighting, and visible locked/progress UI. For macOS, launch with `--tarteel-capture-audio <wav>`, stop recording to finalize the WAV, then replay that same file with `--tarteel-replay-audio <wav> --tarteel-replay-surah <id>` and compare `coreml_asr_audio_capture_*`, `coreml_asr_audio_window`, `coreml_asr_blank`, `coreml_asr_transcript`, and `coreml_asr_locator_event`. For iOS, use the shared `TarteelPrototypeCoreMLReplay` scheme on a physical Apple Neural Engine device first, then tune CoreML decoding and decide whether to port more of the Python locator/session engine or continue hardening the selected-Surah Swift matcher.
+- Current highest-priority unfinished feature: manually verify the CoreML preset end to end in the macOS/iOS app with microphone audio, real FluidAudio VAD runtime, bounded selected-Surah startup lock, current-ayah-gated locator state, canonical word highlighting, and visible locked/progress UI. For macOS, launch with `--tarteel-capture-audio <wav>`, stop recording to finalize the WAV, then replay that same file with `--tarteel-replay-audio <wav> --tarteel-replay-surah <id>` and compare `coreml_asr_audio_capture_*`, `coreml_asr_audio_window`, `coreml_asr_blank`, `coreml_asr_transcript`, `coreml_asr_locator_event`, and `coreml_asr_latency_*`; a good run should avoid multi-second `locator_ms` backlog, avoid `107:2 -> 107:3` before `107:2` completes, avoid hidden sequence-anchor jumps such as initial `49:1 -> 49:4:1`, and show current-only candidate refs after lock. For iOS, use the shared `TarteelPrototypeCoreMLReplay` scheme on a physical Apple Neural Engine device first, then tune CoreML decoding and decide whether to port more of the Python locator/session engine or continue hardening the selected-Surah Swift matcher.
 - Current blocker: none for local source/build verification. No physical iPhone is currently connected, so physical-device CoreML ASR behavior, manual CoreML microphone quality, memory/thermal behavior, full-corpus matching performance, and production privacy posture remain unverified.
 - Package/dependency rule: use `uv` for dependency management and Python execution; do not use `pip` directly
 
 ## Session Log
+
+### Session 117
+
+- Date: 2026-06-12
+- Goal: Enforce selected-Surah CoreML ayah-completion gating so post-lock progression cannot skip an incomplete current ayah, and remove hidden multi-ayah advancement from initial prefix/sequence locks.
+- Diagnosis:
+  - The latest strong manual run still exposed a locator-policy issue: after locking `107:1`, partial `107:2` evidence could be followed by clear `107:3` evidence and the app would progress to `107:3` before `107:2` was complete.
+  - A minimized Surah 49 sequence-anchor case showed the same hidden-advance class at startup: a lock displayed `49:1` while internally setting `nextExpectedRef` to `49:4:1`.
+  - Long cumulative post-lock transcripts could still waste locator time when a no-match kept feeding the matcher too much stale ASR text.
+- Completed:
+  - Selected-Surah post-lock ordered matching now searches only the current expected ayah and rejects later-ayah evidence until that ayah is complete.
+  - Initial prefix-span and sequence-anchor locks now display the start ayah and set `nextExpectedRef` after that displayed ayah, not after the whole approximate span.
+  - Removed the hidden `nextExpectedRefOverride` path from local CoreML match results.
+  - Bounded post-lock transcript words for ordered/tolerant/anchor/forward matching while preserving recent-suffix recovery for very short expected ayahs such as Surah 18:3.
+  - Added red/green Swift regressions for Surah 107 current-ayah completion, recovery after rejecting premature next-ayah evidence, Surah 49 sequence-anchor no hidden jump, and a long noisy post-lock latency guard.
+- Verification run:
+  - Red first: focused Swift coverage failed with partial `107:2` advancing to `107:3`, and sequence-anchor startup setting `nextExpectedRef` to `49:4:1`.
+  - Focused new regressions passed, and `CoreMLFastConformerTests` passed with 49 Swift Testing tests.
+  - Full Swift client core passed with 34 XCTest tests plus 80 Swift Testing tests.
+  - Focused Apple/CoreML Python guardrails passed with 26 tests.
+  - The first parallel macOS/iOS app build hit a FluidAudio/Darwin `.pcm` module-cache race, then sequential fresh-derived-data reruns passed for macOS `TarteelPrototypeMac` and iOS Simulator `TarteelPrototypeCoreMLReplay`.
+  - Full deterministic Python suite passed with 298 tests; compileall passed; `feature_list.json` validation passed; `git diff --check` passed; source/test debug-marker grep returned no matches.
+- Known risk or unresolved issue:
+  - The app now avoids fabricated progress; if ASR misses the tail of the current expected ayah, the locator should stay locating/guiding until enough current-ayah evidence appears.
+  - Raw CoreML ASR transcript spacing remains noisy and should remain diagnostic-only while canonical Tanzil words drive the main UI.
+- Next best step: retest selected Surahs 107, 49, and 87 from the rebuilt macOS app. A good run should show no `107:2 -> 107:3` before `107:2` completes, no initial `49:4:1` hidden jump, current-only post-lock candidate refs, and low `locator_ms`.
+
+### Session 116
+
+- Date: 2026-06-11
+- Goal: Strongly bound selected-Surah CoreML locator startup and post-lock progression so noisy cumulative ASR cannot create multi-second locator backlog or jump past the next ayah.
+- Diagnosis:
+  - Latest latency logs showed CoreML inference itself was fast, but selected-Surah no-lock matching could spend multiple seconds in `locator_ms` because it fuzzily scanned the whole selected Surah against a long cumulative transcript.
+  - Latest Surah 107 logs showed a separate correctness failure: after locking `107:1`, noisy cumulative evidence jumped to `107:3` / later refs instead of staying on the current or next expected ayah.
+  - Older Surah 80 rolling-forward behavior had the same class of risk: a later clear suffix could skip many short ayahs and make the UI look confident while the user had not cleanly progressed there.
+- Completed:
+  - Replaced selected-Surah pre-lock broad fuzzy matching with a bounded initial path: prefix-span over the opening ayahs, exact span matching for clean later starts, then capped fuzzy/sequence-anchor/anchor checks over small opening windows.
+  - Capped post-lock forward lookahead to current + next ayah and kept no-match candidate refs inside that narrow ordered window.
+  - Preserved clean exact late-start support while preventing noisy approximate late relocks from stealing startup or post-lock progression.
+  - Added red/green regressions for Surah 107 no later-ayah jump, Surah 80 no skip beyond next ayah, and a synthetic long Surah 18 startup that previously took about 24 seconds and now stays below the 250 ms guard.
+- Verification run:
+  - Red first: focused CoreML tests failed with Surah 80 jumping to `80:8`, Surah 107 jumping to `107:3`, and long selected-Surah startup taking about 24.3 seconds.
+  - Focused long-startup regression passed after bounding the opening path, with the individual test around 0.096 seconds.
+  - `CoreMLFastConformerTests` passed with 45 Swift Testing tests.
+  - Full Swift client core passed with 34 XCTest tests plus 76 Swift Testing tests.
+  - Focused Apple/CoreML Python guardrails passed with 26 tests.
+  - macOS `TarteelPrototypeMac` build passed.
+  - The first sandboxed iOS Simulator build failed because CoreSimulator/SwiftPM caches were outside the workspace; the cache-aware rerun for `TarteelPrototypeCoreMLReplay` passed.
+  - Full deterministic Python suite passed with 298 tests; `uv run python -m compileall -q tarteel_realtime tests` passed; `feature_list.json` validation passed; `git diff --check` passed; source/test `[DEBUG-` grep returned no matches.
+- Known risk or unresolved issue:
+  - This is a locator correctness and latency fix, not a decoder-quality fix. If ASR emits only blanks or very weak text, the app will correctly stay locating/guiding rather than fabricate progress.
+  - Manual macOS retest is still needed to confirm live logs show low `locator_ms`, current/next candidate refs, and no broad skip after ayah 1.
+- Next best step: launch the rebuilt macOS app, select a failing Surah such as 107 or 18, recite with capture enabled, then inspect `coreml_asr_latency_engine` and `coreml_asr_locator_event` for bounded locator timing and ordered current/next progression.
+
+### Session 115
+
+- Date: 2026-06-11
+- Goal: Add explicit latency telemetry for the CoreML Apple route so slow visible transcript updates can be attributed to queueing, VAD, model-window buffering, inference, locator, or UI reduction.
+- Diagnosis:
+  - Latest macOS logs showed the ASR is windowed streaming, not frozen: the first raw transcript arrived only after a full 17,920-sample model window and an earlier blank/insufficient window, while inference itself stayed around tens of milliseconds.
+  - The missing evidence was a correlated timing trace across app chunk receipt, VAD processing, CoreML window readiness, inference, locator, and UI state reduction.
+- Completed:
+  - Added `AudioChunkLatencyTrace`, carried only for `.coreML` app chunks and intentionally omitted from `AudioChunkPayload` JSON encoding so remote WebSocket contracts remain unchanged.
+  - Added `coreml_asr_latency_client_chunk` with queue, VAD, send, and total client timing plus VAD metadata.
+  - Added `coreml_asr_latency_model_window` with trace count, fixed `model_audio_ms=1120.0`, first/last contributing live-chunk age, last-VAD-to-window timing, inference time, emitted token count, and emitted-text flag.
+  - Added `coreml_asr_latency_engine` for transcriber/locator/total engine timing and `coreml_asr_latency_ui_event` for reducer timing and state-changed status.
+  - Added Swift regressions for latency duration math, local-only payload encoding, model-window trace summarization, and CoreML-only view-model trace wiring; added Python source guardrails for the new log markers.
+- Verification run:
+  - Red first: `swift test --filter CoreMLFastConformerTests` failed because `AudioChunkLatencyTrace`, `latencyTrace`, and `CoreMLFastConformerWindowLatencySummary` did not exist.
+  - Focused CoreML tests passed with 43 Swift Testing tests.
+  - Focused view-model latency trace test passed.
+  - Full Swift client core passed with 34 XCTest tests plus 74 Swift Testing tests.
+  - `uv run python -B -m unittest tests.test_macos_app_project -v` passed with 16 tests.
+  - macOS `TarteelPrototypeMac` build passed.
+  - The stale `TarteelPrototype` iOS scheme command failed because the current project exposes `TarteelPrototypeCoreMLReplay`; `xcodebuild -list` confirmed available schemes, then the `TarteelPrototypeCoreMLReplay` iOS Simulator build passed after rerunning outside the sandbox with `/private/tmp` module caches because CoreSimulator/SwiftPM cache writes were denied in the sandbox.
+  - Structured checks passed: `feature_list.json` validation, active-feature sanity `[]`, `git diff --check`, source/test-only `[DEBUG-` grep with no matches, full Python suite with 298 tests, and `uv run python -m compileall -q tarteel_realtime tests`.
+- Known risk or unresolved issue:
+  - This is observability only. It does not reduce the fixed 1,120 ms model-window contract or improve noisy/blank ASR output.
+  - Manual macOS retest is needed to capture real `coreml_asr_latency_*` logs alongside transcript/locator logs and decide whether the perceived delay is dominated by initial silence/windowing, VAD queueing, locator lock thresholds, or UI update timing.
+- Next best step: launch the rebuilt macOS app, recite a selected Surah, then inspect `coreml_asr_latency_client_chunk`, `coreml_asr_latency_model_window`, `coreml_asr_latency_engine`, and `coreml_asr_latency_ui_event` together with `coreml_asr_audio_window`, `coreml_asr_transcript`, and `coreml_asr_locator_event`.
+
+### Session 114
+
+- Date: 2026-06-11
+- Goal: Recover from live CoreML ASR output starvation after repeated ayahs or longer speech, without resetting Quran locator progress.
+- Diagnosis:
+  - Latest Surah 104 macOS logs reproduced the user's "ASR hangs after the first couple ayahs" report as output starvation, not an inference freeze. CoreML inference windows continued every roughly 1.3 seconds with normal inference times, but the model emitted repeated high-confidence blanks despite speech-level RMS and VAD-active windows.
+  - VAD was not the direct gate: blank windows included healthy audio such as `rms=0.02482` / `vad_speech_chunks=7` and `rms=0.03580` / `vad_speech_chunks=7`.
+  - The most likely cause is streaming acoustic/CTC state drift after pauses/repeats in a long live stream. Resetting the whole session would lose selected-Surah locator state, so the fix needs to reset only model-stream state.
+- Completed:
+  - Added `CoreMLFastConformerStreamResetPolicy` with two reset triggers: VAD `speech_end` followed by the next active speech window (`speech_boundary`), and three consecutive active-speech blank windows after the stream has already emitted transcript text (`blank_streak`).
+  - Added `resetStreamingState()` in the CoreML transcriber to clear only `previousTokenID`, `cacheLastChannel`, `cacheLastTime`, and `cacheLastChannelLength`; it preserves buffered audio, cumulative transcript, processed window count, and the local Quran session/locator state.
+  - Added `coreml_asr_stream_reset` diagnostics with reason, chunk/window, blank streak, RMS, VAD speech chunks, and VAD probability.
+  - Added Swift regressions proving speech-boundary reset, post-transcript blank-streak reset, no reset for quiet blanks, and no blank-streak reset during startup blanks before the first transcript. The startup guard was added after the first full Swift run caught that aggressive blank-streak resets could break the known-good `108001.wav` app replay.
+- Verification run:
+  - Red first: reset-policy tests failed because `CoreMLFastConformerStreamResetPolicy` did not exist.
+  - Red refinement: startup active-speech blank test failed before adding the "first transcript emitted" latch.
+  - Focused reset-policy tests passed with 4 Swift Testing tests.
+  - `CoreMLFastConformerTests` passed with 39 Swift Testing tests.
+  - The real `RecitationViewModel` CoreML replay for `108001.wav` passed after the startup-blank guard.
+  - Full Swift client core passed with 33 XCTest tests plus 71 Swift Testing tests.
+  - Focused Apple/CoreML Python guardrails passed with 26 tests.
+  - macOS `TarteelPrototypeMac` build passed.
+  - iOS Simulator `TarteelPrototypeCoreMLReplay` build passed.
+  - Structured checks passed: `feature_list.json` validation, active-feature sanity `[]`, `git diff --check`, source-only `[DEBUG-` grep with no matches, full Python suite with 298 tests, and `uv run python -m compileall -q tarteel_realtime tests`.
+- Known risk or unresolved issue:
+  - This is a targeted stream-recovery heuristic for the observed live starvation shape. It does not improve the model's base transcript quality, and a fresh manual macOS test must confirm `coreml_asr_stream_reset` appears when the long/repeated recitation would previously starve.
+- Next best step: retest the failing selected Surah from the rebuilt macOS app. Inspect `coreml_asr_audio_window`, `coreml_asr_blank`, `coreml_asr_stream_reset`, `coreml_asr_transcript`, and `coreml_asr_locator_event`; a valuable run should show a stream reset after a speech boundary or active blank streak, followed by renewed transcript/locator progress without losing the current `next_expected_ref`.
+
+### Session 113
+
+- Date: 2026-06-11
+- Goal: Prevent selected-Surah CoreML from falsely jumping to later ayahs after istiaza when basmala is missed and first-ayah ASR evidence is sparse.
+- Diagnosis:
+  - Latest Surah 18 macOS logs loaded full Tanzil and showed healthy speech windows. The ASR recognized istiaza, then likely missed basmala in blank windows, then emitted noisy partial ayah 1 fragments.
+  - Before this fix, the unresolved istiaza prefix fell through into broad selected-Surah sequence-anchor matching. In the full manual log it falsely locked deep in Surah 18 at low confidence, and the minimized regression reproduced the same class as a later-ayah false lock.
+  - Once falsely locked later, post-lock ordered progression was doomed because the app expected later ayah refs instead of `18:1` / `18:2`.
+- Completed:
+  - Added an opening-preface guard: when a selected Surah first ayah starts with basmala and the transcript contains istiaza but no valid basmala/content lock yet, the session stays locating with `coreml_local_opening_preface_no_match` instead of allowing broad pre-lock anchor jumps.
+  - Added `coreml_local_opening_sparse_content_lock` for sparse ordered first-ayah evidence after istiaza. It strips the opening preface, searches only the first ayah content after basmala, and requires at least three strong ordered anchors with a conservative mean score.
+  - Added a red/green Swift regression from the latest Surah 18 startup shape: sparse partial evidence remains locating, while the later noisy ayah 1 phrase locks to `18:1` and advances to `next_expected_ref=18:2:1`.
+- Verification run:
+  - Red first: the new Surah 18 regression falsely locked to a later ayah via `coreml_local_sequence_anchor_lock`.
+  - Focused regression passed after the fix.
+  - Focused istiaza tests passed with 4 Swift Testing tests.
+  - `CoreMLFastConformerTests` passed with 36 Swift Testing tests.
+  - Full Swift client core passed with 33 XCTest tests plus 67 Swift Testing tests.
+  - Focused Apple/CoreML Python guardrails passed with 26 tests.
+  - macOS `TarteelPrototypeMac` build passed.
+  - iOS Simulator `TarteelPrototypeCoreMLReplay` build passed.
+- Known risk or unresolved issue:
+  - This prevents bad locator jumps and recovers when ASR emits enough first-ayah anchors. It does not make the model hear missing basmala or improve blank/noisy CoreML decoding.
+- Next best step: retest selected Surah 18 from the rebuilt macOS app. If ASR emits istiaza but not enough opening evidence, expect `coreml_local_opening_preface_no_match` instead of a later ayah jump; if it later emits enough sparse ayah 1 anchors, expect `coreml_local_opening_sparse_content_lock ayah_ref=18:1 next_expected_ref=18:2:1`.
+
+### Session 112
+
+- Date: 2026-06-11
+- Goal: Fix selected-Surah CoreML first lock when the reciter starts with istiaza and optional basmala before the first ayah content.
+- Diagnosis:
+  - Latest Surah 18 macOS logs loaded full Tanzil (`ayahs=6236`) and received healthy speech windows, but pre-lock locator events stayed `coreml_local_no_match`.
+  - ASR emitted istiaza-shaped startup noise plus partial basmala such as `الرَّحْمَن الرَّحِيم`, then noisy opening content; because no first lock occurred, ordered progression never activated.
+  - The old initial matcher treated the whole cumulative startup text as an ayah candidate. It could miss basmala after an istiaza prefix, or lock content at the wrong word because `بالله` from istiaza resembled the basmala word `الله`.
+- Completed:
+  - Added selected-Surah opening-preface handling for Tanzil-style first ayahs that start with `بسم الله الرحمن الرحيم`.
+  - `coreml_local_opening_basmala_lock` can ignore istiaza/noisy startup and lock on a contiguous basmala suffix, then set `nextExpectedRef` to the first post-basmala word.
+  - `coreml_local_opening_content_lock` can ignore istiaza when basmala is skipped and lock directly at the post-basmala first-ayah content.
+  - Added guardrail coverage proving istiaza alone stays `locating/coreml_local_no_match`.
+- Verification run:
+  - Red first: `swift test --filter CoreMLFastConformerTests/localQuranSessionIgnoresIstiaza` failed because the basmala case stayed `coreml_local_no_match` and the skipped-basmala case locked at the wrong start ref via broad anchor lock.
+  - Focused istiaza regressions passed after the fix.
+  - Full `CoreMLFastConformerTests` passed with 35 Swift Testing tests.
+  - Full Swift client core passed with 33 XCTest tests plus 66 Swift Testing tests.
+  - macOS `TarteelPrototypeMac` build passed.
+  - iOS Simulator `TarteelPrototypeCoreMLReplay` build passed.
+- Known risk or unresolved issue:
+  - This fixes startup lock semantics. It does not improve ASR transcript quality after the first lock if the model continues emitting noisy/blanks for the actual ayah content.
+- Next best step: retest selected Surah 18 from the rebuilt macOS app. If the user starts with istiaza then basmala, expect `reason=coreml_local_opening_basmala_lock ayah_ref=18:1 next_expected_ref=18:1:5`; if basmala is skipped, expect `reason=coreml_local_opening_content_lock ayah_ref=18:1 start_ref=18:1:5`.
+
+### Session 111
+
+- Date: 2026-06-11
+- Goal: Recover selected-Surah CoreML progression when a very short expected ayah is heard only as a suffix, starting with the failed Surah 18:3 manual log.
+- Diagnosis:
+  - The Surah 18 macOS log loaded full Tanzil and progressed correctly through `18:1` and `18:2`, reaching `next_expected_ref=18:3:1`.
+  - Canonical `18:3` is only `ماكثين فيه أبدا`. The ASR did not emit `ماكثين`; it emitted weak suffix fragments like `فِي` and `أبٍ`, then blanks/noisy fragments before ayah 4.
+  - The previous matcher correctly rejected `فِي` alone, but it had no selected-Surah-only recovery for a two-word suffix of a very short expected ayah.
+- Completed:
+  - Added `coreml_local_short_ayah_suffix_progress`, scoped to selected-Surah post-lock progression.
+  - The fallback only considers current/next ordered ayahs with at most four canonical words, requires at least a two-word suffix, and allows short prefix-shaped suffix words such as `في` for `فيه` and `أب` for `أبدا`.
+  - Added a red/green Swift regression from the Surah 18 log shape: after progressing to `nextExpectedRef == 18:3:1`, `فِي` alone remains `coreml_local_ordered_no_match`, while `فِي أبٍ` progresses to `ayah_ref=18:3`, `start_ref=18:3:2`, `next_expected_ref=18:4:1`.
+- Verification run:
+  - Red first: `swift test --filter CoreMLFastConformerTests/localQuranSessionRecoversShortSurah18AyahFromSuffixWhenOpeningWordIsMissing` failed with `type=locating`, `reason=coreml_local_ordered_no_match`, and no refs.
+  - After the fix, the focused regression passed.
+  - Focused CoreML tests passed with 32 Swift Testing tests.
+  - Focused Apple/CoreML Python guardrails passed with 26 tests.
+- Known risk or unresolved issue:
+  - This helps the locator recover when ASR emits enough suffix evidence for a short ayah. It does not fix the underlying blank/noisy CoreML decoding seen during the later Surah 18:4 attempts.
+  - The Surah 18 run was not launched with `--tarteel-capture-audio`, so there is no deterministic captured-WAV replay yet for that exact mic audio.
+- Next best step: rebuild/open the macOS app, retest selected Surah 18 from ayah 1, and confirm logs show `reason=coreml_local_short_ayah_suffix_progress ayah_ref=18:3 start_ref=18:3:2 next_expected_ref=18:4:1` when ASR emits the `في أب` suffix.
 
 ### Session 110
 

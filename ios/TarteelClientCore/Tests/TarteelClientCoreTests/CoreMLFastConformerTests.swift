@@ -39,6 +39,61 @@ struct CoreMLFastConformerTests {
         #expect(!CoreMLFastConformerDiagnostics.shouldLogBuffering(chunkSequence: 11))
     }
 
+    @Test func audioChunkLatencyTraceComputesQueueVADAndSendDurations() {
+        let received = UInt64(1_000_000_000)
+        let trace = AudioChunkLatencyTrace(receivedAtNanoseconds: received)
+            .markingQueuedForSend(atNanoseconds: received + 25_000_000)
+            .markingVoiceActivityFinished(atNanoseconds: received + 65_000_000)
+            .markingSendFinished(atNanoseconds: received + 95_000_000)
+
+        #expect(trace.queueDelayMilliseconds == 25.0)
+        #expect(trace.voiceActivityMilliseconds == 40.0)
+        #expect(trace.sendMilliseconds == 30.0)
+        #expect(trace.totalMilliseconds == 95.0)
+        #expect(AudioChunkLatencyTrace.format(milliseconds: trace.totalMilliseconds) == "95.0")
+        #expect(AudioChunkLatencyTrace.format(milliseconds: nil) == "none")
+    }
+
+    @Test func audioChunkPayloadDoesNotEncodeLocalLatencyTrace() throws {
+        let payload = AudioChunkPayload(
+            sequenceNumber: 7,
+            pcm: Data([1, 2, 3]),
+            sampleRateHz: 16_000,
+            voiceActivity: VoiceActivityPayload(
+                probability: 0.75,
+                isSpeechActive: true,
+                event: .speechStart
+            ),
+            latencyTrace: AudioChunkLatencyTrace(receivedAtNanoseconds: 1_000)
+        )
+
+        let encoded = try JSONEncoder().encode(payload)
+        let json = String(decoding: encoded, as: UTF8.self)
+
+        #expect(json.contains("sequence_number"))
+        #expect(json.contains("voice_activity"))
+        #expect(!json.contains("latency"))
+        #expect(!json.contains("receivedAtNanoseconds"))
+    }
+
+    @Test func modelWindowLatencySummaryUsesOldestAndNewestChunkTrace() {
+        let base = UInt64(1_000_000_000)
+        let oldest = AudioChunkLatencyTrace(receivedAtNanoseconds: base)
+            .markingVoiceActivityFinished(atNanoseconds: base + 10_000_000)
+        let newest = AudioChunkLatencyTrace(receivedAtNanoseconds: base + 960_000_000)
+            .markingVoiceActivityFinished(atNanoseconds: base + 980_000_000)
+
+        let summary = CoreMLFastConformerWindowLatencySummary(
+            traces: [oldest, newest],
+            windowReadyAtNanoseconds: base + 1_120_000_000
+        )
+
+        #expect(summary.firstChunkToWindowMilliseconds == 1_120.0)
+        #expect(summary.lastChunkToWindowMilliseconds == 160.0)
+        #expect(summary.lastVADToWindowMilliseconds == 140.0)
+        #expect(summary.traceCount == 2)
+    }
+
     @Test func audioWindowMetricsSummarizeSignalLevelAndVAD() {
         let metrics = CoreMLFastConformerAudioWindowMetrics(
             samples: [0.0, 0.5, -0.5, 0.01],
@@ -57,6 +112,88 @@ struct CoreMLFastConformerTests {
         #expect(metrics.voiceActivitySpeechChunkCount == 1)
         #expect(metrics.voiceActivityLatestEvent == .speechStart)
         #expect(metrics.voiceActivityMeanProbability == 0.5)
+    }
+
+    @Test func streamResetPolicyResetsAtSpeechBoundaryBeforeNextActiveWindow() {
+        var policy = CoreMLFastConformerStreamResetPolicy()
+
+        let ended = policy.resetReasonBeforePrediction(
+            metrics: activeSpeechMetrics(event: .speechEnd)
+        )
+        let restarted = policy.resetReasonBeforePrediction(
+            metrics: activeSpeechMetrics(event: .speechStart)
+        )
+        let steady = policy.resetReasonBeforePrediction(
+            metrics: activeSpeechMetrics(event: nil)
+        )
+
+        #expect(ended == nil)
+        #expect(restarted == .speechBoundary)
+        #expect(steady == nil)
+    }
+
+    @Test func streamResetPolicyResetsAfterActiveSpeechBlankStreak() {
+        var policy = CoreMLFastConformerStreamResetPolicy()
+
+        let transcript = policy.resetReasonAfterPrediction(
+            metrics: activeSpeechMetrics(event: nil),
+            emittedTokenCount: 3,
+            transcript: "إنا"
+        )
+        let first = policy.resetReasonAfterPrediction(
+            metrics: activeSpeechMetrics(event: nil),
+            emittedTokenCount: 0,
+            transcript: ""
+        )
+        let second = policy.resetReasonAfterPrediction(
+            metrics: activeSpeechMetrics(event: nil),
+            emittedTokenCount: 0,
+            transcript: ""
+        )
+        let third = policy.resetReasonAfterPrediction(
+            metrics: activeSpeechMetrics(event: nil),
+            emittedTokenCount: 0,
+            transcript: ""
+        )
+        let afterReset = policy.resetReasonAfterPrediction(
+            metrics: activeSpeechMetrics(event: nil),
+            emittedTokenCount: 0,
+            transcript: ""
+        )
+
+        #expect(transcript == nil)
+        #expect(first == nil)
+        #expect(second == nil)
+        #expect(third == .blankStreak)
+        #expect(afterReset == nil)
+    }
+
+    @Test func streamResetPolicyDoesNotResetStartupActiveSpeechBlanksBeforeTranscript() {
+        var policy = CoreMLFastConformerStreamResetPolicy()
+
+        let reasons = (0..<4).map { _ in
+            policy.resetReasonAfterPrediction(
+                metrics: activeSpeechMetrics(event: nil),
+                emittedTokenCount: 0,
+                transcript: ""
+            )
+        }
+
+        #expect(reasons.allSatisfy { $0 == nil })
+    }
+
+    @Test func streamResetPolicyDoesNotResetForQuietBlanks() {
+        var policy = CoreMLFastConformerStreamResetPolicy()
+
+        let reasons = (0..<4).map { _ in
+            policy.resetReasonAfterPrediction(
+                metrics: quietMetrics(),
+                emittedTokenCount: 0,
+                transcript: ""
+            )
+        }
+
+        #expect(reasons.allSatisfy { $0 == nil })
     }
 
     @Test func fixtureWAVLoaderDownmixesStereoPCM16() throws {
@@ -395,6 +532,116 @@ struct CoreMLFastConformerTests {
         #expect(event.reason == "coreml_local_no_match")
     }
 
+    @Test func localQuranSessionIgnoresIstiazaBeforeSelectedSurahBasmala() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا ۜ
+        18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "أعوذ بالله من الشيطان الرجيم الرحمن الرحيم",
+            confidence: 0.74,
+            chunkSequence: 34
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_opening_basmala_lock")
+        #expect(locked.ayahRef == "18:1")
+        #expect(locked.startRef == "18:1:3")
+        #expect(locked.nextExpectedRef == "18:1:5")
+        #expect(locked.consumedWords == 2)
+    }
+
+    @Test func localQuranSessionDoesNotLockOnIstiazaAlone() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا ۜ
+        18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let event = session.event(
+            transcript: "أعوذ بالله من الشيطان الرجيم",
+            confidence: 0.82,
+            chunkSequence: 20
+        )
+
+        #expect(event.type == .locating)
+        #expect(event.ayahRef == nil)
+        #expect(event.reason == "coreml_local_opening_preface_no_match")
+    }
+
+    @Test func localQuranSessionIgnoresIstiazaWhenBasmalaIsSkipped() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا ۜ
+        18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "أعوذ بالله من الشيطان الرجيم الحمد لله الذي أنزل",
+            confidence: 0.79,
+            chunkSequence: 48
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_opening_content_lock")
+        #expect(locked.ayahRef == "18:1")
+        #expect(locked.startRef == "18:1:5")
+        #expect(locked.nextExpectedRef == "18:1:9")
+        #expect(locked.consumedWords == 4)
+    }
+
+    @Test func localQuranSessionDoesNotJumpDeepAfterIstiazaStartupNoise() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا ۜ
+        18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا
+        18|3|ماكثين فيه أبدا
+        18|4|وينذر الذين قالوا اتخذ الله ولدا
+        18|43|ولم تكن له فئة ينصرونه من دون الله وما كان منتصرا
+        18|44|هنالك الولاية لله الحق ۚ هو خير ثوابا وخير عقبا
+        18|45|واضرب لهم مثل الحياة الدنيا كماء أنزلناه من السماء فاختلط به نبات الأرض فأصبح هشيما تذروه الرياح ۗ وكان الله على كل شيء مقتدرا
+        18|46|المال والبنون زينة الحياة الدنيا ۖ والباقيات الصالحات خير عند ربك ثوابا وخير أملا
+        18|47|ويوم نسير الجبال وترى الأرض بارزة وحشرناهم فلم نغادر منهم أحدا
+        18|48|وعرضوا على ربك صفا لقد جئتمونا كما خلقناكم أول مرة ۚ بل زعمتم ألن نجعل لكم موعدا
+        18|49|ووضع الكتاب فترى المجرمين مشفقين مما فيه ويقولون يا ويلتنا مال هذا الكتاب لا يغادر صغيرة ولا كبيرة إلا أحصاها ۚ ووجدوا ما عملوا حاضرا ۗ ولا يظلم ربك أحدا
+        18|50|وإذ قلنا للملائكة اسجدوا لآدم فسجدوا إلا إبليس كان من الجن ففسق عن أمر ربه ۗ أفتتخذونه وذريته أولياء من دوني وهم لكم عدو ۚ بئس للظالمين بدلا
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let sparseOpening = session.event(
+            transcript: "أَعُوذُ بِاللَّهِ الشَيْطَان الرَّجِيمِزَلَ عَلَى عد الْكتَابَ وَيد",
+            confidence: 0.27,
+            chunkSequence: 104
+        )
+        let recoveredOpening = session.event(
+            transcript: "أَعُوذُ بِاللَّهِ الشَيْطَان الرَّجِيمِزَلَ عَلَى عد الْكتَابَ وَيدلَهُ عِوَجًا",
+            confidence: 0.37,
+            chunkSequence: 111
+        )
+
+        #expect(sparseOpening.type == .locating)
+        #expect(sparseOpening.ayahRef == nil)
+        #expect(sparseOpening.reason == "coreml_local_opening_preface_no_match")
+        #expect(recoveredOpening.type == .locked)
+        #expect(recoveredOpening.reason == "coreml_local_opening_sparse_content_lock")
+        #expect(recoveredOpening.ayahRef == "18:1")
+        #expect(recoveredOpening.startRef == "18:1:9")
+        #expect(recoveredOpening.nextExpectedRef == "18:2:1")
+    }
+
     @Test func localQuranSessionAnchorLocksNoisySurah35LiveTranscript() throws {
         let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
         35|1|الحمد لله فاطر السماوات والأرض جاعل الملائكة رسلا أولي أجنحة مثنى وثلاث ورباع يزيد في الخلق ما يشاء إن الله على كل شيء قدير
@@ -446,7 +693,7 @@ struct CoreMLFastConformerTests {
         #expect(locked.reason == "coreml_local_prefix_lock")
         #expect(locked.ayahRef == "80:1")
         #expect(locked.ayahText == "بسم الله الرحمن الرحيم عبس وتولى")
-        #expect(locked.nextExpectedRef == "80:3:1")
+        #expect(locked.nextExpectedRef == "80:2:1")
     }
 
     @Test func localQuranSessionPrefixLockDoesNotDragCleanLaterSurah80StartBackward() throws {
@@ -505,10 +752,10 @@ struct CoreMLFastConformerTests {
         #expect(locked.reason == "coreml_local_sequence_anchor_lock")
         #expect(locked.ayahRef == "80:1")
         #expect(locked.startRef == "80:1:1")
-        #expect(locked.nextExpectedRef == "80:4:1")
+        #expect(locked.nextExpectedRef == "80:2:1")
     }
 
-    @Test func localQuranSessionProgressesForwardThroughNoisySurah80CumulativeTranscript() throws {
+    @Test func localQuranSessionDoesNotSkipBeyondNextAyahThroughNoisySurah80CumulativeTranscript() throws {
         let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
         80|1|بسم الله الرحمن الرحيم عبس وتولى
         80|2|أن جاءه الأعمى
@@ -537,11 +784,215 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.ayahRef == "80:1")
-        #expect(progressed.type == .progress)
-        #expect(progressed.reason == "coreml_local_ordered_forward_progress")
-        #expect(progressed.ayahRef == "80:8")
-        #expect(progressed.startRef == "80:8:1")
-        #expect(progressed.nextExpectedRef == "80:9:1")
+        #expect(progressed.ayahRef != "80:8")
+        #expect(progressed.nextExpectedRef != "80:9:1")
+        if let ayahRef = progressed.ayahRef {
+            #expect(ayahRef == "80:2")
+            #expect(progressed.nextExpectedRef == "80:3:1")
+        } else {
+            #expect(progressed.candidateRefs == ["80:2"])
+        }
+    }
+
+    @Test func localQuranSessionDoesNotJumpFromSurah107OpeningToLaterAyahs() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        107|1|بسم الله الرحمن الرحيم أرأيت الذي يكذب بالدين
+        107|2|فذلك الذي يدع اليتيم
+        107|3|ولا يحض على طعام المسكين
+        107|4|فويل للمصلين
+        107|5|الذين هم عن صلاتهم ساهون
+        107|6|الذين هم يراءون
+        107|7|ويمنعون الماعون
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 107),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "بِْمِ الرَّحْمََّحِيم أَرَأَيْتَ الَّذِي كَذَِّين",
+            confidence: 0.4721,
+            chunkSequence: 41
+        )
+        let noisyLaterEvidence = session.event(
+            transcript: "بِْمِ الرَّحْمََّحِيم أَرَأَيْتَ الَّذِي كَذَِّينَِلِ يَتِينِ يَقِضُّ عَلَى طَعَامِ الْمِْكِين",
+            confidence: 0.5362,
+            chunkSequence: 76
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.ayahRef == "107:1")
+        #expect(noisyLaterEvidence.ayahRef != "107:3")
+        #expect(noisyLaterEvidence.ayahRef != "107:4")
+        #expect(noisyLaterEvidence.ayahRef != "107:5")
+        #expect(noisyLaterEvidence.nextExpectedRef != "107:4:1")
+        if noisyLaterEvidence.type == .locating {
+            #expect(noisyLaterEvidence.candidateRefs == ["107:1"])
+        }
+    }
+
+    @Test func localQuranSessionRequiresCurrentAyahCompletionBeforeNextAyahProgress() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        107|1|بسم الله الرحمن الرحيم أرأيت الذي يكذب بالدين
+        107|2|فذلك الذي يدع اليتيم
+        107|3|ولا يحض على طعام المسكين
+        107|4|فويل للمصلين
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 107),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ",
+            confidence: 0.92,
+            chunkSequence: 48
+        )
+        let partialAyah2 = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ فَذَلِكَ الَّذِي",
+            confidence: 0.81,
+            chunkSequence: 62
+        )
+        let prematureAyah3 = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ فَذَلِكَ الَّذِي وَلَا يَحُضُّ عَلَى طَعَامِ الْمِسْكِينِ",
+            confidence: 0.84,
+            chunkSequence: 83
+        )
+
+        #expect(locked.ayahRef == "107:1")
+        #expect(locked.nextExpectedRef == "107:2:1")
+        #expect(partialAyah2.type == .progress)
+        #expect(partialAyah2.ayahRef == "107:2")
+        #expect(partialAyah2.nextExpectedRef == "107:2:3")
+        #expect(prematureAyah3.type == .locating)
+        #expect(prematureAyah3.reason == "coreml_local_ordered_no_match")
+        #expect(prematureAyah3.ayahRef == nil)
+        #expect(prematureAyah3.candidateRefs == ["107:2"])
+    }
+
+    @Test func localQuranSessionCanRecoverCurrentAyahAfterRejectingPrematureNextAyah() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        107|1|بسم الله الرحمن الرحيم أرأيت الذي يكذب بالدين
+        107|2|فذلك الذي يدع اليتيم
+        107|3|ولا يحض على طعام المسكين
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 107),
+            corpus: corpus
+        )
+
+        _ = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ",
+            confidence: 0.92,
+            chunkSequence: 48
+        )
+        _ = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ فَذَلِكَ الَّذِي",
+            confidence: 0.81,
+            chunkSequence: 62
+        )
+        _ = session.event(
+            transcript: "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ أَرَأَيْتَ الَّذِي يُكَذِّبُ بِالدِّينِ فَذَلِكَ الَّذِي وَلَا يَحُضُّ عَلَى طَعَامِ الْمِسْكِينِ",
+            confidence: 0.84,
+            chunkSequence: 83
+        )
+        let recoveredAyah2 = session.event(
+            transcript: "فَذَلِكَ الَّذِي يَدُعُّ الْيَتِيمَ",
+            confidence: 0.88,
+            chunkSequence: 97
+        )
+
+        #expect(recoveredAyah2.type == .progress)
+        #expect(recoveredAyah2.ayahRef == "107:2")
+        #expect(recoveredAyah2.startRef == "107:2:3")
+        #expect(recoveredAyah2.nextExpectedRef == "107:3:1")
+    }
+
+    @Test func selectedSurahSequenceAnchorLockDoesNotAdvancePastIntermediateAyahs() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        49|1|بسم الله الرحمن الرحيم يا أيها الذين آمنوا لا تقدموا بين يدي الله ورسوله واتقوا الله إن الله سميع عليم
+        49|2|يا أيها الذين آمنوا لا ترفعوا أصواتكم فوق صوت النبي ولا تجهروا له بالقول كجهر بعضكم لبعض أن تحبط أعمالكم وأنتم لا تشعرون
+        49|3|إن الذين يغضون أصواتهم عند رسول الله أولئك الذين امتحن الله قلوبهم للتقوى لهم مغفرة وأجر عظيم
+        49|4|إن الذين ينادونك من وراء الحجرات أكثرهم لا يعقلون
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 49),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "رَسُولِهِ أَصْوَاتَكُمْ النَّبِيِّ يَغُضُّونَ أَصْوَاتَهُمْ رَسُولِ اللَّهِ",
+            confidence: 0.72,
+            chunkSequence: 55
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_sequence_anchor_lock")
+        #expect(locked.ayahRef == "49:1")
+        #expect(locked.nextExpectedRef == "49:2:1")
+    }
+
+    @Test func selectedSurahPostLockLongNoisyTranscriptStaysOnCurrentAyahQuickly() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        49|1|بسم الله الرحمن الرحيم يا أيها الذين آمنوا لا تقدموا بين يدي الله ورسوله واتقوا الله إن الله سميع عليم
+        49|2|يا أيها الذين آمنوا لا ترفعوا أصواتكم فوق صوت النبي ولا تجهروا له بالقول كجهر بعضكم لبعض أن تحبط أعمالكم وأنتم لا تشعرون
+        49|3|إن الذين يغضون أصواتهم عند رسول الله أولئك الذين امتحن الله قلوبهم للتقوى لهم مغفرة وأجر عظيم
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 49),
+            corpus: corpus
+        )
+        let ayah1 = "بسم الله الرحمن الرحيم يا أيها الذين آمنوا لا تقدموا بين يدي الله ورسوله واتقوا الله إن الله سميع عليم"
+        let locked = session.event(
+            transcript: ayah1,
+            confidence: 0.92,
+            chunkSequence: 55
+        )
+
+        let noisyCumulativeTranscript = Array(repeating: "ضجيج طويل غير مطابق", count: 160)
+            .joined(separator: " ")
+        let startedAt = Date()
+        let event = session.event(
+            transcript: "\(ayah1) \(noisyCumulativeTranscript)",
+            confidence: 0.31,
+            chunkSequence: 349
+        )
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        #expect(locked.ayahRef == "49:1")
+        #expect(locked.nextExpectedRef == "49:2:1")
+        #expect(event.type == .locating)
+        #expect(event.reason == "coreml_local_ordered_no_match")
+        #expect(event.candidateRefs == ["49:2"])
+        #expect(elapsed < 0.250)
+    }
+
+    @Test func selectedSurahInitialLockKeepsLongNoisyStartupOnBoundedPath() throws {
+        var rows = [
+            "18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا",
+            "18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا",
+        ]
+        let longAyah = "قالوا سبحانك لا علم لنا إلا ما علمتنا إنك أنت العليم الحكيم وجعلنا الليل والنهار آيتين فمحونا آية الليل وجعلنا آية النهار مبصرة"
+        for ayahID in 3...260 {
+            rows.append("18|\(ayahID)|\(longAyah) \(ayahID)")
+        }
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: rows.joined(separator: "\n"))
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let startedAt = Date()
+        let event = session.event(
+            transcript: "الرح أَنَادكتَابُونَ وَ يَتَعْلَُونَ عِوَجًاذَبَأًا شَدِيدًا عََّتِهِمْ سَهُونَغَاءُونَهُونَ",
+            confidence: 0.52,
+            chunkSequence: 76
+        )
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        #expect(event.type == .locating)
+        #expect(event.ayahRef == nil)
+        #expect(elapsed < 0.250)
     }
 
     @Test func localQuranSessionRecoversLoggedSurah59NextAyahWhenASROmitsOpeningWords() throws {
@@ -582,6 +1033,53 @@ struct CoreMLFastConformerTests {
         #expect(recovered.startRef == "59:2:3")
         #expect(recovered.nextExpectedRef == "59:2:6")
         #expect(recovered.consumedWords == 3)
+    }
+
+    @Test func localQuranSessionRecoversShortSurah18AyahFromSuffixWhenOpeningWordIsMissing() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        18|1|بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا ۜ
+        18|2|قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا
+        18|3|ماكثين فيه أبدا
+        18|4|وينذر الذين قالوا اتخذ الله ولدا
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 18),
+            corpus: corpus
+        )
+
+        let ayah1 = "بسم الله الرحمن الرحيم الحمد لله الذي أنزل على عبده الكتاب ولم يجعل له عوجا"
+        let ayah2 = "قيما لينذر بأسا شديدا من لدنه ويبشر المؤمنين الذين يعملون الصالحات أن لهم أجرا حسنا"
+        let locked = session.event(
+            transcript: ayah1,
+            confidence: 0.92,
+            chunkSequence: 62
+        )
+        let progressedToAyah2 = session.event(
+            transcript: "\(ayah1) \(ayah2)",
+            confidence: 0.83,
+            chunkSequence: 125
+        )
+        let singleSuffixWord = session.event(
+            transcript: "\(ayah1) \(ayah2) فِي",
+            confidence: 0.52,
+            chunkSequence: 139
+        )
+        let recoveredShortAyah = session.event(
+            transcript: "\(ayah1) \(ayah2) فِي أبٍ",
+            confidence: 0.77,
+            chunkSequence: 146
+        )
+
+        #expect(locked.ayahRef == "18:1")
+        #expect(progressedToAyah2.ayahRef == "18:2")
+        #expect(progressedToAyah2.nextExpectedRef == "18:3:1")
+        #expect(singleSuffixWord.type == .locating)
+        #expect(singleSuffixWord.reason == "coreml_local_ordered_no_match")
+        #expect(recoveredShortAyah.type == .progress)
+        #expect(recoveredShortAyah.reason == "coreml_local_short_ayah_suffix_progress")
+        #expect(recoveredShortAyah.ayahRef == "18:3")
+        #expect(recoveredShortAyah.startRef == "18:3:2")
+        #expect(recoveredShortAyah.nextExpectedRef == "18:4:1")
     }
 
     @Test func localQuranSessionCanUseTanzilCorpusBeyondMVPAyahs() throws {
@@ -765,6 +1263,33 @@ private func localPinnedTanzilCorpusURL() -> URL? {
         $0.appendingPathComponent("data/tanzil/quran-simple-clean.txt")
     }
     return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+}
+
+private func activeSpeechMetrics(event: VoiceActivityEvent?) -> CoreMLFastConformerAudioWindowMetrics {
+    var observations = Array(
+        repeating: VoiceActivityPayload(probability: 0.86, isSpeechActive: true, event: nil),
+        count: 6
+    )
+    observations.append(
+        VoiceActivityPayload(
+            probability: 0.82,
+            isSpeechActive: event != .speechEnd,
+            event: event
+        )
+    )
+    return CoreMLFastConformerAudioWindowMetrics(
+        samples: Array(repeating: 0.025, count: 17_920),
+        voiceActivity: observations
+    )
+}
+
+private func quietMetrics() -> CoreMLFastConformerAudioWindowMetrics {
+    CoreMLFastConformerAudioWindowMetrics(
+        samples: Array(repeating: 0.001, count: 17_920),
+        voiceActivity: [
+            VoiceActivityPayload(probability: 0.05, isSpeechActive: false, event: nil),
+        ]
+    )
 }
 
 private extension Data {

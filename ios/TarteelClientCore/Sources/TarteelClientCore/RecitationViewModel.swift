@@ -346,14 +346,23 @@ public final class RecitationViewModel: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     guard self.isAudioQueueActive(generation: generation) else { return }
+                    let reducerStart = Date()
                     self.recordHistoryItem(for: event)
                     let currentState = self.state
                     let nextState = currentState.applying(event)
+                    let stateChanged = nextState != currentState
                     if nextState != currentState {
                         self.state = nextState
                     }
                     if self.connectionStatus != "Receiving events" {
                         self.connectionStatus = "Receiving events"
+                    }
+                    if self.backendPreset == .coreML {
+                        CoreMLFastConformerDiagnostics.logLatencyUIEvent(
+                            event: event,
+                            reducerMilliseconds: Date().timeIntervalSince(reducerStart) * 1000.0,
+                            stateChanged: stateChanged
+                        )
                     }
                 }
             }
@@ -394,6 +403,9 @@ public final class RecitationViewModel: ObservableObject {
         sequenceNumber += 1
         let previousTask = audioSendTask
         let generation = audioQueueGeneration
+        let latencyTrace = backendPreset == .coreML
+            ? AudioChunkLatencyTrace()
+            : nil
         audioSendTask = Task { [weak self, previousTask] in
             _ = await previousTask?.result
             guard !Task.isCancelled else { return }
@@ -401,7 +413,8 @@ public final class RecitationViewModel: ObservableObject {
                 sequenceNumber: chunkSequence,
                 pcm: pcm,
                 sampleRate: sampleRate,
-                generation: generation
+                generation: generation,
+                latencyTrace: latencyTrace
             )
         }
     }
@@ -410,23 +423,37 @@ public final class RecitationViewModel: ObservableObject {
         sequenceNumber: Int,
         pcm: Data,
         sampleRate: Int,
-        generation: Int
+        generation: Int,
+        latencyTrace: AudioChunkLatencyTrace?
     ) async {
         guard isAudioQueueActive(generation: generation) else { return }
+        var latencyTrace = latencyTrace?.markingQueuedForSend()
         let voiceActivity = await voiceActivityDetector.process(
             pcm: pcm,
             sampleRate: sampleRate
         )
+        latencyTrace = latencyTrace?.markingVoiceActivityFinished()
         guard isAudioQueueActive(generation: generation) else { return }
         let payload = AudioChunkPayload(
             sequenceNumber: sequenceNumber,
             pcm: pcm,
             sampleRateHz: sampleRate,
-            voiceActivity: voiceActivity
+            voiceActivity: voiceActivity,
+            latencyTrace: latencyTrace
         )
 
         do {
             try await socketClient.send(payload)
+            if let finishedTrace = latencyTrace?.markingSendFinished(),
+               backendPreset == .coreML {
+                CoreMLFastConformerDiagnostics.logLatencyClientChunk(
+                    sequenceNumber: sequenceNumber,
+                    trace: finishedTrace,
+                    sampleRateHz: sampleRate,
+                    pcmByteCount: pcm.count,
+                    voiceActivity: voiceActivity
+                )
+            }
         } catch {
             guard isAudioQueueActive(generation: generation) else { return }
             await stopRecording()
