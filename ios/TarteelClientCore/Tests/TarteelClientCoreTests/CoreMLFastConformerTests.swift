@@ -755,6 +755,88 @@ struct CoreMLFastConformerTests {
         #expect(locked.nextExpectedRef == "80:2:1")
     }
 
+    @Test func localQuranSessionLocksFusedPhysicalIPhoneSurah80Opening() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "الرَّحْمَبَسَتَوَلَّى دًاَزَّكَّ",
+            confidence: 0.6958,
+            chunkSequence: 90
+        )
+
+        #expect(locked.type == .locked)
+        #expect(locked.reason == "coreml_local_opening_fused_lock")
+        #expect(locked.ayahRef == "80:1")
+        #expect(locked.startRef == "80:1:1")
+        #expect(locked.nextExpectedRef == "80:2:1")
+    }
+
+    @Test func localQuranSessionRecoversSurah80Ayah4FromDistinctiveFinalWord() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        80|1|بسم الله الرحمن الرحيم عبس وتولى
+        80|2|أن جاءه الأعمى
+        80|3|وما يدريك لعله يزكى
+        80|4|أو يذكر فتنفعه الذكرى
+        80|5|أما من استغنى
+        80|6|فأنت له تصدى
+        80|7|وما عليك ألا يزكى
+        80|8|وأما من جاءك يسعى
+        80|9|وهو يخشى
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 80),
+            corpus: corpus
+        )
+
+        let locked = session.event(
+            transcript: "أَعُو إِلَيْهِ مِن الشَّيْطَ الرَّجِيمِ عَبَسَ وَتَو",
+            confidence: 0.7509,
+            chunkSequence: 69
+        )
+        let ayah2 = session.event(
+            transcript: "أَعُو إِلَيْهِ مِن الشَّيْطَ الرَّجِيمِ عَبَسَ وَتَوَلَّىَى جاءَهُ الْأَ",
+            confidence: 0.5809,
+            chunkSequence: 90
+        )
+        let ayah3 = session.event(
+            transcript: "أَعُو إِلَيْهِ مِن الشَّيْطَ الرَّجِيمِ عَبَسَ وَتَوَلَّىَى جاءَهُ الْأَ يُرِدْرِيكَ لَعَلَّهُ يَزَّك",
+            confidence: 0.7263,
+            chunkSequence: 118
+        )
+        let ayah4 = session.event(
+            transcript: "أَعُو إِلَيْهِ مِن الشَّيْطَ الرَّجِيمِ عَبَسَ وَتَوَلَّىَى جاءَهُ الْأَ يُرِدْرِيكَ لَعَلَّهُ يَزَّكَّى الذِّكْرَى",
+            confidence: 0.9686,
+            chunkSequence: 153
+        )
+
+        #expect(locked.ayahRef == "80:1")
+        #expect(locked.reason == "coreml_local_opening_fused_lock")
+        #expect(ayah2.ayahRef == "80:2")
+        #expect(ayah2.nextExpectedRef == "80:3:1")
+        #expect(ayah3.ayahRef == "80:3")
+        #expect(ayah3.nextExpectedRef == "80:4:1")
+        #expect(ayah4.type == .progress)
+        #expect(ayah4.reason == "coreml_local_short_ayah_final_word_progress")
+        #expect(ayah4.ayahRef == "80:4")
+        #expect(ayah4.startRef == "80:4:4")
+        #expect(ayah4.nextExpectedRef == "80:5:1")
+        #expect(ayah4.consumedWords == 1)
+    }
+
     @Test func localQuranSessionDoesNotSkipBeyondNextAyahThroughNoisySurah80CumulativeTranscript() throws {
         let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
         80|1|بسم الله الرحمن الرحيم عبس وتولى

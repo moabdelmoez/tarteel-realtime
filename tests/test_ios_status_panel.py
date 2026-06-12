@@ -28,11 +28,13 @@ class IOSStatusPanelSourceTests(unittest.TestCase):
         self.assertIn("DebugStatusPanel", source)
         self.assertIn('"Connection"', source)
         self.assertIn('"Last event"', source)
-        self.assertIn('"Ayah"', source)
+        self.assertIn('"Latest ayah"', source)
+        self.assertIn('"Next expected"', source)
         self.assertIn('"Ayah text"', source)
         self.assertNotIn('title: "Transcript"', source)
         self.assertIn("debugLastEventText", source)
         self.assertIn("debugAyahText", source)
+        self.assertIn("debugNextExpectedText", source)
         self.assertIn("debugAyahBodyText", source)
 
     def test_view_model_does_not_republish_identical_realtime_state(self) -> None:

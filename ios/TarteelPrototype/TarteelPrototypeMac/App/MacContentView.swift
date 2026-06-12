@@ -357,7 +357,8 @@ private struct EventHistoryPanel: View {
 
             StatusRow(title: "Connection", value: viewModel.connectionStatus)
             StatusRow(title: "Last event", value: viewModel.state.debugLastEventText)
-            StatusRow(title: "Ayah", value: viewModel.state.debugAyahText)
+            StatusRow(title: "Latest ayah", value: viewModel.state.debugAyahText)
+            StatusRow(title: "Next expected", value: viewModel.state.debugNextExpectedText)
             StatusRow(title: "Ayah text", value: viewModel.state.debugAyahBodyText)
             StatusRow(title: "Transcript", value: viewModel.state.debugTranscriptText)
 

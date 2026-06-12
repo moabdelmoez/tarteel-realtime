@@ -1020,11 +1020,20 @@ struct CoreMLLocalQuranSession: Sendable {
     private static let shortAyahSuffixMinimumWords = 2
     private static let shortAyahSuffixMaximumRecentWords = 4
     private static let shortAyahSuffixMinimumMeanScore = 0.70
+    private static let shortAyahFinalWordExpectedWords = 4
+    private static let shortAyahFinalWordMinimumCharacters = 5
+    private static let shortAyahFinalWordMaximumRecentWords = 6
+    private static let shortAyahFinalWordMinimumScore = 0.86
     private static let openingBasmalaWords = ["بسم", "الله", "الرحمن", "الرحيم"]
     private static let openingBasmalaMinimumWords = 2
     private static let openingBasmalaMinimumMeanScore = 0.72
     private static let openingSparseContentMinimumStrongMatches = 3
     private static let openingSparseContentMinimumMeanScore = 0.74
+    private static let openingFusedMinimumOpeningMatches = 2
+    private static let openingFusedMaximumFirstAyahWords = 8
+    private static let openingFusedMinimumCharacters = 8
+    private static let openingFusedMaximumCharacters = 72
+    private static let openingFusedMinimumMeanScore = 0.72
 
     private let ayahs: [CoreMLLocalQuranAyah]
     private let allowsAnchorLock: Bool
@@ -1100,6 +1109,21 @@ struct CoreMLLocalQuranSession: Sendable {
 
         if currentAyahIndex != nil,
            let match = shortAyahSuffixProgressMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .progress,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex != nil,
+           let match = shortAyahFinalWordProgressMatch(recognizedWords: recognizedWords) {
             currentAyahIndex = match.ayahIndex
             nextExpectedRef = nextExpectedRefValue(after: match)
                 .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
@@ -1283,6 +1307,15 @@ struct CoreMLLocalQuranSession: Sendable {
         if let prefixMatch = selectedSurahPrefixSpanMatch(normalizedTranscript: normalizedTranscript) {
             return lockInitialSelectedSurahMatch(
                 prefixMatch,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence
+            )
+        }
+
+        if let fusedOpeningMatch = selectedSurahOpeningFusedMatch(normalizedTranscript: normalizedTranscript) {
+            return lockInitialSelectedSurahMatch(
+                fusedOpeningMatch,
                 transcript: transcript,
                 confidence: confidence,
                 chunkSequence: chunkSequence
@@ -1585,6 +1618,108 @@ struct CoreMLLocalQuranSession: Sendable {
             }
         }
         return nil
+    }
+
+    private func selectedSurahOpeningFusedMatch(normalizedTranscript: String) -> CoreMLLocalQuranMatch? {
+        guard allowsAnchorLock,
+              let firstAyahIndex = ayahs.indices.first else {
+            return nil
+        }
+
+        let ayah = ayahs[firstAyahIndex]
+        let expectedWords = Self.words(in: ayah.normalizedText)
+        let basmalaPrefixLength = Self.openingBasmalaPrefixLength(in: expectedWords)
+        guard basmalaPrefixLength >= Self.openingBasmalaMinimumWords,
+              basmalaPrefixLength < expectedWords.count,
+              expectedWords.count <= Self.openingFusedMaximumFirstAyahWords else {
+            return nil
+        }
+
+        return Self.openingFusedMatch(
+            ayah: ayah,
+            ayahIndex: firstAyahIndex,
+            expectedWords: expectedWords,
+            contentStartIndex: basmalaPrefixLength,
+            normalizedTranscript: normalizedTranscript
+        )
+    }
+
+    private static func openingFusedMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        expectedWords: [String],
+        contentStartIndex: Int,
+        normalizedTranscript: String
+    ) -> CoreMLLocalQuranMatch? {
+        let actualCharacters = compactCharacters(normalizedTranscript)
+        guard actualCharacters.count >= openingFusedMinimumCharacters,
+              actualCharacters.count <= openingFusedMaximumCharacters,
+              expectedWords.indices.contains(contentStartIndex) else {
+            return nil
+        }
+
+        let matches = expectedWords.indices.compactMap { expectedIndex -> (expectedIndex: Int, score: Double)? in
+            guard let score = openingFusedWordScore(
+                expected: expectedWords[expectedIndex],
+                actualCharacters: actualCharacters,
+                isContentWord: expectedIndex >= contentStartIndex
+            ) else {
+                return nil
+            }
+            return (expectedIndex, score)
+        }
+
+        let openingMatches = matches.filter { $0.expectedIndex < contentStartIndex }
+        let contentMatches = matches.filter { $0.expectedIndex >= contentStartIndex }
+        guard openingMatches.count >= openingFusedMinimumOpeningMatches,
+              let lastContentMatch = contentMatches.max(by: { $0.expectedIndex < $1.expectedIndex }) else {
+            return nil
+        }
+
+        let evidence = openingMatches + contentMatches
+        let meanScore = evidence.reduce(0.0) { $0 + $1.score } / Double(evidence.count)
+        guard meanScore >= openingFusedMinimumMeanScore else {
+            return nil
+        }
+
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: meanScore,
+            reason: "coreml_local_opening_fused_lock",
+            startWordIndex: 1,
+            matchedWords: lastContentMatch.expectedIndex + 1
+        )
+    }
+
+    private static func openingFusedWordScore(
+        expected: String,
+        actualCharacters: [Character],
+        isContentWord: Bool
+    ) -> Double? {
+        let expectedVariants = anchorWordSimilarityVariants(compactCharacters(expected))
+        let minimumPrefixLength = isContentWord ? 3 : 2
+        var best: Double?
+
+        for expectedCharacters in expectedVariants where expectedCharacters.count >= minimumPrefixLength {
+            if containsContiguous(expectedCharacters, in: actualCharacters) {
+                best = max(best ?? 0, 1.0)
+                continue
+            }
+
+            let maximumPrefix = min(expectedCharacters.count, actualCharacters.count)
+            guard maximumPrefix >= minimumPrefixLength else { continue }
+            for prefixLength in stride(from: maximumPrefix, through: minimumPrefixLength, by: -1) {
+                let prefix = Array(expectedCharacters.prefix(prefixLength))
+                guard containsContiguous(prefix, in: actualCharacters) else { continue }
+                let coverage = Double(prefixLength) / Double(expectedCharacters.count)
+                guard coverage >= 0.50 else { continue }
+                best = max(best ?? 0, 0.68 + (0.24 * coverage))
+                break
+            }
+        }
+
+        return best
     }
 
     private static func openingWordScore(expected: String, actual: String) -> Double {
@@ -2362,6 +2497,24 @@ struct CoreMLLocalQuranSession: Sendable {
             .first
     }
 
+    private func shortAyahFinalWordProgressMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        guard let nextExpectedRef,
+              allowsAnchorLock,
+              nextExpectedRef.wordIndex == 1,
+              !recognizedWords.isEmpty,
+              let ayahIndex = ayahs.firstIndex(where: { $0.ref == nextExpectedRef.ayahRef }) else {
+            return nil
+        }
+
+        let candidateWords = recentPostLockWords(from: recognizedWords)
+        guard !candidateWords.isEmpty else { return nil }
+        return Self.shortAyahFinalWordProgressMatch(
+            ayah: ayahs[ayahIndex],
+            ayahIndex: ayahIndex,
+            recognizedWords: candidateWords
+        )
+    }
+
     private func orderedForwardProgressMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
         guard let nextExpectedRef,
               allowsAnchorLock,
@@ -2552,6 +2705,38 @@ struct CoreMLLocalQuranSession: Sendable {
             }
         }
         return best
+    }
+
+    private static func shortAyahFinalWordProgressMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        recognizedWords: [String]
+    ) -> CoreMLLocalQuranMatch? {
+        let expectedWords = words(in: ayah.normalizedText)
+        guard expectedWords.count == shortAyahFinalWordExpectedWords,
+              let expectedFinalWord = expectedWords.last,
+              compactCharacters(expectedFinalWord).count >= shortAyahFinalWordMinimumCharacters,
+              !recognizedWords.isEmpty else {
+            return nil
+        }
+
+        let recentWords = Array(recognizedWords.suffix(shortAyahFinalWordMaximumRecentWords))
+        let scores = recentWords.map {
+            shortAyahSuffixWordScore(expected: expectedFinalWord, actual: $0)
+        }
+        guard let bestScore = scores.max(),
+              bestScore >= shortAyahFinalWordMinimumScore else {
+            return nil
+        }
+
+        return CoreMLLocalQuranMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            score: bestScore,
+            reason: "coreml_local_short_ayah_final_word_progress",
+            startWordIndex: expectedWords.count,
+            matchedWords: 1
+        )
     }
 
     private static func shortAyahSuffixWordScore(expected: String, actual: String) -> Double {
@@ -2828,6 +3013,25 @@ struct CoreMLLocalQuranSession: Sendable {
 
     private static func compactCharacters(_ normalizedText: String) -> [Character] {
         Array(normalizedText.filter { !$0.isWhitespace })
+    }
+
+    private static func containsContiguous(_ needle: [Character], in haystack: [Character]) -> Bool {
+        guard !needle.isEmpty,
+              needle.count <= haystack.count else {
+            return false
+        }
+
+        if needle.count == haystack.count {
+            return needle == haystack
+        }
+
+        for startIndex in 0...(haystack.count - needle.count) {
+            let endIndex = startIndex + needle.count
+            if Array(haystack[startIndex..<endIndex]) == needle {
+                return true
+            }
+        }
+        return false
     }
 
     private static func bestWindowSimilarity(expected: [Character], actual: [Character]) -> Double {

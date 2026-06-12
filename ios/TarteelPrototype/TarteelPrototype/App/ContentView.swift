@@ -245,7 +245,8 @@ private struct DebugStatusPanel: View {
         VStack(spacing: 8) {
             DebugStatusRow(title: "Connection", value: connectionStatus)
             DebugStatusRow(title: "Last event", value: state.debugLastEventText)
-            DebugStatusRow(title: "Ayah", value: state.debugAyahText)
+            DebugStatusRow(title: "Latest ayah", value: state.debugAyahText)
+            DebugStatusRow(title: "Next expected", value: state.debugNextExpectedText)
             DebugStatusRow(title: "Ayah text", value: state.debugAyahBodyText)
 
             if let errorMessage, !errorMessage.isEmpty {
@@ -272,7 +273,7 @@ private struct DebugStatusRow: View {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.muted)
-                .frame(width: 78, alignment: .leading)
+                .frame(width: 104, alignment: .leading)
 
             Text(value)
                 .font(.caption.monospaced())

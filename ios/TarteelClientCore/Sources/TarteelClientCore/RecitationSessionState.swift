@@ -67,6 +67,10 @@ public struct RecitationSessionState: Equatable, Sendable {
         currentAyahText ?? "none"
     }
 
+    public var debugNextExpectedText: String {
+        nextExpectedRef ?? "none"
+    }
+
     public var debugTranscriptText: String {
         lastTranscript.isEmpty ? "none" : lastTranscript
     }
@@ -123,7 +127,7 @@ public struct RecitationSessionState: Equatable, Sendable {
                 nextExpectedRef: progress.nextExpectedRef,
                 currentAyahWords: progress.currentAyahWords,
                 completedWordCount: progress.completedWordCount,
-                headline: "Continue",
+                headline: progressAyahRef.map { "Ayah \($0)" } ?? "Continue",
                 detail: progressAyahText ?? event.transcript,
                 lastEventType: event.type,
                 lastEventReason: event.reason,
@@ -184,7 +188,7 @@ public struct RecitationSessionState: Equatable, Sendable {
                     nextExpectedRef: event.nextExpectedRef ?? nextExpectedRef,
                     currentAyahWords: currentAyahWords,
                     completedWordCount: completedWordCount,
-                    headline: "Listening",
+                    headline: stableLocatedHeadline,
                     detail: currentAyahText ?? event.transcript,
                     lastEventType: event.type,
                     lastEventReason: event.reason,
@@ -218,7 +222,7 @@ public struct RecitationSessionState: Equatable, Sendable {
                 nextExpectedRef: event.nextExpectedRef ?? nextExpectedRef,
                 currentAyahWords: currentAyahWords,
                 completedWordCount: completedWordCount,
-                headline: "Listening",
+                headline: stableLocatedHeadline,
                 detail: currentAyahText ?? "Keep reciting",
                 lastEventType: event.type,
                 lastEventReason: event.reason,
@@ -241,6 +245,13 @@ public struct RecitationSessionState: Equatable, Sendable {
             lastTranscript: event.transcript,
             lastChunkSequence: event.chunkSequence
         )
+    }
+
+    private var stableLocatedHeadline: String {
+        if headline.hasPrefix("Ayah ") || headline.hasPrefix("Locked on ") {
+            return headline
+        }
+        return "Listening"
     }
 
     private func correctionDetail(for event: RecitationEvent) -> String {

@@ -167,7 +167,7 @@ struct RecitationSessionStateTests {
         #expect(state.phase == .listening)
         #expect(state.currentAyahRef == "114:2")
         #expect(state.currentAyahText == "مَلِكِ النَّاسِ")
-        #expect(state.headline == "Listening")
+        #expect(state.headline == "Locked on 114:2")
         #expect(state.detail == "مَلِكِ النَّاسِ")
     }
 
@@ -276,8 +276,82 @@ struct RecitationSessionStateTests {
         #expect(state.phase == .listening)
         #expect(state.currentAyahRef == "108:2")
         #expect(state.currentAyahText == "فصل لربك وانحر")
+        #expect(state.headline == "Ayah 108:2")
         #expect(state.detail == "فصل لربك وانحر")
         #expect(state.lastTranscript == "أَعْطَيْنَاكَ الْكَوْثَرَ فَصَلِّرََبِّكَ وَانْحَرْ")
+    }
+
+    @Test func progressEventExposesLatestAyahAndNextExpectedDiagnostics() {
+        let event = RecitationEvent(
+            type: .progress,
+            transcript: " الذِّكْرَى",
+            confidence: 0.79,
+            chunkSequence: 104,
+            reason: "coreml_local_ordered_progress",
+            candidateRefs: ["80:4"],
+            ayahText: "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَى",
+            ayahRef: "80:4",
+            startRef: "80:4:4",
+            nextExpectedRef: "80:5:1",
+            consumedWords: 1,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let state = RecitationSessionState().applying(event)
+
+        #expect(state.headline == "Ayah 80:4")
+        #expect(state.currentAyahWords == ["أَوْ", "يَذَّكَّرُ", "فَتَنْفَعَهُ", "الذِّكْرَى"])
+        #expect(state.completedWordCount == 4)
+        #expect(state.debugAyahText == "80:4")
+        #expect(state.debugNextExpectedText == "80:5:1")
+    }
+
+    @Test func postProgressLocatingKeepsLocatedAyahHeadlineVisible() {
+        let progressEvent = RecitationEvent(
+            type: .progress,
+            transcript: " الذِّكْرَى",
+            confidence: 0.79,
+            chunkSequence: 104,
+            reason: "coreml_local_ordered_progress",
+            candidateRefs: ["80:4"],
+            ayahText: "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَى",
+            ayahRef: "80:4",
+            startRef: "80:4:4",
+            nextExpectedRef: "80:5:1",
+            consumedWords: 1,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+        let locatingEvent = RecitationEvent(
+            type: .locating,
+            transcript: "نِسْتَغْنَى",
+            confidence: 0.42,
+            chunkSequence: 111,
+            reason: "coreml_local_ordered_no_match",
+            candidateRefs: ["80:5"],
+            ayahText: nil,
+            ayahRef: nil,
+            startRef: nil,
+            nextExpectedRef: nil,
+            consumedWords: 0,
+            expectedRef: nil,
+            expectedWord: nil,
+            recognizedWord: nil
+        )
+
+        let progressedState = RecitationSessionState().applying(progressEvent)
+        let nextState = progressedState.applying(locatingEvent)
+
+        #expect(nextState.currentAyahRef == "80:4")
+        #expect(nextState.currentAyahText == "أَوْ يَذَّكَّرُ فَتَنْفَعَهُ الذِّكْرَى")
+        #expect(nextState.nextExpectedRef == "80:5:1")
+        #expect(nextState.completedWordCount == 4)
+        #expect(nextState.headline == "Ayah 80:4")
+        #expect(nextState.debugLastEventText == "locating (coreml_local_ordered_no_match)")
+        #expect(nextState.debugNextExpectedText == "80:5:1")
     }
 
     @Test func progressEventTracksCanonicalWordCompletionFromNextExpectedRef() {

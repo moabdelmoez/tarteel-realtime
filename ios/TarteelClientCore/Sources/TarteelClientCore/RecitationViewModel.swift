@@ -275,6 +275,7 @@ public final class RecitationViewModel: ObservableObject {
         Tarteel realtime session
         Connection: \(connectionStatus)
         Latest ayah: \(state.debugAyahText)
+        Next expected: \(state.debugNextExpectedText)
         Latest ayah text: \(state.debugAyahBodyText)
         Transcript: \(state.debugTranscriptText)
 
