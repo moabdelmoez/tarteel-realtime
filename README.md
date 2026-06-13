@@ -1,8 +1,52 @@
-# Tarteel Realtime MVP
+# Tarteel Realtime
 
-Technical MVP for Quran recitation location and correction.
+Technical MVP for Quran recitation location and correction, with native iPhone
+and macOS prototypes. The apps can stream microphone audio to the backend over
+`WS /ws/recitation`, or run the experimental local CoreML FastConformer route
+inside the Apple app.
 
-## Run The Dev API
+## What Is Here
+
+- `tarteel_realtime/`: Python backend, Quran parsing, recitation session logic,
+  ASR adapter seams, and WebSocket API.
+- `ios/TarteelClientCore/`: shared Swift package for endpoint presets, event
+  decoding, state reduction, recording orchestration, CoreML routing, and tests.
+- `ios/TarteelPrototype/`: Xcode project with the iPhone app target
+  `TarteelPrototype` and native macOS app target `TarteelPrototypeMac`.
+- `deploy/modal_asr_app.py`: Modal deployment for the real ASR backend.
+
+## Prerequisites
+
+- macOS with Xcode installed.
+- `uv` for Python commands.
+- Modal CLI configured locally if deploying the Modal backend.
+- Optional local CoreML model artifacts at:
+
+```text
+.models/fastconformer-quran-coreml-streaming/
+```
+
+Expected CoreML files:
+
+```text
+fastconformer-quran-streaming.mlpackage
+pronunciation-head.mlpackage
+tokenizer.model
+tokens.txt
+```
+
+For full-corpus local matching, place the pinned Tanzil text locally at:
+
+```text
+data/tanzil/quran-simple-clean.txt
+```
+
+The Quran text, local audio captures, bearer tokens, and other sensitive
+runtime artifacts should stay local and uncommitted.
+
+## Run The Local Dev Backend
+
+Use this when the Apple app is set to the `Simulator` backend preset:
 
 ```bash
 uv run uvicorn tarteel_realtime.dev_app:app --reload
@@ -14,290 +58,142 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
-The dev app exposes `WS /ws/recitation` and uses a built-in fake recognizer script:
-
-1. First chunk recognizes `مَلِكِ` and emits `locked` at `114:2:1`.
-2. Second chunk recognizes `الْفَلَقِ` and emits `wrong` against expected `114:2:2`.
-
-Each WebSocket message is JSON:
-
-```json
-{
-  "sequence_number": 0,
-  "pcm_base64": "AAE=",
-  "sample_rate_hz": 16000
-}
-```
-
-`pcm_base64` is expected to contain little-endian signed PCM16 audio. The ASR adapter decodes it to normalized float samples before model inference.
-
-In another terminal, send two dummy chunks to the dev WebSocket:
+The dev backend uses a fake recognizer and emits deterministic `locked` /
+`wrong` events. You can smoke it from another terminal:
 
 ```bash
 uv run python -m tarteel_realtime.ws_client
 ```
 
-The dev recognizer script should emit a `locked` event followed by a `wrong` event.
+## Run The iOS App
 
-## Quran Text Data
-
-The production path should use a pinned Tanzil UTF-8 text file, loaded with `QuranCorpus.from_tanzil_file(...)`.
-
-Recommended local placement once downloaded:
+Open the Xcode project:
 
 ```text
-data/tanzil/quran-simple-clean.txt
+ios/TarteelPrototype/TarteelPrototype.xcodeproj
 ```
 
-The repo does not commit Quran text or evaluator JSONL smoke fixtures. Deterministic unit tests embed the tiny smoke data they need; the full Quran file should stay local at the path above.
-
-After placing the full file, record its source metadata and checksum:
+Build the iPhone app from the command line:
 
 ```bash
-uv run python -m tarteel_realtime.quran_data --tanzil-path data/tanzil/quran-simple-clean.txt --source-name Tanzil --source-url "record-the-source-url-you-used" --write-manifest
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
 ```
 
-Check the pinned file before using it for real evaluation:
+In Xcode, choose an iPhone simulator or physical device and run the
+`TarteelPrototypeCoreMLReplay` scheme. For normal manual testing, open Settings
+in the app and choose one of:
+
+- `CoreML`: local on-device route, default for fresh installs with selected
+  Surah 108.
+- `Simulator`: local fake backend at `ws://127.0.0.1:8000/ws/recitation`.
+- `Custom`: remote Modal WebSocket URL with the Modal ASR model picker.
+
+Important iOS note: the CoreML FastConformer model is specialized for Apple
+Neural Engine hardware. The iOS Simulator can build and render the app, but it
+is not valid CoreML ASR evidence for this model. Use a physical iPhone for
+local CoreML ASR proof.
+
+## Run The macOS App
+
+Build the macOS target:
 
 ```bash
-uv run python -m tarteel_realtime.quran_data --check-manifest
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build
 ```
 
-Do not edit the canonical Tanzil file in place. If matching needs simplified text, derive normalized data at runtime or in generated artifacts.
-
-## Run Offline Evaluation
-
-Run the deterministic evaluator tests:
+Open the built app:
 
 ```bash
-uv run python -B -m unittest tests.test_evaluator tests.test_evaluate_cli
+open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app
 ```
 
-When the full Tanzil file is downloaded to `data/tanzil/quran-simple-clean.txt`, the `--tanzil-path` flag can be omitted. Add `--mvp-scope` to evaluate only Al-Fatihah and Juz Amma from a larger Tanzil file. Pass your own JSONL case file to the CLI:
+The macOS app uses a native toolbar for recording, Surah search, and Settings:
+
+- `Space` or `Command-R`: start or stop recording.
+- `Command-F`: focus Surah search.
+- Settings: choose `CoreML`, `Simulator`, or `Custom`.
+- Custom Modal bearer tokens are stored in macOS Keychain after entry.
+
+For deterministic local replay through the same app queue, VAD metadata path,
+backend route, and reducer:
 
 ```bash
-uv run python -m tarteel_realtime.evaluate path/to/cases.jsonl --minimum-lock-words 2 --mvp-scope
+open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args \
+  --tarteel-replay-audio 108001.wav \
+  --tarteel-replay-surah 108
 ```
 
-## ASR Adapter
-
-The current app uses `FakeRecognizer` for deterministic development. `WhisperRecognizer` defines the optional Quran Whisper integration boundary, but model dependencies are intentionally not part of the default install yet.
-
-Run one local smoke transcription with the tested command wrapper. Raw `.pcm16le` input uses `--sample-rate`; `.wav` input must be mono 16-bit PCM and uses the file's embedded sample rate.
+For live-mic diagnosis, capture the exact mono 16 kHz PCM16 chunks forwarded by
+the app, then replay that capture:
 
 ```bash
-uv run python -m tarteel_realtime.asr_smoke path/to/audio.pcm16le --model-id basharalrfooh/whisper-small-quran --sample-rate 16000
-uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran
+open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args --tarteel-capture-audio /tmp/tarteel-capture.wav
+open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args --tarteel-replay-audio /tmp/tarteel-capture.wav --tarteel-replay-surah 108
 ```
 
-Add `--tanzil-path` when you want the smoke output to include a Quran locator decision for the transcript:
+## CoreML Route
 
-```bash
-uv run python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2
-```
+`CoreML` routes `coreml://fastconformer-quran-streaming` to the in-app
+`CoreMLFastConformerSocketClient`. It preserves the same app recording queue,
+VAD metadata seam, reducer state, and recitation event shape used by WebSocket
+backends.
 
-For a real model run, keep dependencies opt-in with `uv`, for example:
+CoreML currently supports selected-Surah local matching best. Fresh installs
+default to selected Surah 108. If the full Tanzil file is bundled locally, the
+local Quran session can use the full corpus; otherwise it falls back to the
+small MVP corpus.
 
-```bash
-uv run --with transformers --with torch python -m tarteel_realtime.asr_smoke path/to/audio.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --mvp-scope
-```
+Important CoreML comments:
 
-On the RunPod L4 smoke environment verified on 2026-05-16, the reproducible GPU command used CUDA-12-compatible Torch pins and an explicit `torchvision` install so `transformers.pipeline` does not import the pod's system `torchvision`:
+- Keep CoreML model artifacts and local recitation audio out of git.
+- Use physical iPhone hardware for iOS CoreML ASR claims.
+- macOS CoreML replay is useful for debugging model, locator, and UI behavior.
+- The app logs CoreML audio windows, transcripts, locator events, stream resets,
+  and latency markers through unified logging.
 
-```bash
-UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0
-```
+## Modal Deployment
 
-This path prints one compact JSON transcription payload. It does not store raw audio.
-
-## Real ASR WebSocket Backend
-
-The default backend remains `tarteel_realtime.dev_app:app` with `FakeRecognizer`. The real ASR backend is a separate opt-in app that uses the same `WS /ws/recitation` contract and lazy-loads the Whisper model on the first audio chunk.
-
-The real ASR backend buffers short mic chunks in memory before calling Whisper. Default buffering is the stable profile:
+Modal serves the real ASR backend behind the same WebSocket app contract:
 
 ```text
-TARTEEL_ASR_BUFFERING_PROFILE=stable
-TARTEEL_ASR_MIN_AUDIO_MS=4200
-TARTEEL_ASR_FLUSH_MS=4200
-TARTEEL_ASR_TAIL_MS=0
-TARTEEL_ASR_MIN_SPEECH_RMS=400
-TARTEEL_ASR_MIN_FRAME_RMS=150
-TARTEEL_WHISPER_BACKEND=transformers
+wss://<modal-app>.modal.run/ws/recitation
 ```
 
-For GPU replay with faster-whisper, the opt-in low-latency buffering profile is:
+The Apple apps use Settings -> `Custom` for Modal. The visible Custom provider
+is Modal-only, and the app appends the selected ASR model slug as `asr_model` on
+the recording URL.
+
+Approved Modal ASR model slugs:
 
 ```text
-TARTEEL_ASR_BUFFERING_PROFILE=low-latency
-TARTEEL_ASR_MIN_AUDIO_MS=2000
-TARTEEL_ASR_FLUSH_MS=1000
-TARTEEL_ASR_TAIL_MS=500
-TARTEEL_ASR_MIN_SPEECH_RMS=400
-TARTEEL_ASR_MIN_FRAME_RMS=150
+nemo-fastconformer-quran-ar
+faster-whisper-base-ar-quran
 ```
 
-Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a model request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. `TARTEEL_ASR_BUFFERING_PROFILE=low-latency` gives the ASR backend a shorter first window and keeps 500ms of tail context between windows; explicit `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, `TARTEEL_ASR_TAIL_MS`, `TARTEEL_ASR_MIN_SPEECH_RMS`, or `TARTEEL_ASR_MIN_FRAME_RMS` values override the selected profile.
-
-Local or CPU smoke command:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
-uv run --with transformers --with torch uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --reload
-```
-
-RunPod L4 command, keeping ASR dependencies opt-in:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
-TARTEEL_WHISPER_DEVICE=cuda:0 \
-UV_NO_PROGRESS=1 uv run --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
-```
-
-For CTranslate2/faster-whisper model IDs such as `OdyAsh/faster-whisper-base-ar-quran`, select the optional faster-whisper backend instead of the default Transformers backend:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_WHISPER_BACKEND=faster-whisper \
-TARTEEL_WHISPER_MODEL_ID=OdyAsh/faster-whisper-base-ar-quran \
-TARTEEL_WHISPER_DEVICE=cuda:0 \
-TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
-TARTEEL_ASR_BUFFERING_PROFILE=low-latency \
-UV_NO_PROGRESS=1 uv run --with faster-whisper uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
-```
-
-For NeMo FastConformer model IDs such as `mohammed/fastconformer-quran-ar`, select the optional NeMo backend. Keep these dependencies out of the default project; install them only in the GPU runtime being tested:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_ASR_BACKEND=nemo \
-TARTEEL_ASR_MODEL_ID=mohammed/fastconformer-quran-ar \
-TARTEEL_NEMO_MODEL_FILE=phase3_full/phase3_full_wer0.0014.nemo \
-TARTEEL_ASR_DEVICE=cuda:0 \
-TARTEEL_ASR_BUFFERING_PROFILE=low-latency \
-UV_NO_PROGRESS=1 uv run --with 'nemo_toolkit[asr]' --with huggingface_hub uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
-```
-
-Send one mono PCM16 WAV or raw PCM16LE file through the WebSocket:
-
-```bash
-uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav
-```
-
-By default, `--audio-path` is sent as one whole-file chunk. To simulate live microphone chunks, add a chunk duration:
-
-```bash
-uv run python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path path/to/mono-16k.wav --chunk-ms 1000
-```
-
-For real ASR windows that may exceed WebSocket keepalive timeouts during model load or long inference, add `--disable-ping` to the replay command.
-
-If `TARTEEL_WS_BEARER_TOKEN` is set, `WS /ws/recitation` requires:
-
-```http
-Authorization: Bearer <token>
-```
-
-`/health` and `/ping` remain public for provider health checks.
-
-If the app knows the intended recitation range, append `scope` to the WebSocket URL so matching stays inside that range before the first lock and during ordered progression. Supported forms are a whole surah like `?scope=108`, a single ayah like `?scope=108:2`, or an inclusive range like `?scope=4:1-3`.
-
-```bash
-uv run python -m tarteel_realtime.ws_client --url 'ws://127.0.0.1:8000/ws/recitation?scope=108' --audio-path path/to/mono-16k.wav --chunk-ms 1000
-uv run python -m tarteel_realtime.ws_client --url 'ws://127.0.0.1:8000/ws/recitation?scope=4:1-3' --audio-path path/to/mono-16k.wav --chunk-ms 1000
-```
-
-Without `scope`, the backend keeps the current conservative global behavior.
-
-For the first RunPod L40S chunked-WAV proof on 2026-05-17, Surah 114:2 locked reliably with a larger first buffer:
-
-```bash
-TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
-TARTEEL_MINIMUM_LOCK_WORDS=2 \
-TARTEEL_WHISPER_MODEL_ID=basharalrfooh/whisper-small-quran \
-TARTEEL_WHISPER_DEVICE=cuda:0 \
-TARTEEL_ASR_MIN_AUDIO_MS=4200 \
-TARTEEL_ASR_FLUSH_MS=4200 \
-TARTEEL_ASR_TAIL_MS=0 \
-TARTEEL_ASR_MIN_SPEECH_RMS=400 \
-TARTEEL_ASR_MIN_FRAME_RMS=150 \
-UV_NO_PROGRESS=1 uv run --python 3.13 --with transformers --with 'torch==2.7.1' uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 127.0.0.1 --port 8000
-```
-
-Then, from the same pod shell:
-
-```bash
-uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/108001.wav --chunk-ms 1000 --disable-ping
-uv run --python 3.13 --with websockets python -m tarteel_realtime.ws_client --url ws://127.0.0.1:8000/ws/recitation --audio-path fixtures/local_audio/004001.wav --chunk-ms 1000 --disable-ping
-```
-
-Expected shape: several `waiting_for_audio_buffer` events, then a meaningful `locked`, `progress`, `lock_candidate`, or `uncertain` event stream. This is a capability proof, not final latency tuning.
-
-## WebSocket + VAD Transport
-
-WebSocket is the only backend transport for app audio. The iPhone and macOS apps share the same app-owned audio path: the platform microphone streamer captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends `AudioChunkPayload` messages to `WS /ws/recitation`.
-
-The experimental `CoreML` preset is the exception to the remote transport path: it routes `coreml://fastconformer-quran-streaming` to the in-app `CoreMLFastConformerSocketClient` while preserving the same app queue, VAD metadata seam, reducer, and recitation event shape. It is a local Apple ASR route, not a second backend transport.
-
-When VAD metadata is available, each WebSocket chunk may include:
-
-```json
-{
-  "voice_activity": {
-    "probability": 0.82,
-    "is_speech_active": true,
-    "event": "speech_start"
-  }
-}
-```
-
-The backend treats that metadata as transport-neutral input to the rolling ASR buffer. It can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present. If VAD is unavailable, the WebSocket path still works with PCM16 audio and backend RMS gating. The app resets streaming VAD state whenever recording starts or stops.
-
-The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent.
-
-### Apple Backend Presets
-
-The Apple apps expose these backend presets:
-
-- `Simulator`: local development WebSocket at `ws://127.0.0.1:8000/ws/recitation`.
-- `CoreML`: local FastConformer ASR at `coreml://fastconformer-quran-streaming`, with selected-Surah scope handled in-app.
-- `Custom`: remote WebSocket URL entry. The visible iPhone/macOS Settings UI is Modal-only for Custom, with a fixed Provider row, Modal bearer-token field, and Modal ASR model picker.
-
-Fresh iPhone and macOS installs default to `CoreML` plus selected Surah 108 for local testing. Existing saved preferences still override that fallback.
-
-For RunPod or another GPU host, expose the real ASR backend directly over WSS and enter the full URL in the Apple app `Custom` preset:
+Create a Modal Secret named `tarteel-modal-asr-secrets` containing:
 
 ```text
-wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
+TARTEEL_WS_BEARER_TOKEN=<prototype token>
 ```
 
-The `Custom` preset accepts full WebSocket URLs. Provider-specific bare-host normalization still exists in shared endpoint code for compatibility, launch arguments, and tests, but the current visible Settings flow presents Modal as the only Custom provider.
+Do not store the token in docs or git.
 
-For the prototype RunPod Serverless path, use a Load Balancer endpoint and paste the full WSS endpoint URL into the Apple app `Custom` preset:
-
-```text
-wss://<endpoint-id>.api.runpod.ai/ws/recitation
-```
-
-Direct Apple-to-serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key locally; do not commit it or put it in docs. The iPhone prototype keeps bearer tokens memory-only. The macOS prototype stores the selected `Custom` provider bearer token in macOS Keychain so it survives relaunch without writing the secret to `UserDefaults`. The token field accepts a raw token, `Bearer <token>`, or `Authorization: Bearer <token>` and canonicalizes to the raw token before connecting. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for provider health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
-
-For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights. Modal uses one WebSocket endpoint and selects between the two approved model profiles per recording session with a safe `asr_model` query item:
-
-```text
-nemo-fastconformer-quran-ar -> mohammed/fastconformer-quran-ar
-faster-whisper-base-ar-quran -> OdyAsh/faster-whisper-base-ar-quran
-```
-
-NeMo is the default when `asr_model` is omitted. Unknown slugs are rejected by the backend.
+Prewarm both model snapshots:
 
 ```bash
 modal run deploy/modal_asr_app.py::prewarm
+```
+
+Deploy:
+
+```bash
 modal deploy deploy/modal_asr_app.py
 ```
 
-Then replay the same scoped fixtures with the provider-neutral probe:
+After deployment, enter the WSS URL in the iPhone or macOS app Settings, paste
+the Modal bearer token locally, choose an ASR model, select a Surah, and record.
+
+For a command-line replay proof:
 
 ```bash
 uv run --with websockets python -m tarteel_realtime.replay_probe \
@@ -312,170 +208,41 @@ uv run --with websockets python -m tarteel_realtime.replay_probe \
   --include-events
 ```
 
-Repeat with `--asr-model faster-whisper-base-ar-quran` to compare the Faster Whisper profile without changing the endpoint. In the iPhone or macOS app, choose Settings -> `Custom`, enter the Modal WSS URL and bearer token, then pick the ASR model from the Modal-only menu.
+Repeat with `--asr-model faster-whisper-base-ar-quran` when comparing Modal
+profiles.
 
-### Visual Diagnostics Bundle
+## Important Comments
 
-Use the diagnostics capture CLI when you need a local HTML bundle that aligns
-raw audio, VAD metadata, backend buffering, ASR windows, transcripts, locator
-decisions, and latency in one replayable report:
+- WebSocket `/ws/recitation` is the only remote backend transport.
+- The local CoreML route is in-app only; it is not a second backend protocol.
+- The app sends PCM16 audio chunks plus optional VAD metadata.
+- Canonical displayed ayah text should come from Quran data, not from noisy ASR
+  transcript text.
+- Heavy ASR dependencies remain opt-in and should not become default test
+  dependencies.
+- iPhone bearer tokens are memory-only. macOS Custom bearer tokens are stored in
+  Keychain after entry.
+- Raw user audio, generated diagnostics, local Quran text, and credentials must
+  remain local unless intentionally shared as evidence.
 
-```bash
-uv run --with websockets python -m tarteel_realtime.diagnostics_capture \
-  --url 'ws://127.0.0.1:8000/ws/recitation' \
-  --scope 108 \
-  --audio-path fixtures/local_audio/108001.wav \
-  --chunk-ms 1000 \
-  --disable-ping
-```
+## Verify
 
-For protected remote backends, prefer an environment variable so the bearer
-token does not appear in shell history:
-
-```bash
-MODAL_TOKEN='<token>' uv run --with websockets python -m tarteel_realtime.diagnostics_capture \
-  --url 'wss://example.modal.run/ws/recitation' \
-  --scope 108 \
-  --audio-path fixtures/local_audio/108001.wav \
-  --chunk-ms 1000 \
-  --bearer-token-env MODAL_TOKEN \
-  --disable-ping
-```
-
-The command prints the generated `index.html` path. Generated bundles live under
-ignored `diagnostics/sessions/` and contain raw voice audio plus ASR transcripts.
-Do not commit or upload them unless intentionally sharing diagnostic evidence.
-
-See `docs/modal-serverless.md` for Modal setup, prewarm, deployment, auth, and evidence capture.
-
-## GitHub And R2 Artifact Workflow
-
-Use GitHub for source code and Cloudflare R2 for ignored local artifacts such as the full Tanzil text and recitation WAVs. The R2 helper expects S3-compatible R2 credentials in environment variables, not a general Cloudflare API token.
+Python:
 
 ```bash
-export R2_ENDPOINT_URL="https://bb8b1b9ffb067e41f5657c9f1400c42b.r2.cloudflarestorage.com"
-export R2_BUCKET="tarteel-realtime"
-export R2_ACCESS_KEY_ID="replace-with-r2-access-key-id"
-export R2_SECRET_ACCESS_KEY="replace-with-r2-secret-access-key"
+uv run python -B -m unittest discover -s tests -v
+uv run python -m compileall -q tarteel_realtime tests
 ```
 
-Upload local artifacts:
-
-```bash
-uv run --with boto3 python scripts/r2_artifacts.py upload data/tanzil/quran-simple-clean.txt
-uv run --with boto3 python scripts/r2_artifacts.py upload fixtures/local_audio
-```
-
-If upload fails with `AccessDenied` during `PutObject`, the credentials are authenticating but do not have write access to the bucket. Use an R2 S3 token with Object Read & Write scope for `tarteel-realtime`.
-
-Download on a GPU host (RunPod example):
-
-```bash
-source /workspace/tarteel-r2.env
-uv run --with boto3 python scripts/r2_artifacts.py download data/tanzil/quran-simple-clean.txt
-for sample in 004001 004002 004003 108001 108002 108003; do
-  uv run --with boto3 python scripts/r2_artifacts.py download "fixtures/local_audio/${sample}.mp3"
-  ffmpeg -y -i "fixtures/local_audio/${sample}.mp3" -ac 1 -ar 16000 -sample_fmt s16 "fixtures/local_audio/${sample}.wav"
-done
-```
-
-For full host bootstrap steps, see `docs/runpod-r2.md`. The preferred bootstrap entrypoint is `scripts/gpu_bootstrap.sh` (with `scripts/runpod_bootstrap.sh` kept as a compatibility wrapper).
-
-The current GitHub repo is public, so a fresh GPU host can clone it over HTTPS. If the repo becomes private again, configure a read-only deploy key or another GitHub auth method before running the bootstrap. Do not use `scp` for host setup; add R2 credentials manually to your host env file (for RunPod, `/workspace/tarteel-r2.env`) or through provider secrets.
-
-## Apple Prototypes
-
-The native Apple prototypes live under `ios/`:
-
-- `ios/TarteelClientCore`: shared Swift package for endpoint presets, event decoding, `AudioChunkPayload`, `VoiceActivityPayload`, recording orchestration, state reduction, local CoreML ASR routing, replay/capture helpers, and tests.
-- `ios/TarteelPrototype/TarteelPrototype.xcodeproj`: iPhone app target `TarteelPrototype`, macOS app target `TarteelPrototypeMac`, shared assets, VAD/CoreML resources, and local artifact copy scripts.
-
-Run the deterministic backend when using the `Simulator` preset:
-
-```bash
-uv run uvicorn tarteel_realtime.dev_app:app --reload
-```
-
-Then open the Xcode project:
-
-```text
-ios/TarteelPrototype/TarteelPrototype.xcodeproj
-```
-
-The iPhone app is a light recitation surface: backend setup lives behind the gear Settings sheet, while Auto/Surah, Surah picker, status, canonical ayah display, `Latest ayah`, `Next expected`, voice indicator, and mic control stay on the home screen.
-
-The macOS app is a native desktop prototype with a unified toolbar for recording, Surah search, and Settings. It supports `Space` or `Command-R` for recording, `Command-F` for search focus, URL/text drop-in for backend URLs, diagnostic drag-out text, first-run onboarding, adaptive system colors/materials, and a curated timeline that collapses repeated waiting/uncertain/same-ayah progress rows.
-
-Both apps support:
-
-- `Simulator`, `CoreML`, and `Custom` backend presets.
-- Auto global detection or selected-Surah mode. Selected Surah adds `scope=<surah-id>` to WebSocket URLs and scopes the local CoreML locator.
-- Modal-only Custom Settings with `FastConformer Quran AR (NeMo)` and `Faster Whisper Base AR Quran` choices.
-- Canonical Tanzil word highlighting after lock, plus stable `Latest ayah` and `Next expected` diagnostics.
-- Bundled `quran_logo` image and app icons.
-- Conditional app-build copying of ignored local `data/tanzil/quran-simple-clean.txt` and ignored local WAV replay fixtures when those files exist.
-
-Fresh installs default to:
-
-```text
-coreml://fastconformer-quran-streaming?scope=108
-```
-
-For a physical iPhone using the backend instead of CoreML, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP as a full WebSocket URL in `Custom`:
-
-```text
-ws://192.168.1.20:8000/ws/recitation
-```
-
-For deterministic app-level replay, launch a built app with bundled or absolute WAV input. The audio flows through the normal app queue, VAD metadata path, selected backend route, and reducer:
-
-```bash
-open -n /path/to/TarteelPrototypeMac.app --args \
-  --tarteel-replay-audio 108001.wav \
-  --tarteel-replay-surah 108
-```
-
-To replay against a remote backend, add backend launch arguments after entering the bearer token locally through Settings or letting macOS restore it from Keychain:
-
-```bash
-open -n /path/to/TarteelPrototypeMac.app --args \
-  --tarteel-replay-audio 108001.wav \
-  --tarteel-replay-surah 108 \
-  --tarteel-backend-url wss://<modal-app>.modal.run/ws/recitation \
-  --tarteel-backend-provider modal
-```
-
-For macOS live-mic diagnosis, capture the exact mono 16 kHz PCM16 chunks forwarded by the app, then replay that WAV through the same route:
-
-```bash
-open -n /path/to/TarteelPrototypeMac.app --args --tarteel-capture-audio /tmp/tarteel-capture.wav
-open -n /path/to/TarteelPrototypeMac.app --args --tarteel-replay-audio /tmp/tarteel-capture.wav --tarteel-replay-surah 108
-```
-
-The iOS Simulator can build and render the app, but the ANE-specialized CoreML FastConformer model is not accepted as successful iOS ASR evidence there; Simulator CoreML output is guarded with an actionable invalid-output message. Use a physical Apple Neural Engine device for iOS CoreML ASR proof.
-
-Build the iPhone app with the shared replay scheme:
-
-```bash
-xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
-```
-
-Build the macOS app:
-
-```bash
-xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build
-```
-
-Test the shared client core:
+Swift client core:
 
 ```bash
 cd ios/TarteelClientCore
 env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test
 ```
 
-## Verify
+Apple source/project guardrails:
 
 ```bash
-uv run python -B -m unittest discover
-uv run python -m compileall -q tarteel_realtime tests
+uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v
 ```

@@ -33,7 +33,7 @@ Single-context repo: read root `CONTEXT.md` and `docs/adr/` when present. See `d
 
 - Use `uv` for Python execution and dependency management. Do not use `pip` directly.
 - Keep heavyweight ASR dependencies optional. Whisper, Torch, and GPU-only packages must not become default test dependencies without explicit approval.
-- Do not commit secrets. `.env`, RunPod env files, Cloudflare R2 credentials, and raw user audio must remain local or ignored.
+- Do not commit secrets. `.env`, provider env files, deployment credentials, bearer tokens, and raw user audio must remain local or ignored.
 - Do not mutate canonical Quran data in place. Treat `data/tanzil/quran-simple-clean.txt` as pinned local input.
 - Preserve user changes. Do not run destructive git commands or revert unrelated edits.
 - Prefer small verified slices. Update harness docs after meaningful changes.
@@ -47,7 +47,7 @@ Single-context repo: read root `CONTEXT.md` and `docs/adr/` when present. See `d
 - `ios/TarteelPrototype/`: Xcode project containing the SwiftUI iPhone app (`TarteelPrototype`), native macOS app (`TarteelPrototypeMac`), shared app resources, CoreML/VAD assets, and local artifact copy scripts.
 - `fixtures/`: small committed fixtures only.
 - `data/tanzil/`: ignored full Quran text plus checked-in metadata/docs.
-- `scripts/`: R2 and RunPod helper scripts.
+- `scripts/`: local helper scripts.
 - `plans/`, `docs/`, and root harness files: project memory and operating procedure.
 
 ## Verification Expectations
@@ -62,7 +62,7 @@ Choose the smallest check that proves the change, then run broader checks when t
   - `uv run python -B -m unittest discover -s tests -v` when project state or commands changed
 - ASR adapter/backend changes:
   - Focused ASR tests first, then the full Python suite.
-  - RunPod/GPU verification only when real model behavior is part of the claim.
+  - GPU verification only when real model behavior is part of the claim.
 - WebSocket transport changes:
   - `uv run python -B -m unittest tests.test_api tests.test_recitation_stream tests.test_ws_client`
   - Use the documented WebSocket client smoke before real ASR transport claims.
@@ -77,14 +77,6 @@ Choose the smallest check that proves the change, then run broader checks when t
 - Docs-only changes:
   - Validate affected structured files.
   - Run the baseline Python suite if the docs change workflow, commands, or harness state.
-
-## RunPod and R2 Rules
-
-- Ask the user before starting or relying on a GPU pod.
-- On RunPod, prefer public GitHub clone plus R2 artifact hydration over `scp`.
-- The user provides `/workspace/tarteel-r2.env` manually when needed. Do not print or store credentials.
-- Bind HTTP/WebSocket servers to `0.0.0.0` on exposed RunPod ports.
-- Evidence for RunPod success needs command output, endpoint/log proof, and the model/backend version used.
 
 ## Harness Updates
 
@@ -101,7 +93,3 @@ After a slice, update:
 - This MVP detects recitation location and obvious text-level mistakes. It is not yet tajweed scoring, phoneme-level correction, or production-grade Quran memorization coaching.
 - Canonical displayed ayah text should come from Quran data after location, not from noisy ASR transcript.
 - When confidence is low after lock, prefer ordered progression guidance before broad full-Quran relocking.
-
-## Special Local Skill
-
-- `/graphify` triggers the graphify skill for knowledge graph generation.
