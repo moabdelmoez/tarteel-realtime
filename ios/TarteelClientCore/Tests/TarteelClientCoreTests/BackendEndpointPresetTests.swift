@@ -98,6 +98,48 @@ struct BackendEndpointPresetTests {
         )
     }
 
+    @Test func modalASRModelIsAppendedToModalRecordingURLAfterScope() {
+        let modalHost = "workspace--tarteel-realtime-asr-fastapi-app.modal.run"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: modalHost,
+                recitationScope: .selectedSurah(id: 108),
+                provider: .modal,
+                modalASRModel: .fasterWhisperBaseARQuran
+            )
+                == "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108&asr_model=faster-whisper-base-ar-quran"
+        )
+    }
+
+    @Test func modalASRModelReplacesExistingModelQueryItem() {
+        let modalURL = "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?asr_model=old&debug=1"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: modalURL,
+                recitationScope: .selectedSurah(id: 108),
+                provider: .modal,
+                modalASRModel: .nemoFastConformerQuranAR
+            )
+                == "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?debug=1&scope=108&asr_model=nemo-fastconformer-quran-ar"
+        )
+    }
+
+    @Test func staleModalASRModelQueryItemIsRemovedForNonModalProviders() {
+        let runpodURL = "wss://0qudx1ctbmw1xc-8000.proxy.runpod.net/ws/recitation?asr_model=nemo-fastconformer-quran-ar"
+
+        #expect(
+            BackendEndpointPreset.custom.recordingURLText(
+                currentURLText: runpodURL,
+                recitationScope: .selectedSurah(id: 108),
+                provider: .runPod,
+                modalASRModel: .nemoFastConformerQuranAR
+            )
+                == "wss://0qudx1ctbmw1xc-8000.proxy.runpod.net/ws/recitation?scope=108"
+        )
+    }
+
     @Test func genericCustomProviderDoesNotAddProviderSpecificPathToBareHost() {
         let host = "example.test"
 

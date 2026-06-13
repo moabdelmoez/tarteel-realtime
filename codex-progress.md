@@ -14,6 +14,7 @@
   - `UV_NO_PROGRESS=1 uv run --no-project --with transformers --with 'torch==2.7.1' --with 'torchvision==0.22.1' python -m tarteel_realtime.asr_smoke path/to/mono-16k.wav --model-id basharalrfooh/whisper-small-quran --tanzil-path data/tanzil/quran-simple-clean.txt --minimum-lock-words 2 --device cuda:0`
   - `cd ios/TarteelClientCore && env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift run coreml-fixture-runner --model-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.models/fastconformer-quran-coreml-streaming --audio-dir /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/fixtures/local_audio --manifest /Users/mostafa/Downloads/Coding_Projects/tarteel-realtime/.worktrees/coreml-fastconformer-spike/fixtures/local_audio_manifest.json`
 - Current transport direction: WebSocket `/ws/recitation` remains the only backend transport. The Apple prototypes also have an experimental local `CoreML` preset that routes `coreml://fastconformer-quran-streaming` to a bundled streaming FastConformer model instead of opening a WebSocket; fresh iPhone/macOS app installs now default to CoreML + selected Surah 108 for local testing, while existing saved preferences still override that fallback. The local route maps scoped CoreML transcripts through a Swift Quran locator/session that can load Tanzil-format `quran-simple-clean.txt` from an app bundle or local model directory when present, and otherwise falls back to the MVP Surah 108 / local Surah 4 corpus. In selected-Surah mode, the Swift local session now locks inside the selected Surah, ignores istiaza/startup preface and optional basmala when the selected Tanzil first ayah begins with basmala, blocks broad startup jumps while an opening preface is unresolved, bounds startup fuzzy/anchor matching to cheap exact spans and the opening ayahs instead of scanning the whole selected Surah, can recover sparse first-ayah content after istiaza, uses a conservative ordered-anchor fallback for noisy long-ayah first locks such as the Surah 35:1 live log, uses a selected-Surah prefix-span lock to prevent short later ayahs from stealing cumulative multi-ayah starts such as the Surah 80 basmala+80:1+80:2 log, uses selected-Surah sequence-anchor locking when ASR skips short middle ayahs but keeps ordered anchors across the Surah sequence, and now uses a narrow short-first-ayah fused-opening lock for physical-iPhone startup shapes such as `الرَّحْمَبَسَتَوَلَّى دًاَزَّكَّ` in Surah 80 without reopening broad selected-Surah scans. Initial prefix/sequence locks now display the start ayah and do not secretly advance `nextExpectedRef` past intermediate ayahs. After lock, selected-Surah progression is gated on the current expected ayah by default: the matcher searches that current ayah only, rejects later-ayah evidence until the current ayah is complete, keeps no-match candidate refs current-only, uses bounded ordered-anchor recovery on the current expected ayah when ASR omits opening words, uses a selected-Surah short-ayah suffix fallback when ASR misses the opening word of a very short expected ayah such as Surah 18:3, uses a current-ayah-only final-word recovery for distinctive four-word ayahs such as Surah 80:4 when ASR only preserves `الذكرى`, and now has a guarded immediate-next-ayah tail-skip fallback for long mostly-complete ayahs such as the physical-iPhone Surah 47:2 -> 47:3 failure. The tail-skip fallback only runs after current-ayah matchers fail, requires a long current ayah with at least 70% completed and at most six words left, and accepts ordered anchors near the start of only the immediate next ayah. Post-lock transcript-word matching remains bounded so long cumulative ASR cannot create multi-second locator backlog. The shared Apple reducer now keeps a prominent `Ayah <ref>` headline after progress and preserves it across later locating/no-match packets, while the iPhone/macOS status panels show `Latest ayah` and `Next expected` explicitly so short-ayah progress is visible even when ASR remains noisy. The CoreML route logs `coreml_asr_audio_window` per 17,920-sample inference window with RMS, peak, near-silence ratio, and aggregated VAD observations; can reset only the transcriber acoustic cache plus CTC previous-token state on VAD speech boundaries or post-transcript active-speech blank streaks, logging `coreml_asr_stream_reset` without resetting the local Quran session; and now emits explicit latency diagnostics across queue/VAD/send, model-window age/inference, transcriber/locator, and UI reducer checkpoints via `coreml_asr_latency_client_chunk`, `coreml_asr_latency_model_window`, `coreml_asr_latency_engine`, and `coreml_asr_latency_ui_event`. The iPhone and macOS app builds now conditionally copy the ignored local `data/tanzil/quran-simple-clean.txt` and ignored local WAV replay fixtures into their app bundles when they exist, without committing the text or audio. Local opt-in app launch paths now support both fixture replay (`--tarteel-replay-audio <wav> --tarteel-replay-surah <id>`) and live mic capture (`--tarteel-capture-audio <wav>`). Capture writes the exact mono 16 kHz PCM16 chunks forwarded to the CoreML route, and the captured WAV can be replayed through the same queued audio, real FluidAudio VAD metadata processing, real CoreML inference, and local locator; the launched macOS app produced the expected cumulative CoreML transcript for `108001.wav`, while the iOS Simulator launch path now surfaces an actionable invalid-output message for this ANE-specialized model instead of looking stuck.
+- Current Modal ASR direction: branch `codex/modal-fastconformer-quran-ar` in `.worktrees/modal-fastconformer-quran-ar` now supports two approved Modal ASR profiles behind the same `wss://.../ws/recitation` endpoint. The Apple Custom settings UI is Modal-only: it no longer exposes Generic or RunPod in the Provider control, migrates any old saved Custom provider to Modal when Settings appears, and still keeps the old provider enum cases internally for URL/token compatibility and existing regression coverage. The Apple settings UI shows a Modal-only ASR model picker for `nemo-fastconformer-quran-ar` (default, `mohammed/fastconformer-quran-ar`) and `faster-whisper-base-ar-quran` (`OdyAsh/faster-whisper-base-ar-quran`); the selected slug is sent per recording as `asr_model`, stale URL query values are replaced, and unknown slugs close the socket with code `1008`. The existing live Modal deploy `https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run` previously restored `phase3_full/phase3_full_wer0.0014.nemo` on L4 and locked Surah 108 fixtures plus macOS app replay through the NeMo path. The new model-picker slice is locally source/build/test verified, but Modal has not yet been redeployed/replayed for the Faster Whisper profile, and iOS manual ASR proof remains open.
 - Current iOS UI direction: the home screen is a light recitation surface. Backend preset, Custom provider, custom WebSocket URL, memory-only bearer token, and CoreML preset selection live behind the gear settings sheet; Auto/Surah, Surah picker, status/ayah info, voice indicator, and mic stay on the home screen.
 - Current macOS UI direction: the app uses a unified native toolbar with recording, Surah search, and Settings; supports Space/Command-R recording, Command-F search focus, URL/text backend drop-in, diagnostic drag-out, first-run onboarding, curated/collapsed recitation timeline, adaptive system colors/materials, Settings validation feedback, first-launch Custom/Modal defaults, Keychain persistence for selected Custom provider bearer tokens, and the experimental local CoreML FastConformer preset with unified-log ASR, locator, and audio-window diagnostics.
 - Current evaluator fixture posture: committed Quran/evaluation smoke fixtures were removed; deterministic smoke coverage now lives in `tests/test_evaluate_cli.py`.
@@ -23,7 +24,7 @@
 
 ## Session Log
 
-### Session 125
+### Session 128
 
 - Date: 2026-06-13
 - Goal: Fix the macOS app build failure reported during manual CoreML app testing.
@@ -45,7 +46,70 @@
   - This fixes the project-file build failure. It does not prove manual microphone/CoreML recitation quality.
   - The initial missing Darwin PCM was cache corruption/staleness; if it recurs, run the same command with `clean build` or use a fresh `-derivedDataPath`.
 - Next best step: open `/private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app` and run the intended manual CoreML capture/replay test.
+### Session 127
 
+- Date: 2026-06-13
+- Goal: Remove Generic and RunPod from the iPhone/macOS Settings Provider UI without crashing existing Custom backend code.
+- Completed:
+  - Replaced the Custom Provider picker in iPhone `SettingsSheet` and macOS `MacSettingsView` with a static Modal provider row.
+  - Kept `BackendProvider.generic` and `.runPod` internally for compatibility with saved preferences, URL normalization, token storage, and existing regression tests.
+  - Added `RecitationViewModel.selectModalCustomBackendProviderForSettings()` so opening Settings migrates any old saved Custom provider to Modal and loads the Modal token.
+  - Made the Modal ASR model picker and Modal bearer-token label use the fixed Modal provider state in both Apple settings surfaces.
+  - Added source guardrails and Swift regression coverage for the Settings migration path.
+- Verification run:
+  - Apple source guardrails passed: `uv run python -B -m unittest tests.test_ios_websocket_client tests.test_macos_app_project -v` with 23 tests.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 40 XCTest tests plus 91 Swift Testing tests.
+  - iOS Simulator build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-modal-model-picker CODE_SIGNING_ALLOWED=NO build`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos-modal-model-picker CODE_SIGNING_ALLOWED=NO build`.
+  - `git diff --check` passed.
+- Known risk or unresolved issue:
+  - This is a UI/provider-selection hardening change only; live Modal ASR success still depends on the correct bearer token and deployed backend profile.
+- Next best step: reopen the rebuilt macOS app and confirm Settings shows Provider `Modal` with no provider dropdown, then manually test both ASR model choices after Modal deploy.
+
+### Session 125
+
+- Date: 2026-06-13
+- Goal: Fix the macOS Modal manual-test error where a protected Modal WebSocket rejection appeared only as "There was a bad response from the server."
+- Diagnosis:
+  - The deployed Modal app was healthy (`/ping` returned `{"status":"ok"}`), but replay without a bearer token reproduced the same failure class as the screenshot: Modal rejected the WebSocket handshake with HTTP 403.
+  - The Apple client bug was that Custom + Modal could start recording without a bearer token and then surfaced URLSession's generic bad-response text instead of actionable Modal-token guidance.
+- Completed:
+  - Added a Modal-only bearer-token validation gate in `RecitationViewModel`.
+  - Disabled recording for Custom + Modal until a token is present and changed the recording help text to `Enter the Modal bearer token in Settings before recording.`
+  - Added a start-recording block before socket connection so missing-token attempts do not open the WebSocket or start audio.
+  - Mapped Modal bad-response/server-rejected/403 errors to `Modal rejected the WebSocket request. Check the Modal bearer token in Settings and try again.`
+  - Added Swift regression coverage for missing Modal token and wrong-token bad-response guidance.
+- Verification run:
+  - Focused Swift regressions passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter 'RecitationViewModelTests/testModalBackendRequiresBearerTokenBeforeRecording|RecitationViewModelTests/testModalBadServerResponseShowsBearerTokenGuidance'` with 2 tests.
+  - `git diff --check` passed.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos-modal-model-picker CODE_SIGNING_ALLOWED=NO build`.
+  - Reopened the rebuilt app from `/private/tmp/tarteel-xcode-derived-macos-modal-model-picker/Build/Products/Debug/TarteelPrototypeMac.app`.
+- Known risk or unresolved issue:
+  - This fixes the client-side missing/wrong Modal token UX; live ASR still requires the user-provided Modal bearer token.
+- Next best step: in macOS Settings, select Backend `Custom`, Provider `Modal`, paste the Modal WSS URL and bearer token, choose the ASR model, then start recording.
+
+### Session 126
+
+- Date: 2026-06-13
+- Goal: Fix the remaining macOS Modal rejection when the Settings token field contains a pasted full bearer header instead of only the raw token.
+- Diagnosis:
+  - The macOS screenshot showed the Modal URL and model query were valid, and the app reached the Modal auth rejection path.
+  - A focused Swift repro proved the client sent `Authorization: Bearer Bearer <token>` when the user pasted `Bearer <token>` into the token field, and persisted `Authorization: Bearer <token>` unchanged when a full header was pasted.
+- Completed:
+  - Added `RecitationViewModel` token canonicalization before both socket connection and token storage.
+  - The Settings token field now accepts raw tokens, `Bearer <token>`, or `Authorization: Bearer <token>`, but the socket and Keychain receive only the raw token.
+  - Added Swift regressions for pasted bearer-header persistence and pasted bearer-prefix connection.
+- Verification run:
+  - Red first: focused Swift regressions failed because the stored token remained `Authorization: Bearer new-modal-token` and the socket authorization token remained `Bearer modal-token`.
+  - Focused Swift auth regressions passed after the fix with 4 tests.
+  - Server bearer-token auth tests passed: `uv run python -B -m unittest tests.test_api.ApiTests.test_websocket_accepts_matching_bearer_token_when_configured tests.test_api.ApiTests.test_websocket_rejects_missing_bearer_token_when_configured tests.test_api.ApiTests.test_websocket_rejects_wrong_bearer_token_when_configured -v`.
+  - Full Swift client core passed with 39 XCTest tests plus 91 Swift Testing tests.
+  - `git diff --check` passed.
+  - macOS `TarteelPrototypeMac` build passed into `/private/tmp/tarteel-xcode-derived-macos-modal-model-picker`.
+  - Reopened the rebuilt macOS app from `/private/tmp/tarteel-xcode-derived-macos-modal-model-picker/Build/Products/Debug/TarteelPrototypeMac.app`.
+- Known risk or unresolved issue:
+  - If the app still shows `Modal rejected...` after this fix, the entered value does not match the live Modal secret `TARTEEL_WS_BEARER_TOKEN`; that is a secret mismatch rather than URL/model routing.
+- Next best step: paste either the raw token or the full `Bearer ...` header in Settings, then start a new recording.
 ### Session 124
 
 - Date: 2026-06-13
@@ -66,6 +130,35 @@
   - This is an internal vocabulary/locality refactor. It does not change ASR quality, locator policy, UI behavior, or physical-device status.
   - The reason enum is internal to the Swift package, not public library surface, but package-internal tests can now use it for local-session expectations.
 - Next best step: consider the next deepening split only if it removes real coupling, likely between corpus loading and match policy; avoid splitting event mapping until there is a second caller or a clearer test leverage gain.
+
+### Session 124 (Modal ASR Model Picker)
+
+- Date: 2026-06-13
+- Goal: Add a Modal-only ASR model picker in iPhone and macOS Settings and route the selected approved model slug through Modal per WebSocket recording session.
+- Completed:
+  - Added shared Swift `ModalASRModel` with the approved NeMo and Faster Whisper slugs and user-facing labels.
+  - Persisted `modalASRModel` in `RecitationPreferencesStoring`, exposed it through `RecitationViewModel`, and added `selectModalASRModel(...)`.
+  - Added Modal-only `Picker("ASR model", ...)` controls to iPhone `SettingsSheet` and macOS `MacSettingsView`; both are disabled while recording.
+  - Updated URL construction so Custom + Modal recording URLs append or replace `asr_model` while preserving `scope` and other query items; non-Modal providers strip stale `asr_model`.
+  - Extended FastAPI WebSocket app creation with a safe `recognizer_factories_by_asr_model` whitelist; missing `asr_model` uses the default NeMo factory and unknown slugs close with `1008`.
+  - Updated Modal deployment wiring to install both optional runtimes, configure NeMo and Faster Whisper profiles, prewarm both Hugging Face snapshots, and create one lazy shared recognizer per model slug with a fresh buffered recognizer per socket connection.
+  - Added `replay_probe --asr-model <slug>` and `--bearer-token-env` support for manual Modal checks without editing URLs or placing tokens in command lines.
+  - Updated README, Modal runbook, iOS README, clean-state checklist, feature state, and this handoff/progress trail for the two-profile workflow.
+- Verification run:
+  - Red first: focused Python tests failed before `recognizer_factories_by_asr_model`, `create_buffered_asr_recognizer_factories_by_model`, `url_with_asr_model`, Modal profile wiring, and Apple source guardrails existed.
+  - Red first: focused Swift tests failed before `ModalASRModel`, persisted `modalASRModel`, `selectModalASRModel(...)`, and model-aware URL construction existed.
+  - Focused Python suite passed: `uv run python -B -m unittest tests.test_api tests.test_asr_app tests.test_replay_probe tests.test_modal_serverless tests.test_ios_websocket_client -v` with 52 tests.
+  - Focused Swift filter passed after implementation.
+  - Broader Python plan suite passed: `uv run python -B -m unittest tests.test_api tests.test_asr_runtime tests.test_asr_app tests.test_modal_serverless tests.test_replay_probe tests.test_ws_client tests.test_ios_websocket_client tests.test_macos_app_project -v` with 86 tests.
+  - Swift client core passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test` with 35 XCTest tests plus 91 Swift Testing tests.
+  - iOS Simulator app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived-ios-modal-model-picker CODE_SIGNING_ALLOWED=NO build`.
+  - macOS app build passed: `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos-modal-model-picker CODE_SIGNING_ALLOWED=NO build`.
+  - Full deterministic Python suite passed with 319 tests.
+  - Compile and hygiene passed: `uv run python -m compileall -q deploy tarteel_realtime tests`, feature_list JSON validation, active-feature sanity `[]`, and `git diff --check`.
+- Known risk or unresolved issue:
+  - Modal live deploy/prewarm/replay was not rerun for this slice. The previous live evidence proves the NeMo path; Faster Whisper still needs live Modal proof after deploy.
+  - iOS manual ASR proof remains open because the previous Simulator control issue was not retested in this slice.
+- Next best step: deploy the two-profile Modal app, run `replay_probe` twice with `--asr-model nemo-fastconformer-quran-ar` and `--asr-model faster-whisper-base-ar-quran`, then manually verify the picker in macOS and iOS.
 
 ### Session 123
 
@@ -90,6 +183,35 @@
   - This was a source-ownership refactor, not an ASR quality or locator-policy change.
   - iOS/macOS app builds and physical-device CoreML microphone behavior were not rerun for this extraction; the Swift package tests compile and exercise the extracted code.
 - Next best step: design the next small interface cleanup around the new seam, especially reducing reason-string coupling and deciding whether corpus loading, matching policy, and event mapping should remain together or split under tests.
+
+### Session 123 (Modal NeMo Worktree)
+
+- Date: 2026-06-13
+- Goal: Create an isolated Modal worktree and test Hugging Face NeMo ASR model `mohammed/fastconformer-quran-ar` through the existing WebSocket backend, then manually check macOS and iOS app paths.
+- Completed:
+  - Created worktree `.worktrees/modal-fastconformer-quran-ar` on branch `codex/modal-fastconformer-quran-ar`.
+  - Added optional `tarteel_realtime.nemo_adapter` with nested Hugging Face snapshot restore support via `TARTEEL_NEMO_MODEL_FILE=phase3_full/phase3_full_wer0.0014.nemo`.
+  - Generalized ASR runtime env parsing from Whisper-only to `TARTEEL_ASR_BACKEND`, preserving legacy `TARTEEL_WHISPER_*` compatibility.
+  - Updated Modal deploy adapter to use NeMo, `mohammed/fastconformer-quran-ar`, Modal Volume model cache, CUDA/cuDNN image, L4 GPU, and speech-end flushing settings.
+  - Added replay/client support for a final empty `speech_end` VAD marker and wired Apple replay launch paths so local WAV replay can target a Custom Modal backend while keeping bearer tokens out of launch args.
+  - Deployed Modal endpoint `https://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run`; `/ping` returned `{"status":"ok"}` and logs showed `EncDecHybridRNNTCTCBPEModel` restored from the nested `.nemo` checkpoint.
+- Manual ASR evidence:
+  - `108001.wav` app-cadence replay with `--chunk-ms 160 --send-speech-end --scope 108` returned 57 events and final `locked` `108:1` with transcript `إِنَّهَا أعطَيْنَاكَ الْكَوْثَرَ`.
+  - `108002.wav` returned final `locked` `108:2` with 38 events.
+  - `108003.wav` returned final `locked` `108:3` with 50 events.
+  - Launched macOS app replay for `108001.wav` against the Modal WSS URL; Modal logs showed the terminal empty chunk flushed the buffer and emitted `event_type=locked reason=unique_match ayah_ref=108:1`.
+  - iOS Simulator manual proof is not complete: the app builds, but local `simctl` install/launch commands hung and the captured Simulator screen was blank.
+- Verification run:
+  - Focused Python ASR/runtime/WebSocket checks passed with 64 tests.
+  - Full deterministic Python suite passed with 312 tests.
+  - `uv run python -m compileall -q deploy tarteel_realtime tests` passed.
+  - Swift client core passed with 34 XCTest tests plus 88 Swift Testing tests.
+  - macOS `TarteelPrototypeMac` xcodebuild passed.
+  - iOS Simulator `TarteelPrototypeCoreMLReplay` xcodebuild passed.
+- Known risk or unresolved issue:
+  - Modal live replay is proven for short scoped Surah 108 fixtures, not broad live-mic quality, latency, idle shutdown, or cost.
+  - iOS Simulator manual Modal replay remains blocked by local Simulator control, and physical iOS WebSocket proof has not been run in this slice.
+- Next best step: repeat iOS manual verification on a healthy Simulator session or physical device, then gather live microphone evidence and compare Modal latency/cost against RunPod.
 
 ### Session 122
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import logging
 from typing import Any
 
@@ -26,6 +26,8 @@ def create_app(
     minimum_lock_words: int = 3,
     log_transcripts: bool = False,
     websocket_bearer_token: str | None = None,
+    recognizer_factories_by_asr_model: Mapping[str, Callable[[], SpeechRecognizer]] | None = None,
+    default_asr_model: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Tarteel Realtime MVP")
 
@@ -55,11 +57,22 @@ def create_app(
             await websocket.close(code=1008, reason=str(exc))
             return
 
+        try:
+            selected_recognizer_factory = _recognizer_factory_for_asr_model(
+                websocket.query_params.get("asr_model"),
+                default_factory=recognizer_factory,
+                factories_by_asr_model=recognizer_factories_by_asr_model,
+                default_asr_model=default_asr_model,
+            )
+        except ValueError as exc:
+            await websocket.close(code=1008, reason=str(exc))
+            return
+
         diagnostics_enabled = websocket.query_params.get("diagnostics") == "1"
         await websocket.accept()
         stream = RecitationStream(
             corpus=corpus,
-            recognizer=recognizer_factory(),
+            recognizer=selected_recognizer_factory(),
             minimum_lock_words=minimum_lock_words,
             log_transcripts=log_transcripts,
             recitation_scope=recitation_scope,
@@ -85,6 +98,26 @@ def create_app(
             return
 
     return app
+
+
+def _recognizer_factory_for_asr_model(
+    requested_asr_model: str | None,
+    *,
+    default_factory: Callable[[], SpeechRecognizer],
+    factories_by_asr_model: Mapping[str, Callable[[], SpeechRecognizer]] | None,
+    default_asr_model: str | None,
+) -> Callable[[], SpeechRecognizer]:
+    if factories_by_asr_model is None:
+        return default_factory
+
+    selected_asr_model = (
+        requested_asr_model.strip()
+        if requested_asr_model is not None and requested_asr_model.strip()
+        else default_asr_model
+    )
+    if not selected_asr_model or selected_asr_model not in factories_by_asr_model:
+        raise ValueError("unsupported asr_model")
+    return factories_by_asr_model[selected_asr_model]
 
 
 def _audio_chunk_from_payload(payload: dict[str, Any]) -> AudioChunk:

@@ -35,16 +35,20 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
         self.assertIn("private var backendAuthorizationToken", source)
         self.assertIn("authorizationToken: backendAuthorizationToken", source)
 
-    def test_content_view_exposes_custom_provider_picker_and_bearer_token_field_in_settings(self) -> None:
+    def test_content_view_exposes_modal_only_provider_and_bearer_token_field_in_settings(self) -> None:
         source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
 
         self.assertIn("private struct SettingsSheet", source)
-        self.assertIn('Picker("Provider"', source)
-        self.assertIn("BackendProvider.allCases", source)
-        self.assertIn("customBackendProvider.tokenFieldLabel", source)
+        self.assertIn('LabeledContent("Provider"', source)
+        self.assertIn("BackendProvider.modal.label", source)
+        self.assertIn("selectModalCustomBackendProviderForSettings()", source)
+        self.assertNotIn("BackendProvider.allCases", source)
+        self.assertIn('Picker("ASR model"', source)
+        self.assertIn("ModalASRModel.allCases", source)
+        self.assertIn("BackendProvider.modal.tokenFieldLabel", source)
         self.assertIn("$viewModel.backendBearerTokenText", source)
 
-    def test_macos_settings_exposes_custom_provider_picker_and_bearer_token_field(self) -> None:
+    def test_macos_settings_exposes_modal_only_provider_and_bearer_token_field(self) -> None:
         source = (
             REPO_ROOT
             / "ios"
@@ -54,9 +58,13 @@ class IOSWebSocketClientSourceTests(unittest.TestCase):
             / "MacSettingsView.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn('Picker("Provider"', source)
-        self.assertIn("BackendProvider.allCases", source)
-        self.assertIn("customBackendProvider.tokenFieldLabel", source)
+        self.assertIn('LabeledContent("Provider"', source)
+        self.assertIn("BackendProvider.modal.label", source)
+        self.assertIn("selectModalCustomBackendProviderForSettings()", source)
+        self.assertNotIn("BackendProvider.allCases", source)
+        self.assertIn('Picker("ASR model"', source)
+        self.assertIn("ModalASRModel.allCases", source)
+        self.assertIn("BackendProvider.modal.tokenFieldLabel", source)
         self.assertIn("$viewModel.backendBearerTokenText", source)
 
     def test_view_model_maps_simulator_socket_errors_to_actionable_guidance(self) -> None:

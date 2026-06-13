@@ -62,6 +62,45 @@ public struct LocalAudioReplayConfiguration: Equatable, Sendable {
     }
 }
 
+public struct BackendLaunchConfiguration: Equatable, Sendable {
+    public static let urlFlag = "--tarteel-backend-url"
+    public static let providerFlag = "--tarteel-backend-provider"
+
+    public let urlText: String
+    public let provider: BackendProvider
+
+    public init?(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        guard let urlText = Self.value(after: Self.urlFlag, in: arguments),
+              !urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        self.urlText = urlText
+        provider = Self.value(after: Self.providerFlag, in: arguments)
+            .flatMap(BackendProvider.init(rawValue:)) ?? .generic
+    }
+
+    public func preferencesDefaults(
+        selectedSurahID: Int,
+        recitationMode: RecitationMode = .selectedSurah
+    ) -> RecitationPreferencesDefaults {
+        RecitationPreferencesDefaults(
+            backendPreset: .custom,
+            customBackendProvider: provider,
+            customBackendURLText: urlText,
+            recitationMode: recitationMode,
+            selectedSurahID: selectedSurahID
+        )
+    }
+
+    private static func value(after flag: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: flag) else { return nil }
+        let valueIndex = arguments.index(after: index)
+        guard valueIndex < arguments.endIndex else { return nil }
+        return arguments[valueIndex]
+    }
+}
+
 public struct LocalAudioCaptureConfiguration: Equatable, Sendable {
     public static let audioFlag = "--tarteel-capture-audio"
 
@@ -288,13 +327,15 @@ public final class CapturingAudioStreamer: AudioStreaming, @unchecked Sendable {
 public final class LocalAudioReplayStreamer: AudioStreaming, @unchecked Sendable {
     public let audioURL: URL
     public let chunkSampleCount: Int
+    public let emitsTerminalChunk: Bool
 
     private let chunks: [Data]
     private var onChunk: (@Sendable (Data, Int) -> Void)?
 
     public init(
         audioURL: URL,
-        chunkSampleCount: Int = CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples
+        chunkSampleCount: Int = CoreMLFastConformerFixtureRunner.defaultLiveChunkSamples,
+        emitsTerminalChunk: Bool = false
     ) throws {
         guard chunkSampleCount > 0 else {
             throw CoreMLFastConformerError.invalidAudio
@@ -302,6 +343,7 @@ public final class LocalAudioReplayStreamer: AudioStreaming, @unchecked Sendable
 
         self.audioURL = audioURL
         self.chunkSampleCount = chunkSampleCount
+        self.emitsTerminalChunk = emitsTerminalChunk
         let audio = try CoreMLFastConformerFixtureAudio.loadWAV(from: audioURL)
         let pcm16 = audio.resampled16KPCM16
         let chunkByteCount = chunkSampleCount * MemoryLayout<Int16>.size
@@ -329,6 +371,38 @@ public final class LocalAudioReplayStreamer: AudioStreaming, @unchecked Sendable
             onChunk(chunk, 16_000)
             await Task.yield()
         }
+        if emitsTerminalChunk {
+            onChunk(Data(), 16_000)
+        }
+    }
+}
+
+public actor LocalAudioReplayVoiceActivityDetector: VoiceActivityDetecting {
+    private var hasStartedSpeech = false
+
+    public init() {}
+
+    public func process(pcm: Data, sampleRate: Int) async -> VoiceActivityPayload? {
+        if pcm.isEmpty {
+            return VoiceActivityPayload(
+                probability: 0.0,
+                isSpeechActive: false,
+                event: .speechEnd
+            )
+        }
+
+        let isFirstSpeechChunk = !hasStartedSpeech
+        hasStartedSpeech = true
+
+        return VoiceActivityPayload(
+            probability: 1.0,
+            isSpeechActive: true,
+            event: isFirstSpeechChunk ? .speechStart : nil
+        )
+    }
+
+    public func reset() async {
+        hasStartedSpeech = false
     }
 }
 

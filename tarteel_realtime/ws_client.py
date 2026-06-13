@@ -19,12 +19,16 @@ def build_chunk_payload(
     sequence_number: int,
     pcm: bytes,
     sample_rate_hz: int,
+    voice_activity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "sequence_number": sequence_number,
         "pcm_base64": base64.b64encode(pcm).decode("ascii"),
         "sample_rate_hz": sample_rate_hz,
     }
+    if voice_activity is not None:
+        payload["voice_activity"] = voice_activity
+    return payload
 
 
 async def collect_events(
@@ -66,13 +70,28 @@ async def collect_audio_events(
     *,
     audio: SmokeAudio,
     chunk_duration_ms: int | None,
+    send_speech_end: bool = False,
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
-    for sequence_number, pcm in enumerate(split_pcm_audio(audio, chunk_duration_ms=chunk_duration_ms)):
+    chunks = split_pcm_audio(audio, chunk_duration_ms=chunk_duration_ms)
+    for sequence_number, pcm in enumerate(chunks):
         payload = build_chunk_payload(
             sequence_number=sequence_number,
             pcm=pcm,
             sample_rate_hz=audio.sample_rate_hz,
+        )
+        await websocket.send(json.dumps(payload))
+        events.append(json.loads(await websocket.recv()))
+    if send_speech_end:
+        payload = build_chunk_payload(
+            sequence_number=len(chunks),
+            pcm=b"",
+            sample_rate_hz=audio.sample_rate_hz,
+            voice_activity={
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
         )
         await websocket.send(json.dumps(payload))
         events.append(json.loads(await websocket.recv()))
@@ -116,6 +135,7 @@ async def run_client(
     chunk_duration_ms: int | None = None,
     disable_ping: bool = False,
     authorization_token: str | None = None,
+    send_speech_end: bool = False,
 ) -> list[dict[str, Any]]:
     import websockets
 
@@ -131,6 +151,7 @@ async def run_client(
                 websocket,
                 audio=audio,
                 chunk_duration_ms=chunk_duration_ms,
+                send_speech_end=send_speech_end,
             )
         return await collect_events(
             websocket,
@@ -148,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chunk-ms", type=int, default=None, help="Optional chunk size in milliseconds. Defaults to one whole-file chunk for --audio-path.")
     parser.add_argument("--disable-ping", action="store_true", help="Disable WebSocket keepalive pings for long ASR inference windows.")
     parser.add_argument("--bearer-token", default=None, help="Optional WebSocket Authorization bearer token.")
+    parser.add_argument("--send-speech-end", action="store_true", help="Send one final empty speech_end VAD marker after audio chunks.")
     args = parser.parse_args(argv)
 
     audio = None
@@ -162,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         chunk_duration_ms=args.chunk_ms,
         disable_ping=args.disable_ping,
         authorization_token=args.bearer_token,
+        send_speech_end=args.send_speech_end,
     ))
     for event in events:
         print(format_event(event))

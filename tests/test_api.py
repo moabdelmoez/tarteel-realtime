@@ -156,6 +156,82 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(event["ayah_ref"], "114:1")
         self.assertEqual(event["start_ref"], "114:1:1")
 
+    def test_websocket_selects_recognizer_factory_by_safe_asr_model_slug(self):
+        selected_factories = []
+
+        def nemo_factory():
+            selected_factories.append("nemo-fastconformer-quran-ar")
+            return FakeRecognizer(["مَلِكِ"])
+
+        def faster_whisper_factory():
+            selected_factories.append("faster-whisper-base-ar-quran")
+            return FakeRecognizer(["قُلْ أَعُوذُ"])
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=nemo_factory,
+            minimum_lock_words=1,
+            recognizer_factories_by_asr_model={
+                "nemo-fastconformer-quran-ar": nemo_factory,
+                "faster-whisper-base-ar-quran": faster_whisper_factory,
+            },
+            default_asr_model="nemo-fastconformer-quran-ar",
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect(
+            "/ws/recitation?asr_model=faster-whisper-base-ar-quran"
+        ) as websocket:
+            websocket.send_json(chunk_payload(0))
+            event = websocket.receive_json()
+
+        self.assertEqual(selected_factories, ["faster-whisper-base-ar-quran"])
+        self.assertEqual(event["type"], "locked")
+        self.assertEqual(event["ayah_ref"], "114:1")
+
+    def test_websocket_uses_default_asr_model_when_query_is_missing(self):
+        selected_factories = []
+
+        def nemo_factory():
+            selected_factories.append("nemo-fastconformer-quran-ar")
+            return FakeRecognizer(["مَلِكِ"])
+
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=nemo_factory,
+            minimum_lock_words=1,
+            recognizer_factories_by_asr_model={
+                "nemo-fastconformer-quran-ar": nemo_factory,
+            },
+            default_asr_model="nemo-fastconformer-quran-ar",
+        )
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws/recitation") as websocket:
+            websocket.send_json(chunk_payload(0))
+            event = websocket.receive_json()
+
+        self.assertEqual(selected_factories, ["nemo-fastconformer-quran-ar"])
+        self.assertEqual(event["type"], "locked")
+        self.assertEqual(event["ayah_ref"], "114:2")
+
+    def test_websocket_rejects_unknown_asr_model_slug(self):
+        app = create_app(
+            corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),
+            recognizer_factory=lambda: FakeRecognizer(["مَلِكِ"]),
+            recognizer_factories_by_asr_model={
+                "nemo-fastconformer-quran-ar": lambda: FakeRecognizer(["مَلِكِ"]),
+            },
+            default_asr_model="nemo-fastconformer-quran-ar",
+        )
+        client = TestClient(app)
+
+        with self.assertRaises(WebSocketDisconnect) as context:
+            with client.websocket_connect("/ws/recitation?asr_model=../../other-model"):
+                pass
+
+        self.assertEqual(context.exception.code, 1008)
+
     def test_websocket_accepts_matching_bearer_token_when_configured(self):
         app = create_app(
             corpus=QuranCorpus.from_tanzil_lines(SAMPLE_TANZIL_LINES),

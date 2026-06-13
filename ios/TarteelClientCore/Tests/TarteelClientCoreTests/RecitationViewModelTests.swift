@@ -44,7 +44,8 @@ final class RecitationViewModelTests: XCTestCase {
             customBackendProvider: .modal,
             customBackendURLText: "workspace--tarteel-realtime-asr-fastapi-app.modal.run",
             recitationMode: .selectedSurah,
-            selectedSurahID: 108
+            selectedSurahID: 108,
+            modalASRModel: .fasterWhisperBaseARQuran
         )
         let viewModel = RecitationViewModel(
             socketClient: socket,
@@ -58,10 +59,89 @@ final class RecitationViewModelTests: XCTestCase {
 
         XCTAssertEqual(
             socket.connectedURL?.absoluteString,
-            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108"
+            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation?scope=108&asr_model=faster-whisper-base-ar-quran"
         )
         XCTAssertEqual(socket.authorizationToken, "modal-token")
         XCTAssertTrue(audio.didStart)
+    }
+
+    func testModalBackendRequiresBearerTokenBeforeRecording() async throws {
+        let socket = FakeSocket()
+        let audio = FakeAudioStreamer()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: audio,
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            )
+        )
+
+        XCTAssertFalse(viewModel.canStartRecording)
+        XCTAssertEqual(
+            viewModel.recordingActionHelp,
+            "Enter the Modal bearer token in Settings before recording."
+        )
+
+        await viewModel.startRecording()
+
+        XCTAssertNil(socket.connectedURL)
+        XCTAssertFalse(audio.didStart)
+        XCTAssertFalse(viewModel.isRecording)
+        XCTAssertEqual(viewModel.connectionStatus, "Error")
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            "Enter the Modal bearer token in Settings before recording."
+        )
+
+        viewModel.backendBearerTokenText = " modal-token "
+
+        XCTAssertTrue(viewModel.canStartRecording)
+    }
+
+    func testModalBadServerResponseShowsBearerTokenGuidance() async throws {
+        let socket = FailingConnectSocket(error: TestSocketError.badServerResponse)
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            )
+        )
+        viewModel.backendBearerTokenText = "wrong-token"
+
+        await viewModel.startRecording()
+
+        XCTAssertFalse(viewModel.isRecording)
+        XCTAssertEqual(viewModel.connectionStatus, "Error")
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            "Modal rejected the WebSocket request. Check the Modal bearer token in Settings and try again."
+        )
+    }
+
+    func testSelectingModalASRModelPersistsPreference() {
+        let preferences = FakePreferencesStore(
+            backendPreset: .custom,
+            customBackendProvider: .modal,
+            customBackendURLText: "wss://example.modal.run/ws/recitation"
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: preferences
+        )
+
+        viewModel.selectModalASRModel(.fasterWhisperBaseARQuran)
+
+        XCTAssertEqual(viewModel.modalASRModel, .fasterWhisperBaseARQuran)
+        XCTAssertEqual(preferences.modalASRModel, .fasterWhisperBaseARQuran)
     }
 
     func testStartingRecordingConnectsToScopedCoreMLURLWithoutBearerToken() async throws {
@@ -175,6 +255,31 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.customBackendProvider, .modal)
     }
 
+    func testSettingsProviderMigrationSelectsModalAndLoadsStoredModalToken() {
+        let tokenStore = FakeBearerTokenStore(tokens: [
+            .runPod: "stored-runpod-token",
+            .modal: "stored-modal-token",
+        ])
+        let preferences = FakePreferencesStore(
+            backendPreset: .custom,
+            customBackendProvider: .runPod,
+            customBackendURLText: "wss://example.test/ws/recitation"
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: preferences,
+            backendBearerTokenStore: tokenStore
+        )
+
+        viewModel.selectModalCustomBackendProviderForSettings()
+
+        XCTAssertEqual(viewModel.customBackendProvider, .modal)
+        XCTAssertEqual(preferences.customBackendProvider, .modal)
+        XCTAssertEqual(viewModel.backendBearerTokenText, "stored-modal-token")
+    }
+
     func testEditingBearerTokenPersistsTrimmedTokenForCurrentProvider() {
         let tokenStore = FakeBearerTokenStore()
         let viewModel = RecitationViewModel(
@@ -193,6 +298,46 @@ final class RecitationViewModelTests: XCTestCase {
 
         XCTAssertEqual(tokenStore.tokens[.modal], "new-modal-token")
         XCTAssertNil(viewModel.backendBearerTokenPersistenceMessage)
+    }
+
+    func testEditingBearerTokenPersistsPastedBearerHeaderAsRawToken() {
+        let tokenStore = FakeBearerTokenStore()
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            ),
+            backendBearerTokenStore: tokenStore
+        )
+
+        viewModel.backendBearerTokenText = "  Authorization: Bearer new-modal-token  "
+
+        XCTAssertEqual(tokenStore.tokens[.modal], "new-modal-token")
+        XCTAssertNil(viewModel.backendBearerTokenPersistenceMessage)
+    }
+
+    func testStartingRecordingStripsPastedBearerPrefixBeforeConnecting() async throws {
+        let socket = FakeSocket()
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: FakePreferencesStore(
+                backendPreset: .custom,
+                customBackendProvider: .modal,
+                customBackendURLText: "wss://example.modal.run/ws/recitation"
+            )
+        )
+        viewModel.backendBearerTokenText = " Bearer modal-token "
+
+        await viewModel.startRecording()
+
+        XCTAssertEqual(socket.authorizationToken, "modal-token")
+        XCTAssertEqual(viewModel.connectionStatus, "Streaming")
     }
 
     func testClearingBearerTokenDeletesStoredTokenForCurrentProvider() {
@@ -1106,25 +1251,28 @@ private func localAudioFixtureURL(named filename: String) throws -> URL {
     throw XCTSkip("Local audio fixture \(filename) is not available.")
 }
 
-private struct FakePreferencesStore: RecitationPreferencesStoring {
+private final class FakePreferencesStore: RecitationPreferencesStoring {
     var backendPreset: BackendEndpointPreset
     var customBackendProvider: BackendProvider
     var customBackendURLText: String
     var recitationMode: RecitationMode
     var selectedSurahID: Int
+    var modalASRModel: ModalASRModel
 
     init(
         backendPreset: BackendEndpointPreset = .simulator,
         customBackendProvider: BackendProvider = .runPod,
         customBackendURLText: String = "",
         recitationMode: RecitationMode = .autoDetect,
-        selectedSurahID: Int = 108
+        selectedSurahID: Int = 108,
+        modalASRModel: ModalASRModel = .nemoFastConformerQuranAR
     ) {
         self.backendPreset = backendPreset
         self.customBackendProvider = customBackendProvider
         self.customBackendURLText = customBackendURLText
         self.recitationMode = recitationMode
         self.selectedSurahID = selectedSurahID
+        self.modalASRModel = modalASRModel
     }
 }
 
@@ -1165,8 +1313,34 @@ private enum TestTokenStoreError: Error {
 
 private enum TestSocketError: LocalizedError {
     case sendFailed
+    case badServerResponse
 
     var errorDescription: String? {
-        "send failed"
+        switch self {
+        case .sendFailed:
+            return "send failed"
+        case .badServerResponse:
+            return "There was a bad response from the server."
+        }
     }
+}
+
+private final class FailingConnectSocket: BackendSocketing {
+    private let error: Error
+
+    init(error: Error) {
+        self.error = error
+    }
+
+    func connect(
+        url: URL,
+        authorizationToken: String?,
+        onEvent: @escaping @Sendable (RecitationEvent) -> Void
+    ) async throws {
+        throw error
+    }
+
+    func send(_ payload: AudioChunkPayload) async throws {}
+
+    func disconnect() {}
 }

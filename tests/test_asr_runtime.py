@@ -31,6 +31,8 @@ class AsrRuntimeTests(unittest.TestCase):
         self.assertEqual(settings.minimum_audio_ms, 4_200)
         self.assertEqual(settings.flush_interval_ms, 4_200)
         self.assertEqual(settings.tail_audio_ms, 0)
+        self.assertEqual(settings.speech_end_min_audio_ms, 4_200)
+        self.assertFalse(settings.flush_on_speech_end)
         self.assertEqual(settings.minimum_speech_rms, 400)
         self.assertEqual(settings.minimum_frame_rms, 150)
         self.assertFalse(settings.log_transcripts)
@@ -45,6 +47,8 @@ class AsrRuntimeTests(unittest.TestCase):
         self.assertEqual(settings.minimum_audio_ms, 2_000)
         self.assertEqual(settings.flush_interval_ms, 1_000)
         self.assertEqual(settings.tail_audio_ms, 500)
+        self.assertEqual(settings.speech_end_min_audio_ms, 2_000)
+        self.assertFalse(settings.flush_on_speech_end)
         self.assertEqual(settings.minimum_speech_rms, 400)
         self.assertEqual(settings.minimum_frame_rms, 150)
 
@@ -70,12 +74,16 @@ class AsrRuntimeTests(unittest.TestCase):
             "TARTEEL_ASR_MIN_AUDIO_MS": "2300",
             "TARTEEL_ASR_FLUSH_MS": "1200",
             "TARTEEL_ASR_TAIL_MS": "400",
+            "TARTEEL_ASR_SPEECH_END_MIN_AUDIO_MS": "900",
+            "TARTEEL_ASR_FLUSH_ON_SPEECH_END": "1",
         })
 
         self.assertEqual(settings.buffering_profile, "low-latency")
         self.assertEqual(settings.minimum_audio_ms, 2_300)
         self.assertEqual(settings.flush_interval_ms, 1_200)
         self.assertEqual(settings.tail_audio_ms, 400)
+        self.assertEqual(settings.speech_end_min_audio_ms, 900)
+        self.assertTrue(settings.flush_on_speech_end)
 
     def test_lazy_factory_defers_model_build_until_first_audio_chunk(self):
         built = []

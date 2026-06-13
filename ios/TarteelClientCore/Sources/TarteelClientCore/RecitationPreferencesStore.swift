@@ -6,19 +6,22 @@ public struct RecitationPreferencesDefaults: Equatable, Sendable {
     public let customBackendURLText: String
     public let recitationMode: RecitationMode
     public let selectedSurahID: Int
+    public let modalASRModel: ModalASRModel
 
     public init(
         backendPreset: BackendEndpointPreset = .simulator,
         customBackendProvider: BackendProvider = .runPod,
         customBackendURLText: String = "",
         recitationMode: RecitationMode = .autoDetect,
-        selectedSurahID: Int = 108
+        selectedSurahID: Int = 108,
+        modalASRModel: ModalASRModel = .nemoFastConformerQuranAR
     ) {
         self.backendPreset = backendPreset
         self.customBackendProvider = customBackendProvider
         self.customBackendURLText = customBackendURLText
         self.recitationMode = recitationMode
         self.selectedSurahID = selectedSurahID
+        self.modalASRModel = modalASRModel
     }
 
     public static let simulator = RecitationPreferencesDefaults()
@@ -46,6 +49,7 @@ public protocol RecitationPreferencesStoring {
     var customBackendURLText: String { get set }
     var recitationMode: RecitationMode { get set }
     var selectedSurahID: Int { get set }
+    var modalASRModel: ModalASRModel { get set }
 }
 
 public struct VolatileRecitationPreferencesStore: RecitationPreferencesStoring {
@@ -54,6 +58,7 @@ public struct VolatileRecitationPreferencesStore: RecitationPreferencesStoring {
     public var customBackendURLText: String
     public var recitationMode: RecitationMode
     public var selectedSurahID: Int
+    public var modalASRModel: ModalASRModel
 
     public init(defaults: RecitationPreferencesDefaults = .simulator) {
         backendPreset = defaults.backendPreset
@@ -61,6 +66,7 @@ public struct VolatileRecitationPreferencesStore: RecitationPreferencesStoring {
         customBackendURLText = defaults.customBackendURLText
         recitationMode = defaults.recitationMode
         selectedSurahID = defaults.selectedSurahID
+        modalASRModel = defaults.modalASRModel
     }
 }
 
@@ -71,6 +77,7 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
         static let customBackendURLText = "tarteel.customBackendURLText"
         static let recitationMode = "tarteel.recitationMode"
         static let selectedSurahID = "tarteel.selectedSurahID"
+        static let modalASRModel = "tarteel.modalASRModel"
     }
 
     private let defaults: UserDefaults
@@ -138,6 +145,19 @@ public struct UserDefaultsRecitationPreferencesStore: RecitationPreferencesStori
         }
         set {
             defaults.set(newValue, forKey: Key.selectedSurahID)
+        }
+    }
+
+    public var modalASRModel: ModalASRModel {
+        get {
+            guard let rawValue = defaults.string(forKey: Key.modalASRModel),
+                  let model = ModalASRModel(rawValue: rawValue) else {
+                return fallbackValues.modalASRModel
+            }
+            return model
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Key.modalASRModel)
         }
     }
 }

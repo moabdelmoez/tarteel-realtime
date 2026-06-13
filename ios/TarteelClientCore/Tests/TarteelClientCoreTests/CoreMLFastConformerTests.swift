@@ -328,6 +328,46 @@ struct CoreMLFastConformerTests {
         #expect(emittedSampleRates == [16_000, 16_000, 16_000])
     }
 
+    @Test func localAudioReplayStreamerCanEmitTerminalChunkForSpeechEnd() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("mono16k.wav")
+        try makePCM16WAV(
+            sampleRateHz: 16_000,
+            channelCount: 1,
+            frames: [[1], [2]]
+        ).write(to: url)
+        let streamer = try LocalAudioReplayStreamer(
+            audioURL: url,
+            chunkSampleCount: 2,
+            emitsTerminalChunk: true
+        )
+        nonisolated(unsafe) var emittedSamples: [[Int16]] = []
+        nonisolated(unsafe) var emittedSampleRates: [Int] = []
+
+        try await streamer.start { data, sampleRate in
+            emittedSamples.append(samples(fromPCM16: data))
+            emittedSampleRates.append(sampleRate)
+        }
+        await streamer.replay()
+
+        #expect(emittedSamples == [[1, 2], []])
+        #expect(emittedSampleRates == [16_000, 16_000])
+    }
+
+    @Test func localAudioReplayVoiceActivityMarksTerminalChunkAsSpeechEnd() async {
+        let detector = LocalAudioReplayVoiceActivityDetector()
+
+        let first = await detector.process(pcm: pcm16Data([1]), sampleRate: 16_000)
+        let second = await detector.process(pcm: pcm16Data([2]), sampleRate: 16_000)
+        let terminal = await detector.process(pcm: Data(), sampleRate: 16_000)
+
+        #expect(first == VoiceActivityPayload(probability: 1.0, isSpeechActive: true, event: .speechStart))
+        #expect(second == VoiceActivityPayload(probability: 1.0, isSpeechActive: true, event: nil))
+        #expect(terminal == VoiceActivityPayload(probability: 0.0, isSpeechActive: false, event: .speechEnd))
+    }
+
     @Test func localAudioCaptureWritesReplayableMono16KWAV() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -423,6 +463,26 @@ struct CoreMLFastConformerTests {
 
         #expect(configuration.audioArgument == "108001.wav")
         #expect(configuration.selectedSurahID == 108)
+    }
+
+    @Test func backendLaunchConfigurationParsesModalReplayArguments() throws {
+        let configuration = try #require(BackendLaunchConfiguration(arguments: [
+            "/Applications/TarteelPrototype.app/TarteelPrototype",
+            "--tarteel-backend-url",
+            "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation",
+            "--tarteel-backend-provider",
+            "modal",
+        ]))
+
+        let defaults = configuration.preferencesDefaults(selectedSurahID: 108)
+
+        #expect(configuration.urlText == "wss://workspace--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation")
+        #expect(configuration.provider == .modal)
+        #expect(defaults.backendPreset == .custom)
+        #expect(defaults.customBackendProvider == .modal)
+        #expect(defaults.customBackendURLText == configuration.urlText)
+        #expect(defaults.recitationMode == .selectedSurah)
+        #expect(defaults.selectedSurahID == 108)
     }
 
     @Test func fixtureManifestLooksUpExpectationsByAudioFilename() throws {

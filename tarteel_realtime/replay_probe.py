@@ -5,6 +5,7 @@ import asyncio
 from collections import Counter
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import struct
 from time import monotonic
@@ -102,6 +103,26 @@ def url_with_scope(url: str, scope: str | None) -> str:
     ))
 
 
+def url_with_asr_model(url: str, asr_model: str | None) -> str:
+    if not asr_model:
+        return url
+
+    parts = urlsplit(url)
+    query_items = [
+        (name, value)
+        for name, value in parse_qsl(parts.query, keep_blank_values=True)
+        if name != "asr_model"
+    ]
+    query_items.append(("asr_model", asr_model))
+    return urlunsplit((
+        parts.scheme,
+        parts.netloc,
+        parts.path,
+        urlencode(query_items),
+        parts.fragment,
+    ))
+
+
 async def run_probe(
     *,
     url: str,
@@ -110,6 +131,7 @@ async def run_probe(
     chunk_ms: int | None,
     disable_ping: bool,
     authorization_token: str | None = None,
+    send_speech_end: bool = False,
 ) -> ReplayProbeResult:
     import websockets
 
@@ -123,11 +145,28 @@ async def run_probe(
         ),
     ) as websocket:
         connected = monotonic()
-        for sequence_number, pcm in enumerate(split_pcm_audio(audio, chunk_duration_ms=chunk_ms)):
+        chunks = split_pcm_audio(audio, chunk_duration_ms=chunk_ms)
+        for sequence_number, pcm in enumerate(chunks):
             await websocket.send(json.dumps(build_chunk_payload(
                 sequence_number=sequence_number,
                 pcm=pcm,
                 sample_rate_hz=audio.sample_rate_hz,
+            )))
+            event = json.loads(await websocket.recv())
+            timed_events.append(TimedEvent(
+                event=event,
+                elapsed_ms=_elapsed_ms(start),
+            ))
+        if send_speech_end:
+            await websocket.send(json.dumps(build_chunk_payload(
+                sequence_number=len(chunks),
+                pcm=b"",
+                sample_rate_hz=audio.sample_rate_hz,
+                voice_activity={
+                    "probability": 0.0,
+                    "is_speech_active": False,
+                    "event": "speech_end",
+                },
             )))
             event = json.loads(await websocket.recv())
             timed_events.append(TimedEvent(
@@ -206,19 +245,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chunk-ms", type=int, default=1_000)
     parser.add_argument("--scope", default=None)
     parser.add_argument("--bearer-token", default=None)
+    parser.add_argument("--bearer-token-env", default=None)
+    parser.add_argument("--asr-model", default=None)
     parser.add_argument("--disable-ping", action="store_true")
     parser.add_argument("--include-events", action="store_true")
+    parser.add_argument("--send-speech-end", action="store_true")
     args = parser.parse_args(argv)
 
     audio = load_replay_audio_file(args.audio_path, raw_sample_rate_hz=args.sample_rate)
-    url = url_with_scope(args.url, args.scope)
+    url = url_with_asr_model(url_with_scope(args.url, args.scope), args.asr_model)
+    bearer_token = args.bearer_token
+    if args.bearer_token_env:
+        bearer_token = os.environ.get(args.bearer_token_env)
     result = asyncio.run(run_probe(
         url=url,
         audio=audio,
         audio_path=str(args.audio_path),
         chunk_ms=args.chunk_ms,
         disable_ping=args.disable_ping,
-        authorization_token=args.bearer_token,
+        authorization_token=bearer_token,
+        send_speech_end=args.send_speech_end,
     ))
     print(format_summary(summarize_probe_result(
         result,

@@ -12,6 +12,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(store.customBackendURLText, "")
         XCTAssertEqual(store.recitationMode, .autoDetect)
         XCTAssertEqual(store.selectedSurahID, 108)
+        XCTAssertEqual(store.modalASRModel, .nemoFastConformerQuranAR)
     }
 
     func testCanUseModalFallbackValuesWhenNoValuesArePersisted() {
@@ -45,6 +46,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(store.customBackendURLText, "")
         XCTAssertEqual(store.recitationMode, .selectedSurah)
         XCTAssertEqual(store.selectedSurahID, 108)
+        XCTAssertEqual(store.modalASRModel, .nemoFastConformerQuranAR)
     }
 
     func testVolatileStoreKeepsDeveloperReplayPreferencesInMemory() {
@@ -114,6 +116,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         store.customBackendURLText = "wss://example.test/ws/recitation"
         store.recitationMode = .selectedSurah
         store.selectedSurahID = 4
+        store.modalASRModel = .fasterWhisperBaseARQuran
 
         let reloaded = UserDefaultsRecitationPreferencesStore(defaults: defaults)
         XCTAssertEqual(reloaded.backendPreset, .custom)
@@ -121,6 +124,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.customBackendURLText, "wss://example.test/ws/recitation")
         XCTAssertEqual(reloaded.recitationMode, .selectedSurah)
         XCTAssertEqual(reloaded.selectedSurahID, 4)
+        XCTAssertEqual(reloaded.modalASRModel, .fasterWhisperBaseARQuran)
     }
 
     func testRunPodAPIKeyIsNotPartOfPreferencesStore() {

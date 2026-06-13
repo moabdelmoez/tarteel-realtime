@@ -26,6 +26,8 @@ class BufferedRecognitionConfig:
     minimum_audio_ms: int = 4_200
     flush_interval_ms: int = 4_200
     tail_audio_ms: int = 0
+    speech_end_min_audio_ms: int | None = None
+    flush_on_speech_end: bool = False
     minimum_speech_rms: int = 400
     minimum_frame_rms: int = 150
 
@@ -36,6 +38,8 @@ class BufferedRecognitionConfig:
             raise ValueError("flush_interval_ms must be positive")
         if self.tail_audio_ms < 0:
             raise ValueError("tail_audio_ms must be non-negative")
+        if self.speech_end_min_audio_ms is not None and self.speech_end_min_audio_ms <= 0:
+            raise ValueError("speech_end_min_audio_ms must be positive")
         if self.minimum_speech_rms < 0:
             raise ValueError("minimum_speech_rms must be non-negative")
         if self.minimum_frame_rms < 0:
@@ -111,7 +115,7 @@ class BufferedRecognizer:
             if self._should_buffer_chunk(chunk, incoming_rms=incoming_rms):
                 sample_rate_reset = self._reset_sample_rate_if_needed(chunk)
                 appended_segments = self._append(chunk)
-            else:
+            elif not self._can_flush_rejected_speech_end(chunk):
                 _record_buffer_action(
                     diagnostic_collector,
                     chunk=chunk,
@@ -135,28 +139,29 @@ class BufferedRecognizer:
                 )
                 return _waiting_result(chunk.sequence_number)
         elif _is_vad_speech_end(chunk):
-            _record_buffer_action(
-                diagnostic_collector,
-                chunk=chunk,
-                action=BUFFER_ACTION_DROP_VAD_OR_RMS,
-                incoming_rms=incoming_rms,
-                buffered_ms_before=buffered_ms_before,
-                buffered_ms_after=self._buffered_ms,
-                unflushed_ms_after=self._unflushed_ms,
-                appended=False,
-                appended_segments=[],
-            )
-            logger.warning(
-                "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
-                "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait_vad",
-                chunk.sequence_number,
-                len(chunk.pcm),
-                chunk.sample_rate_hz,
-                self._buffered_ms,
-                self._unflushed_ms,
-                incoming_rms,
-            )
-            return _waiting_result(chunk.sequence_number)
+            if not self._can_flush_rejected_speech_end(chunk):
+                _record_buffer_action(
+                    diagnostic_collector,
+                    chunk=chunk,
+                    action=BUFFER_ACTION_DROP_VAD_OR_RMS,
+                    incoming_rms=incoming_rms,
+                    buffered_ms_before=buffered_ms_before,
+                    buffered_ms_after=self._buffered_ms,
+                    unflushed_ms_after=self._unflushed_ms,
+                    appended=False,
+                    appended_segments=[],
+                )
+                logger.warning(
+                    "buffered_recognizer sequence=%s incoming_bytes=%s sample_rate_hz=%s "
+                    "buffered_ms=%s unflushed_ms=%s incoming_rms=%s action=wait_vad",
+                    chunk.sequence_number,
+                    len(chunk.pcm),
+                    chunk.sample_rate_hz,
+                    self._buffered_ms,
+                    self._unflushed_ms,
+                    incoming_rms,
+                )
+                return _waiting_result(chunk.sequence_number)
         if not self._ready_to_flush(chunk):
             if appended_segments:
                 action = _wait_action_for_buffer_state(
@@ -336,12 +341,22 @@ class BufferedRecognizer:
     def _ready_to_flush(self, chunk: AudioChunk) -> bool:
         if self._sample_rate_hz is None:
             return False
+        if _is_vad_speech_end(chunk):
+            return self._buffered_ms >= self._speech_end_min_audio_ms
         if self._buffered_ms < self._config.minimum_audio_ms:
             return False
+        return self._unflushed_ms >= self._config.flush_interval_ms
+
+    def _can_flush_rejected_speech_end(self, chunk: AudioChunk) -> bool:
         return (
-            self._unflushed_ms >= self._config.flush_interval_ms
-            or _is_vad_speech_end(chunk)
+            self._config.flush_on_speech_end
+            and _is_vad_speech_end(chunk)
+            and self._ready_to_flush(chunk)
         )
+
+    @property
+    def _speech_end_min_audio_ms(self) -> int:
+        return self._config.speech_end_min_audio_ms or self._config.minimum_audio_ms
 
     @property
     def _buffered_ms(self) -> int:

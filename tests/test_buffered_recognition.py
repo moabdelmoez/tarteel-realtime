@@ -52,6 +52,8 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(config.minimum_audio_ms, 4_200)
         self.assertEqual(config.flush_interval_ms, 4_200)
         self.assertEqual(config.tail_audio_ms, 0)
+        self.assertIsNone(config.speech_end_min_audio_ms)
+        self.assertFalse(config.flush_on_speech_end)
         self.assertEqual(config.minimum_speech_rms, 400)
         self.assertEqual(config.minimum_frame_rms, 150)
 
@@ -61,6 +63,8 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertEqual(config.minimum_audio_ms, 2_000)
         self.assertEqual(config.flush_interval_ms, 1_000)
         self.assertEqual(config.tail_audio_ms, 500)
+        self.assertIsNone(config.speech_end_min_audio_ms)
+        self.assertFalse(config.flush_on_speech_end)
         self.assertEqual(config.minimum_speech_rms, 400)
         self.assertEqual(config.minimum_frame_rms, 150)
 
@@ -425,6 +429,41 @@ class BufferedRecognizerTests(unittest.TestCase):
         self.assertFalse(envelope["trace"]["buffer"]["appended"])
         self.assertIsNone(envelope["trace"]["asr_window"])
         self.assertEqual(inner.chunks, [])
+
+    def test_opt_in_empty_speech_end_flushes_ready_buffer(self):
+        inner = RecordingRecognizer()
+        recognizer = BufferedRecognizer(
+            inner,
+            config=BufferedRecognitionConfig(
+                minimum_audio_ms=10,
+                flush_interval_ms=10,
+                tail_audio_ms=0,
+                speech_end_min_audio_ms=2,
+                flush_on_speech_end=True,
+                minimum_frame_rms=150,
+            ),
+        )
+        buffered_chunk = chunk(0, struct.pack("<hh", 1000, -1000))
+        empty_speech_end = AudioChunk(
+            sequence_number=1,
+            pcm=b"",
+            sample_rate_hz=1_000,
+            voice_activity=VoiceActivity(
+                probability=0.0,
+                is_speech_active=False,
+                event="speech_end",
+            ),
+        )
+
+        waiting = recognizer.recognize(buffered_chunk)
+        result = recognizer.recognize(empty_speech_end)
+
+        self.assertEqual(waiting.transcript, "")
+        self.assertEqual(result.transcript, "flush-1")
+        self.assertEqual(result.chunk_sequence, 1)
+        self.assertEqual([recorded.pcm for recorded in inner.chunks], [
+            struct.pack("<hh", 1000, -1000),
+        ])
 
     def test_records_appended_wait_actions_before_flush_conditions(self):
         inner = RecordingRecognizer()

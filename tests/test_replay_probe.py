@@ -11,6 +11,7 @@ from tarteel_realtime.replay_probe import (
     format_summary,
     load_replay_audio_file,
     summarize_probe_result,
+    url_with_asr_model,
     url_with_scope,
 )
 
@@ -74,6 +75,24 @@ class ReplayProbeTests(unittest.TestCase):
                 "108",
             ),
             "wss://example.modal.run/ws/recitation?debug=1&scope=108",
+        )
+
+    def test_url_with_asr_model_adds_model_and_preserves_scope(self) -> None:
+        self.assertEqual(
+            url_with_asr_model(
+                "wss://example.modal.run/ws/recitation?scope=108",
+                "faster-whisper-base-ar-quran",
+            ),
+            "wss://example.modal.run/ws/recitation?scope=108&asr_model=faster-whisper-base-ar-quran",
+        )
+
+    def test_url_with_asr_model_replaces_existing_model(self) -> None:
+        self.assertEqual(
+            url_with_asr_model(
+                "wss://example.modal.run/ws/recitation?asr_model=old&debug=1",
+                "nemo-fastconformer-quran-ar",
+            ),
+            "wss://example.modal.run/ws/recitation?debug=1&asr_model=nemo-fastconformer-quran-ar",
         )
 
     def test_summarizes_first_non_wait_event_and_lock_ref(self) -> None:

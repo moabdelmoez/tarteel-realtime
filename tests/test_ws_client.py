@@ -39,6 +39,27 @@ class WebSocketClientTests(unittest.TestCase):
         self.assertEqual(payload["pcm_base64"], base64.b64encode(b"\x00\x01").decode("ascii"))
         self.assertEqual(payload["sample_rate_hz"], 16_000)
 
+    def test_builds_optional_voice_activity_payload(self):
+        payload = build_chunk_payload(
+            sequence_number=8,
+            pcm=b"",
+            sample_rate_hz=16_000,
+            voice_activity={
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
+        )
+
+        self.assertEqual(
+            payload["voice_activity"],
+            {
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
+        )
+
     def test_collects_events_for_scripted_dummy_chunks(self):
         websocket = FakeWebSocket([
             {"type": "locked", "start_ref": "114:2:1"},
@@ -97,6 +118,33 @@ class WebSocketClientTests(unittest.TestCase):
             ],
         )
         self.assertEqual([event["type"] for event in events], ["locked", "progress"])
+
+    def test_collect_audio_events_can_send_final_speech_end_marker(self):
+        websocket = FakeWebSocket([
+            {"type": "locating"},
+            {"type": "locked", "ayah_ref": "108:1"},
+        ])
+        audio = SmokeAudio(pcm=b"\x00\x01", sample_rate_hz=1_000)
+
+        events = asyncio.run(collect_audio_events(
+            websocket,
+            audio=audio,
+            chunk_duration_ms=1,
+            send_speech_end=True,
+        ))
+
+        self.assertEqual(len(websocket.sent_payloads), 2)
+        self.assertEqual(websocket.sent_payloads[1]["sequence_number"], 1)
+        self.assertEqual(websocket.sent_payloads[1]["pcm_base64"], "")
+        self.assertEqual(
+            websocket.sent_payloads[1]["voice_activity"],
+            {
+                "probability": 0.0,
+                "is_speech_active": False,
+                "event": "speech_end",
+            },
+        )
+        self.assertEqual([event["type"] for event in events], ["locating", "locked"])
 
     def test_formats_event_as_compact_json_line(self):
         line = format_event({"type": "wrong", "expected_ref": "114:2:2"})

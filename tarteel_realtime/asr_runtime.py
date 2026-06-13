@@ -15,6 +15,7 @@ from tarteel_realtime.buffered_recognition import (
     normalize_buffering_profile_name,
 )
 from tarteel_realtime.diagnostics import current_diagnostic_context
+from tarteel_realtime.nemo_adapter import NemoConfig, NemoRecognizer
 from tarteel_realtime.quran_data import DEFAULT_TANZIL_PATH
 from tarteel_realtime.recognition import AudioChunk, RecognitionResult, SpeechRecognizer
 from tarteel_realtime.whisper_adapter import WhisperConfig, WhisperRecognizer
@@ -28,15 +29,20 @@ DEFAULT_HF_CACHE_ROOT = Path("/runpod-volume/huggingface-cache/hub")
 class AsrRuntimeSettings:
     tanzil_path: Path = DEFAULT_TANZIL_PATH
     minimum_lock_words: int = 3
+    asr_backend: str = "transformers"
     model_id: str = DEFAULT_QURAN_WHISPER_MODEL_ID
     whisper_backend: str = "transformers"
     language: str = "ar"
     device: str | int | None = None
     faster_whisper_compute_type: str | None = None
+    hf_cache_root: Path = DEFAULT_HF_CACHE_ROOT
+    nemo_model_file: str | None = None
     buffering_profile: str = DEFAULT_BUFFERING_PROFILE
     minimum_audio_ms: int = 4_200
     flush_interval_ms: int = 4_200
     tail_audio_ms: int = 0
+    speech_end_min_audio_ms: int = 4_200
+    flush_on_speech_end: bool = False
     minimum_speech_rms: int = 400
     minimum_frame_rms: int = 150
     log_transcripts: bool = False
@@ -71,26 +77,83 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> AsrRuntimeSetting
         values.get("TARTEEL_ASR_BUFFERING_PROFILE") or DEFAULT_BUFFERING_PROFILE
     )
     profile_config = buffering_profile_config(buffering_profile)
+    asr_backend = _asr_backend(
+        values.get("TARTEEL_ASR_BACKEND")
+        or values.get("TARTEEL_WHISPER_BACKEND")
+        or "transformers"
+    )
+    model_id = values.get(
+        "TARTEEL_ASR_MODEL_ID",
+        values.get("TARTEEL_WHISPER_MODEL_ID", DEFAULT_QURAN_WHISPER_MODEL_ID),
+    )
+    hf_cache_root = Path(values.get("TARTEEL_HF_CACHE_ROOT", str(DEFAULT_HF_CACHE_ROOT)))
+    if asr_backend != "nemo":
+        model_id = resolve_cached_huggingface_model_id(
+            model_id,
+            cache_root=hf_cache_root,
+        )
+    minimum_audio_ms = int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", str(profile_config.minimum_audio_ms)))
+    flush_interval_ms = int(values.get("TARTEEL_ASR_FLUSH_MS", str(profile_config.flush_interval_ms)))
+    tail_audio_ms = int(values.get("TARTEEL_ASR_TAIL_MS", str(profile_config.tail_audio_ms)))
     return AsrRuntimeSettings(
         tanzil_path=Path(values.get("TARTEEL_TANZIL_PATH", str(DEFAULT_TANZIL_PATH))),
         minimum_lock_words=int(values.get("TARTEEL_MINIMUM_LOCK_WORDS", "3")),
-        model_id=resolve_cached_huggingface_model_id(
-            values.get("TARTEEL_WHISPER_MODEL_ID", DEFAULT_QURAN_WHISPER_MODEL_ID),
-            cache_root=Path(values.get("TARTEEL_HF_CACHE_ROOT", str(DEFAULT_HF_CACHE_ROOT))),
+        asr_backend=asr_backend,
+        model_id=model_id,
+        whisper_backend=_whisper_backend(
+            values.get(
+                "TARTEEL_WHISPER_BACKEND",
+                asr_backend if asr_backend in {"transformers", "faster-whisper"} else "transformers",
+            )
         ),
-        whisper_backend=_whisper_backend(values.get("TARTEEL_WHISPER_BACKEND", "transformers")),
         language=values.get("TARTEEL_WHISPER_LANGUAGE", "ar"),
-        device=_optional_env(values, "TARTEEL_WHISPER_DEVICE"),
+        device=_optional_env(values, "TARTEEL_ASR_DEVICE") or _optional_env(values, "TARTEEL_WHISPER_DEVICE"),
         faster_whisper_compute_type=_optional_env(values, "TARTEEL_FASTER_WHISPER_COMPUTE_TYPE"),
+        hf_cache_root=hf_cache_root,
+        nemo_model_file=_optional_env(values, "TARTEEL_NEMO_MODEL_FILE"),
         buffering_profile=buffering_profile,
-        minimum_audio_ms=int(values.get("TARTEEL_ASR_MIN_AUDIO_MS", str(profile_config.minimum_audio_ms))),
-        flush_interval_ms=int(values.get("TARTEEL_ASR_FLUSH_MS", str(profile_config.flush_interval_ms))),
-        tail_audio_ms=int(values.get("TARTEEL_ASR_TAIL_MS", str(profile_config.tail_audio_ms))),
+        minimum_audio_ms=minimum_audio_ms,
+        flush_interval_ms=flush_interval_ms,
+        tail_audio_ms=tail_audio_ms,
+        speech_end_min_audio_ms=int(
+            values.get("TARTEEL_ASR_SPEECH_END_MIN_AUDIO_MS", str(minimum_audio_ms))
+        ),
+        flush_on_speech_end=_env_bool(values, "TARTEEL_ASR_FLUSH_ON_SPEECH_END"),
         minimum_speech_rms=int(values.get("TARTEEL_ASR_MIN_SPEECH_RMS", str(profile_config.minimum_speech_rms))),
         minimum_frame_rms=int(values.get("TARTEEL_ASR_MIN_FRAME_RMS", str(profile_config.minimum_frame_rms))),
         log_transcripts=_env_bool(values, "TARTEEL_LOG_TRANSCRIPTS"),
         websocket_bearer_token=_optional_env(values, "TARTEEL_WS_BEARER_TOKEN"),
     )
+
+
+def create_lazy_asr_recognizer_factory(
+    settings: AsrRuntimeSettings,
+    *,
+    whisper_recognizer_builder: Callable[[WhisperConfig], SpeechRecognizer] | None = None,
+    nemo_recognizer_builder: Callable[[NemoConfig], SpeechRecognizer] | None = None,
+) -> Callable[[], SpeechRecognizer]:
+    if settings.asr_backend == "nemo":
+        builder = nemo_recognizer_builder or NemoRecognizer.from_pretrained
+        config = NemoConfig(
+            model_id=settings.model_id,
+            model_file=settings.nemo_model_file,
+            cache_dir=str(settings.hf_cache_root),
+            device=settings.device,
+        )
+        shared_recognizer = LazyRecognizer(lambda: builder(config))
+
+        def create_recognizer() -> SpeechRecognizer:
+            return shared_recognizer
+
+        return create_recognizer
+
+    if settings.asr_backend in {"transformers", "faster-whisper"}:
+        return create_lazy_whisper_recognizer_factory(
+            settings,
+            recognizer_builder=whisper_recognizer_builder,
+        )
+
+    raise ValueError(f"unsupported ASR backend: {settings.asr_backend}")
 
 
 def create_lazy_whisper_recognizer_factory(
@@ -115,6 +178,49 @@ def create_lazy_whisper_recognizer_factory(
     return create_recognizer
 
 
+def create_buffered_asr_recognizer_factory(
+    settings: AsrRuntimeSettings,
+    *,
+    whisper_recognizer_builder: Callable[[WhisperConfig], SpeechRecognizer] | None = None,
+    nemo_recognizer_builder: Callable[[NemoConfig], SpeechRecognizer] | None = None,
+) -> Callable[[], SpeechRecognizer]:
+    lazy_factory = create_lazy_asr_recognizer_factory(
+        settings,
+        whisper_recognizer_builder=whisper_recognizer_builder,
+        nemo_recognizer_builder=nemo_recognizer_builder,
+    )
+    buffer_config = BufferedRecognitionConfig(
+        minimum_audio_ms=settings.minimum_audio_ms,
+        flush_interval_ms=settings.flush_interval_ms,
+        tail_audio_ms=settings.tail_audio_ms,
+        speech_end_min_audio_ms=settings.speech_end_min_audio_ms,
+        flush_on_speech_end=settings.flush_on_speech_end,
+        minimum_speech_rms=settings.minimum_speech_rms,
+        minimum_frame_rms=settings.minimum_frame_rms,
+    )
+
+    def create_recognizer() -> SpeechRecognizer:
+        return BufferedRecognizer(lazy_factory(), config=buffer_config)
+
+    return create_recognizer
+
+
+def create_buffered_asr_recognizer_factories_by_model(
+    settings_by_asr_model: Mapping[str, AsrRuntimeSettings],
+    *,
+    whisper_recognizer_builder: Callable[[WhisperConfig], SpeechRecognizer] | None = None,
+    nemo_recognizer_builder: Callable[[NemoConfig], SpeechRecognizer] | None = None,
+) -> dict[str, Callable[[], SpeechRecognizer]]:
+    return {
+        asr_model: create_buffered_asr_recognizer_factory(
+            settings,
+            whisper_recognizer_builder=whisper_recognizer_builder,
+            nemo_recognizer_builder=nemo_recognizer_builder,
+        )
+        for asr_model, settings in settings_by_asr_model.items()
+    }
+
+
 def create_buffered_whisper_recognizer_factory(
     settings: AsrRuntimeSettings,
     *,
@@ -128,6 +234,8 @@ def create_buffered_whisper_recognizer_factory(
         minimum_audio_ms=settings.minimum_audio_ms,
         flush_interval_ms=settings.flush_interval_ms,
         tail_audio_ms=settings.tail_audio_ms,
+        speech_end_min_audio_ms=settings.speech_end_min_audio_ms,
+        flush_on_speech_end=settings.flush_on_speech_end,
         minimum_speech_rms=settings.minimum_speech_rms,
         minimum_frame_rms=settings.minimum_frame_rms,
     )
@@ -146,6 +254,10 @@ def _optional_env(values: Mapping[str, str], key: str) -> str | None:
 
 
 def _whisper_backend(value: str) -> str:
+    return value.strip().lower().replace("_", "-")
+
+
+def _asr_backend(value: str) -> str:
     return value.strip().lower().replace("_", "-")
 
 

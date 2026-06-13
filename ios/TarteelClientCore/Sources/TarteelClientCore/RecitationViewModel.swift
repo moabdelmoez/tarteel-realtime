@@ -83,6 +83,7 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var backendPreset = BackendEndpointPreset.simulator
     @Published public private(set) var customBackendProvider = BackendProvider.runPod
+    @Published public private(set) var modalASRModel = ModalASRModel.nemoFastConformerQuranAR
     @Published public private(set) var recitationMode = RecitationMode.autoDetect
     @Published public private(set) var connectionStatus = "Idle"
     @Published public private(set) var recentEventHistory: [RecitationEventHistoryItem] = []
@@ -140,6 +141,7 @@ public final class RecitationViewModel: ObservableObject {
         let storedCustomURLText = preferencesStore.customBackendURLText
         backendPreset = storedPreset
         customBackendProvider = storedProvider
+        modalASRModel = preferencesStore.modalASRModel
         customBackendURLText = storedCustomURLText
         recitationMode = preferencesStore.recitationMode
         selectedSurahID = preferencesStore.selectedSurahID
@@ -188,6 +190,17 @@ public final class RecitationViewModel: ObservableObject {
         validateBackendURLText()
     }
 
+    public func selectModalCustomBackendProviderForSettings() {
+        guard customBackendProvider != .modal else { return }
+        selectCustomBackendProvider(.modal)
+    }
+
+    public func selectModalASRModel(_ model: ModalASRModel) {
+        modalASRModel = model
+        preferencesStore.modalASRModel = model
+        validateBackendURLText()
+    }
+
     public func selectRecitationMode(_ mode: RecitationMode) {
         recitationMode = mode
         preferencesStore.recitationMode = mode
@@ -204,8 +217,16 @@ public final class RecitationViewModel: ObservableObject {
 
     private var backendAuthorizationToken: String? {
         guard backendPreset == .custom else { return nil }
-        let token = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return token.isEmpty ? nil : token
+        return Self.canonicalBackendBearerToken(from: backendBearerTokenText)
+    }
+
+    private var backendBearerTokenValidationMessage: String? {
+        guard backendPreset == .custom,
+              customBackendProvider == .modal,
+              backendAuthorizationToken == nil else {
+            return nil
+        }
+        return Self.missingModalBearerTokenMessage
     }
 
     private func loadBackendBearerToken(for provider: BackendProvider) {
@@ -226,8 +247,7 @@ public final class RecitationViewModel: ObservableObject {
     private func persistBackendBearerTokenIfNeeded() {
         guard !isLoadingBackendBearerToken, backendPreset == .custom else { return }
 
-        let trimmedToken = backendBearerTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tokenToStore = trimmedToken.isEmpty ? nil : trimmedToken
+        let tokenToStore = Self.canonicalBackendBearerToken(from: backendBearerTokenText)
         do {
             try backendBearerTokenStore.setToken(tokenToStore, for: customBackendProvider)
             backendBearerTokenPersistenceMessage = nil
@@ -237,7 +257,10 @@ public final class RecitationViewModel: ObservableObject {
     }
 
     public var canStartRecording: Bool {
-        !isRecording && !isStartingRecording && validatedCurrentBackendURLText() != nil
+        !isRecording
+            && !isStartingRecording
+            && validatedCurrentBackendURLText() != nil
+            && backendBearerTokenValidationMessage == nil
     }
 
     public var recordingActionTitle: String {
@@ -260,6 +283,9 @@ public final class RecitationViewModel: ObservableObject {
         }
         if isRecording {
             return "Stop the current recitation stream"
+        }
+        if let backendBearerTokenValidationMessage {
+            return backendBearerTokenValidationMessage
         }
         return backendURLValidationMessage ?? "Start streaming microphone audio"
     }
@@ -326,7 +352,8 @@ public final class RecitationViewModel: ObservableObject {
             let urlText = backendPreset.recordingURLText(
                 currentURLText: backendURLText,
                 recitationScope: recitationScopeSelection,
-                provider: customBackendProvider
+                provider: customBackendProvider,
+                modalASRModel: modalASRModel
             )
             guard backendPreset == .coreML || Self.isValidWebSocketURLText(urlText) else {
                 backendURLValidationMessage = Self.invalidBackendURLMessage
@@ -335,6 +362,9 @@ public final class RecitationViewModel: ObservableObject {
             backendURLValidationMessage = nil
             if urlText != backendURLText {
                 backendURLText = urlText
+            }
+            if let backendBearerTokenValidationMessage {
+                throw RecitationViewModelError.blocked(backendBearerTokenValidationMessage)
             }
             guard let backendURL = URL(string: urlText) else {
                 throw RecitationViewModelError.invalidBackendURL
@@ -556,7 +586,9 @@ public final class RecitationViewModel: ObservableObject {
     private func validatedCurrentBackendURLText() -> String? {
         let normalized = backendPreset.recordingURLText(
             currentURLText: backendURLText,
-            provider: customBackendProvider
+            recitationScope: recitationScopeSelection,
+            provider: customBackendProvider,
+            modalASRModel: modalASRModel
         )
         if backendPreset == .coreML {
             return normalized
@@ -588,6 +620,8 @@ public final class RecitationViewModel: ObservableObject {
     }
 
     private static let invalidBackendURLMessage = "Enter a valid backend URL."
+    private static let missingModalBearerTokenMessage = "Enter the Modal bearer token in Settings before recording."
+    private static let modalBadServerResponseMessage = "Modal rejected the WebSocket request. Check the Modal bearer token in Settings and try again."
 
     private func errorMessage(for error: Error, backendPreset: BackendEndpointPreset) -> String {
         if backendPreset == .coreML,
@@ -597,6 +631,12 @@ public final class RecitationViewModel: ObservableObject {
         }
 
         let message = error.localizedDescription
+        if backendPreset == .custom,
+           customBackendProvider == .modal,
+           Self.isBadServerResponseMessage(message) {
+            return Self.modalBadServerResponseMessage
+        }
+
         guard backendPreset == .simulator else {
             return message
         }
@@ -609,15 +649,37 @@ public final class RecitationViewModel: ObservableObject {
 
         return message
     }
+
+    private static func isBadServerResponseMessage(_ message: String) -> Bool {
+        message.localizedCaseInsensitiveContains("bad response")
+            || message.localizedCaseInsensitiveContains("server rejected")
+            || message.contains("403")
+    }
+
+    private static func canonicalBackendBearerToken(from text: String) -> String? {
+        var token = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if token.lowercased().hasPrefix("authorization:") {
+            token = String(token.dropFirst("authorization:".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if token.lowercased().hasPrefix("bearer ") {
+            token = String(token.dropFirst("bearer ".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return token.isEmpty ? nil : token
+    }
 }
 
 enum RecitationViewModelError: LocalizedError {
     case invalidBackendURL
+    case blocked(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidBackendURL:
             return "Enter a valid backend URL."
+        case .blocked(let message):
+            return message
         }
     }
 }

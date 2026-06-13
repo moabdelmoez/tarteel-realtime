@@ -85,14 +85,30 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
         normalizedRecordingURLText(
             currentURLText: currentURLText,
             recitationScope: recitationScope,
-            provider: provider
+            provider: provider,
+            modalASRModel: nil
+        )
+    }
+
+    public func recordingURLText(
+        currentURLText: String,
+        recitationScope: RecitationScopeSelection,
+        provider: BackendProvider,
+        modalASRModel: ModalASRModel
+    ) -> String {
+        normalizedRecordingURLText(
+            currentURLText: currentURLText,
+            recitationScope: recitationScope,
+            provider: provider,
+            modalASRModel: modalASRModel
         )
     }
 
     private func normalizedRecordingURLText(
         currentURLText: String,
         recitationScope: RecitationScopeSelection?,
-        provider: BackendProvider
+        provider: BackendProvider,
+        modalASRModel: ModalASRModel? = nil
     ) -> String {
         let urlText: String
         switch self {
@@ -104,7 +120,11 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
             urlText = Self.webSocketURLText(from: currentURLText, provider: provider)
         }
 
-        return Self.urlText(urlText, applying: recitationScope)
+        return Self.urlText(
+            urlText,
+            applying: recitationScope,
+            modalASRModel: self == .custom && provider == .modal ? modalASRModel : nil
+        )
     }
 
     private static func webSocketURLText(from text: String, provider: BackendProvider) -> String {
@@ -138,21 +158,43 @@ public enum BackendEndpointPreset: String, CaseIterable, Hashable, Identifiable,
 
     private static func urlText(
         _ text: String,
-        applying recitationScope: RecitationScopeSelection?
+        applying recitationScope: RecitationScopeSelection?,
+        modalASRModel: ModalASRModel? = nil
     ) -> String {
-        guard let recitationScope else { return text }
+        guard recitationScope != nil || modalASRModel != nil else { return text }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return text
         }
         guard var components = URLComponents(string: text) else { return text }
 
-        var queryItems = components.queryItems?.filter { $0.name != "scope" } ?? []
-        if let scope = recitationScope.queryValue {
+        var queryItems = components.queryItems?.filter {
+            $0.name != "scope" && $0.name != "asr_model"
+        } ?? []
+        if let scope = recitationScope?.queryValue {
             queryItems.append(URLQueryItem(name: "scope", value: scope))
+        }
+        if let modalASRModel {
+            queryItems.append(URLQueryItem(name: "asr_model", value: modalASRModel.rawValue))
         }
         components.queryItems = queryItems.isEmpty ? nil : queryItems
 
         return components.string ?? text
+    }
+}
+
+public enum ModalASRModel: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case nemoFastConformerQuranAR = "nemo-fastconformer-quran-ar"
+    case fasterWhisperBaseARQuran = "faster-whisper-base-ar-quran"
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .nemoFastConformerQuranAR:
+            return "FastConformer Quran AR (NeMo)"
+        case .fasterWhisperBaseARQuran:
+            return "Faster Whisper Base AR Quran"
+        }
     }
 }
 

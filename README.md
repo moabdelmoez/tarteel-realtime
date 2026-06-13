@@ -137,7 +137,7 @@ TARTEEL_ASR_MIN_SPEECH_RMS=400
 TARTEEL_ASR_MIN_FRAME_RMS=150
 ```
 
-Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a Whisper request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. `TARTEEL_ASR_BUFFERING_PROFILE=low-latency` gives the ASR backend a shorter first window and keeps 500ms of tail context between windows; explicit `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, `TARTEEL_ASR_TAIL_MS`, `TARTEEL_ASR_MIN_SPEECH_RMS`, or `TARTEEL_ASR_MIN_FRAME_RMS` values override the selected profile.
+Each incoming WebSocket audio frame is first passed through the lightweight speech-energy gate. Frames below `TARTEEL_ASR_MIN_FRAME_RMS` are not appended to the rolling ASR buffer, so low-noise transport audio does not become a model request. Before each model call the backend then waits for at least `TARTEEL_ASR_MIN_AUDIO_MS` of buffered PCM16 speech audio and still requires the full buffer to meet `TARTEEL_ASR_MIN_SPEECH_RMS`. `TARTEEL_ASR_BUFFERING_PROFILE=low-latency` gives the ASR backend a shorter first window and keeps 500ms of tail context between windows; explicit `TARTEEL_ASR_MIN_AUDIO_MS`, `TARTEEL_ASR_FLUSH_MS`, `TARTEEL_ASR_TAIL_MS`, `TARTEEL_ASR_MIN_SPEECH_RMS`, or `TARTEEL_ASR_MIN_FRAME_RMS` values override the selected profile.
 
 Local or CPU smoke command:
 
@@ -166,6 +166,18 @@ TARTEEL_WHISPER_DEVICE=cuda:0 \
 TARTEEL_FASTER_WHISPER_COMPUTE_TYPE=float16 \
 TARTEEL_ASR_BUFFERING_PROFILE=low-latency \
 UV_NO_PROGRESS=1 uv run --with faster-whisper uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
+```
+
+For NeMo FastConformer model IDs such as `mohammed/fastconformer-quran-ar`, select the optional NeMo backend. Keep these dependencies out of the default project; install them only in the GPU runtime being tested:
+
+```bash
+TARTEEL_TANZIL_PATH=data/tanzil/quran-simple-clean.txt \
+TARTEEL_ASR_BACKEND=nemo \
+TARTEEL_ASR_MODEL_ID=mohammed/fastconformer-quran-ar \
+TARTEEL_NEMO_MODEL_FILE=phase3_full/phase3_full_wer0.0014.nemo \
+TARTEEL_ASR_DEVICE=cuda:0 \
+TARTEEL_ASR_BUFFERING_PROFILE=low-latency \
+UV_NO_PROGRESS=1 uv run --with 'nemo_toolkit[asr]' --with huggingface_hub uvicorn tarteel_realtime.asr_app:create_app_from_env --factory --host 0.0.0.0 --port 8000
 ```
 
 Send one mono PCM16 WAV or raw PCM16LE file through the WebSocket:
@@ -261,7 +273,14 @@ URL normalization and token labeling while the WebSocket contract stays the same
 
 Direct Apple-to-serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key locally; do not commit it or put it in docs. The iPhone prototype keeps bearer tokens memory-only. The macOS prototype stores the selected `Custom` provider bearer token in macOS Keychain so it survives relaunch without writing the secret to `UserDefaults`. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for provider health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
 
-For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights:
+For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights. Modal uses one WebSocket endpoint and selects between the two approved model profiles per recording session with a safe `asr_model` query item:
+
+```text
+nemo-fastconformer-quran-ar -> mohammed/fastconformer-quran-ar
+faster-whisper-base-ar-quran -> OdyAsh/faster-whisper-base-ar-quran
+```
+
+NeMo is the default when `asr_model` is omitted. Unknown slugs are rejected by the backend.
 
 ```bash
 modal run deploy/modal_asr_app.py::prewarm
@@ -274,11 +293,16 @@ Then replay the same scoped fixtures with the provider-neutral probe:
 uv run --with websockets python -m tarteel_realtime.replay_probe \
   --url 'wss://<modal-app>.modal.run/ws/recitation' \
   --scope 108 \
+  --asr-model nemo-fastconformer-quran-ar \
   --audio-path fixtures/local_audio/108001.wav \
-  --chunk-ms 1000 \
-  --bearer-token '<token>' \
-  --disable-ping
+  --chunk-ms 160 \
+  --bearer-token-env MODAL_TOKEN \
+  --disable-ping \
+  --send-speech-end \
+  --include-events
 ```
+
+Repeat with `--asr-model faster-whisper-base-ar-quran` to compare the Faster Whisper profile without changing the endpoint. In the iPhone or macOS app, choose Settings -> Custom -> Provider: Modal, then pick the ASR model from the Modal-only menu.
 
 ### Visual Diagnostics Bundle
 

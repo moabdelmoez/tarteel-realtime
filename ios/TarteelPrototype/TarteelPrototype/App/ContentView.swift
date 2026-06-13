@@ -200,24 +200,31 @@ private struct SettingsSheet: View {
                         .disabled(viewModel.isRecording || !viewModel.backendPreset.allowsURLTextEditing)
 
                     if viewModel.backendPreset == .custom {
-                        Picker("Provider", selection: Binding(
-                            get: { viewModel.customBackendProvider },
-                            set: { viewModel.selectCustomBackendProvider($0) }
+                        LabeledContent("Provider") {
+                            Text(BackendProvider.modal.label)
+                        }
+                        .onAppear {
+                            viewModel.selectModalCustomBackendProviderForSettings()
+                        }
+
+                        Picker("ASR model", selection: Binding(
+                            get: { viewModel.modalASRModel },
+                            set: { viewModel.selectModalASRModel($0) }
                         )) {
-                            ForEach(BackendProvider.allCases) { provider in
-                                Text(provider.label).tag(provider)
+                            ForEach(ModalASRModel.allCases) { model in
+                                Text(model.label).tag(model)
                             }
                         }
                         .pickerStyle(.menu)
                         .disabled(viewModel.isRecording)
 
-                        SecureField(viewModel.customBackendProvider.tokenFieldLabel, text: $viewModel.backendBearerTokenText)
+                        SecureField(BackendProvider.modal.tokenFieldLabel, text: $viewModel.backendBearerTokenText)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.footnote.monospaced())
                             .disabled(viewModel.isRecording)
 
-                        Text(viewModel.customBackendProvider.tokenHelpText)
+                        Text(BackendProvider.modal.tokenHelpText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

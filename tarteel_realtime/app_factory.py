@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +23,8 @@ def create_configured_app(
     settings: AppSettings,
     *,
     recognizer_factory: Callable[[], SpeechRecognizer],
+    recognizer_factories_by_asr_model: Mapping[str, Callable[[], SpeechRecognizer]] | None = None,
+    default_asr_model: str | None = None,
 ) -> FastAPI:
     return create_app(
         corpus=QuranCorpus.from_tanzil_file(settings.tanzil_path),
@@ -30,4 +32,6 @@ def create_configured_app(
         minimum_lock_words=settings.minimum_lock_words,
         log_transcripts=settings.log_transcripts,
         websocket_bearer_token=settings.websocket_bearer_token,
+        recognizer_factories_by_asr_model=recognizer_factories_by_asr_model,
+        default_asr_model=default_asr_model,
     )
