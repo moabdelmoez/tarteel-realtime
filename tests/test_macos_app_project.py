@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_PATH = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototype.xcodeproj" / "project.pbxproj"
+CLIENT_CORE_SOURCE_ROOT = REPO_ROOT / "ios" / "TarteelClientCore" / "Sources" / "TarteelClientCore"
 MAC_APP_ROOT = REPO_ROOT / "ios" / "TarteelPrototype" / "TarteelPrototypeMac"
 MAC_APP_SOURCE_ROOT = MAC_APP_ROOT / "App"
 MAC_PLIST_PATH = MAC_APP_ROOT / "Info.plist"
@@ -117,24 +118,8 @@ class MacOSAppProjectTests(unittest.TestCase):
         iphone_paths = self._target_source_paths(project, "TarteelPrototype")
         mac_paths = self._target_source_paths(project, "TarteelPrototypeMac")
 
-        for filename in [
-            "AudioChunkPayload.swift",
-            "BackendEndpointPreset.swift",
-            "BackendWebSocketClient.swift",
-            COREML_CLIENT_NAME,
-            COREML_SCORING_NAME,
-            LOCAL_AUDIO_REPLAY_NAME,
-            "RecitationClientProtocols.swift",
-            "RecitationEvent.swift",
-            "RecitationMode.swift",
-            "RecitationPreferencesStore.swift",
-            "RecitationScopeSelection.swift",
-            "RecitationSessionState.swift",
-            "RecitationViewModel.swift",
-            "SurahCatalog.swift",
-            "VoiceActivityPayload.swift",
-        ]:
-            expected_path = f"../TarteelClientCore/Sources/TarteelClientCore/{filename}"
+        for source_path in sorted(CLIENT_CORE_SOURCE_ROOT.glob("*.swift")):
+            expected_path = f"../TarteelClientCore/Sources/TarteelClientCore/{source_path.name}"
             self.assertIn(expected_path, iphone_paths)
             self.assertIn(expected_path, mac_paths)
 

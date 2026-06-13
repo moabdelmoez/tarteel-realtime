@@ -31,6 +31,7 @@ The canonical flow is:
 - `RecitationSession`: recognizer adapter (`AudioChunk` -> `RecognitionResult`) plus delegation.
 - `RecitationTransitionPolicy`: stateful post-recognition decision tree.
 - `QuranLocator.locate_recitation(...)`: public recitation-location seam.
+- `CoreMLLocalQuranSession`: Apple local recitation-location seam that maps cumulative CoreML transcripts to SessionEvent-compatible recitation events.
 - `locator_matching.py`: exact/tolerant/span matching internals, scoring, and scope constraints.
 - `RecitationProgression`: ordered progression state (next expected word/ayah, ordered misses, anchor refs).
 - `session_events.py`: event constructors and event type semantics.

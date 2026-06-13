@@ -28,6 +28,7 @@
 		100000000000000000000019 /* Resources/quran_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* Resources/quran_logo.png */; };
 		100000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000120 /* Assets.xcassets */; };
 		100000000000000000000022 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000121 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift */; };
+		100000000000000000000029 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000128 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift */; };
 		100000000000000000000023 /* ../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000122 /* ../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage */; };
 		100000000000000000000024 /* ../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000123 /* ../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage */; };
 		100000000000000000000025 /* ../../.models/fastconformer-quran-coreml-streaming/tokenizer.model in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000124 /* ../../.models/fastconformer-quran-coreml-streaming/tokenizer.model */; };
@@ -57,6 +58,7 @@
 		200000000000000000000022 /* Resources/quran_logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* Resources/quran_logo.png */; };
 		200000000000000000000023 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000120 /* Assets.xcassets */; };
 		200000000000000000000024 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000121 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift */; };
+		200000000000000000000033 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000128 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift */; };
 		200000000000000000000025 /* ../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000122 /* ../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage */; };
 		200000000000000000000026 /* ../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000123 /* ../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage */; };
 		200000000000000000000027 /* ../../.models/fastconformer-quran-coreml-streaming/tokenizer.model in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000124 /* ../../.models/fastconformer-quran-coreml-streaming/tokenizer.model */; };
@@ -88,6 +90,7 @@
 		100000000000000000000119 /* Resources/quran_logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Resources/quran_logo.png; sourceTree = "<group>"; };
 		100000000000000000000120 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		100000000000000000000121 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift; sourceTree = "<group>"; };
+		100000000000000000000128 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift; sourceTree = "<group>"; };
 		100000000000000000000122 /* ../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mlpackage; path = "../../.models/fastconformer-quran-coreml-streaming/fastconformer-quran-streaming.mlpackage"; sourceTree = "<group>"; };
 		100000000000000000000123 /* ../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper.mlpackage; path = "../../.models/fastconformer-quran-coreml-streaming/pronunciation-head.mlpackage"; sourceTree = "<group>"; };
 		100000000000000000000124 /* ../../.models/fastconformer-quran-coreml-streaming/tokenizer.model */ = {isa = PBXFileReference; lastKnownFileType = file; path = "../../.models/fastconformer-quran-coreml-streaming/tokenizer.model"; sourceTree = "<group>"; };
@@ -160,6 +163,7 @@
 				100000000000000000000111 /* ../TarteelClientCore/Sources/TarteelClientCore/VoiceActivityPayload.swift */,
 				100000000000000000000116 /* ../TarteelClientCore/Sources/TarteelClientCore/RecitationClientProtocols.swift */,
 				100000000000000000000121 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift */,
+				100000000000000000000128 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift */,
 				100000000000000000000126 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerFixtureScoring.swift */,
 				100000000000000000000127 /* ../TarteelClientCore/Sources/TarteelClientCore/LocalAudioReplayStreamer.swift */,
 				100000000000000000000117 /* ../TarteelClientCore/Sources/TarteelClientCore/RecitationMode.swift */,
@@ -439,6 +443,7 @@
 				100000000000000000000017 /* ../TarteelClientCore/Sources/TarteelClientCore/RecitationMode.swift in Sources */,
 				100000000000000000000018 /* ../TarteelClientCore/Sources/TarteelClientCore/RecitationPreferencesStore.swift in Sources */,
 				100000000000000000000022 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift in Sources */,
+				100000000000000000000029 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift in Sources */,
 				100000000000000000000027 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerFixtureScoring.swift in Sources */,
 				100000000000000000000028 /* ../TarteelClientCore/Sources/TarteelClientCore/LocalAudioReplayStreamer.swift in Sources */,
 			);
@@ -467,6 +472,7 @@
 				200000000000000000000017 /* App/VoiceActivityDetector.swift in Sources */,
 				200000000000000000000021 /* App/KeychainBackendBearerTokenStore.swift in Sources */,
 				200000000000000000000024 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerClient.swift in Sources */,
+				200000000000000000000033 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift in Sources */,
 				200000000000000000000029 /* ../TarteelClientCore/Sources/TarteelClientCore/CoreMLFastConformerFixtureScoring.swift in Sources */,
 				200000000000000000000032 /* ../TarteelClientCore/Sources/TarteelClientCore/LocalAudioReplayStreamer.swift in Sources */,
 			);

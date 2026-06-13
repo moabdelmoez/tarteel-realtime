@@ -439,6 +439,36 @@ struct CoreMLFastConformerTests {
         #expect(expectation.ayahRef == "108:1")
     }
 
+    @Test func localQuranEventReasonsKeepWireContractValues() {
+        let expectedReasons: [(CoreMLLocalQuranEventReason, String)] = [
+            (.noWords, "coreml_local_no_words"),
+            (.insufficientContext, "coreml_local_insufficient_context"),
+            (.noMatch, "coreml_local_no_match"),
+            (.orderedNoMatch, "coreml_local_ordered_no_match"),
+            (.spanMatch, "coreml_local_span_match"),
+            (.tolerantMatch, "coreml_local_tolerant_match"),
+            (.orderedProgress, "coreml_local_ordered_progress"),
+            (.orderedForwardProgress, "coreml_local_ordered_forward_progress"),
+            (.orderedAnchorProgress, "coreml_local_ordered_anchor_progress"),
+            (.nextAyahTailSkipProgress, "coreml_local_next_ayah_tail_skip_progress"),
+            (.shortAyahSuffixProgress, "coreml_local_short_ayah_suffix_progress"),
+            (.shortAyahFinalWordProgress, "coreml_local_short_ayah_final_word_progress"),
+            (.openingBasmalaLock, "coreml_local_opening_basmala_lock"),
+            (.openingContentLock, "coreml_local_opening_content_lock"),
+            (.openingPrefaceNoMatch, "coreml_local_opening_preface_no_match"),
+            (.openingSparseContentLock, "coreml_local_opening_sparse_content_lock"),
+            (.openingFusedLock, "coreml_local_opening_fused_lock"),
+            (.sequenceAnchorLock, "coreml_local_sequence_anchor_lock"),
+            (.anchorLock, "coreml_local_anchor_lock"),
+            (.prefixLock, "coreml_local_prefix_lock"),
+        ]
+
+        #expect(CoreMLLocalQuranEventReason.allCases.count == expectedReasons.count)
+        for (reason, rawValue) in expectedReasons {
+            #expect(reason.rawValue == rawValue)
+        }
+    }
+
     @Test func localQuranSessionLocksAndProgressesScopedCoreMLTranscript() {
         var session = CoreMLLocalQuranSession(scope: .selectedSurah(id: 108))
 
@@ -454,13 +484,13 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_span_match")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.spanMatch.rawValue)
         #expect(locked.ayahRef == "108:1")
         #expect(locked.ayahText == "إنا أعطيناك الكوثر")
         #expect(locked.startRef == "108:1:2")
         #expect(locked.candidateRefs == ["108:1"])
         #expect(progressed.type == .progress)
-        #expect(progressed.reason == "coreml_local_ordered_progress")
+        #expect(progressed.reason == CoreMLLocalQuranEventReason.orderedProgress.rawValue)
         #expect(progressed.ayahRef == "108:2")
         #expect(progressed.ayahText == "فصل لربك وانحر")
         #expect(progressed.nextExpectedRef == "108:3:1")
@@ -481,7 +511,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(progressed.type == .progress)
-        #expect(progressed.reason == "coreml_local_ordered_progress")
+        #expect(progressed.reason == CoreMLLocalQuranEventReason.orderedProgress.rawValue)
         #expect(progressed.ayahRef == "108:2")
         #expect(progressed.ayahText == "فصل لربك وانحر")
         #expect(progressed.startRef == "108:2:1")
@@ -529,7 +559,7 @@ struct CoreMLFastConformerTests {
 
         #expect(event.type == .locating)
         #expect(event.ayahRef == nil)
-        #expect(event.reason == "coreml_local_no_match")
+        #expect(event.reason == CoreMLLocalQuranEventReason.noMatch.rawValue)
     }
 
     @Test func localQuranSessionIgnoresIstiazaBeforeSelectedSurahBasmala() throws {
@@ -549,7 +579,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_opening_basmala_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.openingBasmalaLock.rawValue)
         #expect(locked.ayahRef == "18:1")
         #expect(locked.startRef == "18:1:3")
         #expect(locked.nextExpectedRef == "18:1:5")
@@ -574,7 +604,7 @@ struct CoreMLFastConformerTests {
 
         #expect(event.type == .locating)
         #expect(event.ayahRef == nil)
-        #expect(event.reason == "coreml_local_opening_preface_no_match")
+        #expect(event.reason == CoreMLLocalQuranEventReason.openingPrefaceNoMatch.rawValue)
     }
 
     @Test func localQuranSessionIgnoresIstiazaWhenBasmalaIsSkipped() throws {
@@ -594,7 +624,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_opening_content_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.openingContentLock.rawValue)
         #expect(locked.ayahRef == "18:1")
         #expect(locked.startRef == "18:1:5")
         #expect(locked.nextExpectedRef == "18:1:9")
@@ -634,9 +664,9 @@ struct CoreMLFastConformerTests {
 
         #expect(sparseOpening.type == .locating)
         #expect(sparseOpening.ayahRef == nil)
-        #expect(sparseOpening.reason == "coreml_local_opening_preface_no_match")
+        #expect(sparseOpening.reason == CoreMLLocalQuranEventReason.openingPrefaceNoMatch.rawValue)
         #expect(recoveredOpening.type == .locked)
-        #expect(recoveredOpening.reason == "coreml_local_opening_sparse_content_lock")
+        #expect(recoveredOpening.reason == CoreMLLocalQuranEventReason.openingSparseContentLock.rawValue)
         #expect(recoveredOpening.ayahRef == "18:1")
         #expect(recoveredOpening.startRef == "18:1:9")
         #expect(recoveredOpening.nextExpectedRef == "18:2:1")
@@ -659,7 +689,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_anchor_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.anchorLock.rawValue)
         #expect(locked.ayahRef == "35:1")
         #expect(locked.ayahText == "الحمد لله فاطر السماوات والأرض جاعل الملائكة رسلا أولي أجنحة مثنى وثلاث ورباع يزيد في الخلق ما يشاء إن الله على كل شيء قدير")
         #expect(locked.startRef == "35:1:1")
@@ -690,7 +720,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_prefix_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.prefixLock.rawValue)
         #expect(locked.ayahRef == "80:1")
         #expect(locked.ayahText == "بسم الله الرحمن الرحيم عبس وتولى")
         #expect(locked.nextExpectedRef == "80:2:1")
@@ -749,7 +779,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_sequence_anchor_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.sequenceAnchorLock.rawValue)
         #expect(locked.ayahRef == "80:1")
         #expect(locked.startRef == "80:1:1")
         #expect(locked.nextExpectedRef == "80:2:1")
@@ -779,7 +809,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_opening_fused_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.openingFusedLock.rawValue)
         #expect(locked.ayahRef == "80:1")
         #expect(locked.startRef == "80:1:1")
         #expect(locked.nextExpectedRef == "80:2:1")
@@ -824,13 +854,13 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.ayahRef == "80:1")
-        #expect(locked.reason == "coreml_local_opening_fused_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.openingFusedLock.rawValue)
         #expect(ayah2.ayahRef == "80:2")
         #expect(ayah2.nextExpectedRef == "80:3:1")
         #expect(ayah3.ayahRef == "80:3")
         #expect(ayah3.nextExpectedRef == "80:4:1")
         #expect(ayah4.type == .progress)
-        #expect(ayah4.reason == "coreml_local_short_ayah_final_word_progress")
+        #expect(ayah4.reason == CoreMLLocalQuranEventReason.shortAyahFinalWordProgress.rawValue)
         #expect(ayah4.ayahRef == "80:4")
         #expect(ayah4.startRef == "80:4:4")
         #expect(ayah4.nextExpectedRef == "80:5:1")
@@ -947,7 +977,7 @@ struct CoreMLFastConformerTests {
         #expect(partialAyah2.ayahRef == "107:2")
         #expect(partialAyah2.nextExpectedRef == "107:2:3")
         #expect(prematureAyah3.type == .locating)
-        #expect(prematureAyah3.reason == "coreml_local_ordered_no_match")
+        #expect(prematureAyah3.reason == CoreMLLocalQuranEventReason.orderedNoMatch.rawValue)
         #expect(prematureAyah3.ayahRef == nil)
         #expect(prematureAyah3.candidateRefs == ["107:2"])
     }
@@ -1009,7 +1039,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_sequence_anchor_lock")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.sequenceAnchorLock.rawValue)
         #expect(locked.ayahRef == "49:1")
         #expect(locked.nextExpectedRef == "49:2:1")
     }
@@ -1044,7 +1074,7 @@ struct CoreMLFastConformerTests {
         #expect(locked.ayahRef == "49:1")
         #expect(locked.nextExpectedRef == "49:2:1")
         #expect(event.type == .locating)
-        #expect(event.reason == "coreml_local_ordered_no_match")
+        #expect(event.reason == CoreMLLocalQuranEventReason.orderedNoMatch.rawValue)
         #expect(event.candidateRefs == ["49:2"])
         #expect(elapsed < 0.250)
     }
@@ -1110,7 +1140,7 @@ struct CoreMLFastConformerTests {
 
         #expect(locked.ayahRef == "59:1")
         #expect(recovered.type == .progress)
-        #expect(recovered.reason == "coreml_local_ordered_anchor_progress")
+        #expect(recovered.reason == CoreMLLocalQuranEventReason.orderedAnchorProgress.rawValue)
         #expect(recovered.ayahRef == "59:2")
         #expect(recovered.startRef == "59:2:3")
         #expect(recovered.nextExpectedRef == "59:2:6")
@@ -1156,9 +1186,9 @@ struct CoreMLFastConformerTests {
         #expect(progressedToAyah2.ayahRef == "18:2")
         #expect(progressedToAyah2.nextExpectedRef == "18:3:1")
         #expect(singleSuffixWord.type == .locating)
-        #expect(singleSuffixWord.reason == "coreml_local_ordered_no_match")
+        #expect(singleSuffixWord.reason == CoreMLLocalQuranEventReason.orderedNoMatch.rawValue)
         #expect(recoveredShortAyah.type == .progress)
-        #expect(recoveredShortAyah.reason == "coreml_local_short_ayah_suffix_progress")
+        #expect(recoveredShortAyah.reason == CoreMLLocalQuranEventReason.shortAyahSuffixProgress.rawValue)
         #expect(recoveredShortAyah.ayahRef == "18:3")
         #expect(recoveredShortAyah.startRef == "18:3:2")
         #expect(recoveredShortAyah.nextExpectedRef == "18:4:1")
@@ -1198,7 +1228,7 @@ struct CoreMLFastConformerTests {
         #expect(lateAyah2.ayahRef == "47:2")
         #expect(lateAyah2.nextExpectedRef == "47:2:14")
         #expect(ayah3Evidence.type == .progress)
-        #expect(ayah3Evidence.reason == "coreml_local_next_ayah_tail_skip_progress")
+        #expect(ayah3Evidence.reason == CoreMLLocalQuranEventReason.nextAyahTailSkipProgress.rawValue)
         #expect(ayah3Evidence.ayahRef == "47:3")
         #expect(ayah3Evidence.startRef == "47:3:1")
         #expect(ayah3Evidence.nextExpectedRef == "47:3:7")
@@ -1222,7 +1252,7 @@ struct CoreMLFastConformerTests {
         )
 
         #expect(locked.type == .locked)
-        #expect(locked.reason == "coreml_local_span_match")
+        #expect(locked.reason == CoreMLLocalQuranEventReason.spanMatch.rawValue)
         #expect(locked.ayahRef == "114:2")
         #expect(locked.ayahText == "ملك الناس")
         #expect(locked.startRef == "114:2:1")

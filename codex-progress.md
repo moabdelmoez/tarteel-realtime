@@ -23,6 +23,74 @@
 
 ## Session Log
 
+### Session 125
+
+- Date: 2026-06-13
+- Goal: Fix the macOS app build failure reported during manual CoreML app testing.
+- Diagnosis:
+  - The user's first attached build log failed inside FluidAudio `MachTaskSelfWrapper` because `/private/tmp/tarteel-xcode-derived-macos/.../Darwin-*.pcm` was missing, and the compiler command still referenced the stale `.worktrees/coreml-fastconformer-spike` path.
+  - A fresh derived-data build got past that cache issue and exposed the real project-membership error: `CoreMLFastConformerClient.swift` could not find `CoreMLLocalQuranSession`.
+  - Root cause: `CoreMLLocalQuranSession.swift` had been extracted and included by SwiftPM tests, but the hand-authored Xcode app project manually lists shared core source files and did not include the new file in the iPhone/macOS app source phases.
+- Completed:
+  - Added `CoreMLLocalQuranSession.swift` to the Xcode project `Shared Core` group.
+  - Added the new shared core file to both `TarteelPrototype` and `TarteelPrototypeMac` source build phases.
+  - Strengthened `tests.test_macos_app_project.MacOSAppProjectTests.test_project_includes_shared_core_files_in_both_app_targets` so it enumerates every Swift file in `ios/TarteelClientCore/Sources/TarteelClientCore` instead of relying on a hand-maintained list.
+  - Repaired the stale original macOS derived-data path with a `clean build`, then confirmed the normal incremental build works again.
+- Verification run:
+  - `uv run python -B -m unittest tests.test_macos_app_project -v` passed with 16 tests.
+  - Fresh derived-data macOS build passed: `xcodebuild -quiet -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos-fresh CODE_SIGNING_ALLOWED=NO build`.
+  - Original derived-data macOS `clean build` passed at `/private/tmp/tarteel-xcode-derived-macos`.
+  - Original derived-data normal macOS build passed at `/private/tmp/tarteel-xcode-derived-macos`.
+- Known risk or unresolved issue:
+  - This fixes the project-file build failure. It does not prove manual microphone/CoreML recitation quality.
+  - The initial missing Darwin PCM was cache corruption/staleness; if it recurs, run the same command with `clean build` or use a fresh `-derivedDataPath`.
+- Next best step: open `/private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app` and run the intended manual CoreML capture/replay test.
+
+### Session 124
+
+- Date: 2026-06-13
+- Goal: Reduce `CoreMLLocalQuranSession` interface coupling around emitted reason strings after extracting the session seam.
+- Diagnosis:
+  - The extracted local session still carried raw `coreml_local_*` reason strings through match records, predicate checks, and local-session test expectations.
+  - That made reason ownership shallow: changing or auditing a local event reason required scanning session implementation details and many test literals instead of one vocabulary.
+- Completed:
+  - Added internal `CoreMLLocalQuranEventReason` as the session-owned reason vocabulary.
+  - Changed `CoreMLLocalQuranMatch.reason` and local transcript construction to carry typed reason cases until the final `RecitationEvent` construction point, where they become the existing raw wire strings.
+  - Updated local Quran session tests to expect `CoreMLLocalQuranEventReason` raw values instead of duplicating local event strings throughout the test body.
+  - Added `localQuranEventReasonsKeepWireContractValues` to pin every current raw reason string in one focused contract table.
+  - Intentionally preserved every emitted reason string and all matching policy behavior.
+- Verification run:
+  - Focused CoreML suite passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 53 Swift Testing tests.
+  - Full Swift client core passed: 34 XCTest tests plus 86 Swift Testing tests.
+- Known risk or unresolved issue:
+  - This is an internal vocabulary/locality refactor. It does not change ASR quality, locator policy, UI behavior, or physical-device status.
+  - The reason enum is internal to the Swift package, not public library surface, but package-internal tests can now use it for local-session expectations.
+- Next best step: consider the next deepening split only if it removes real coupling, likely between corpus loading and match policy; avoid splitting event mapping until there is a second caller or a clearer test leverage gain.
+
+### Session 123
+
+- Date: 2026-06-13
+- Goal: Take the recommended architecture-review slice by separating the Apple local Quran session from the CoreML FastConformer client without changing behavior.
+- Diagnosis:
+  - The architecture report identified `CoreMLFastConformerClient.swift` as carrying two different reasons to change: CoreML ASR/runtime orchestration and the local Quran location/session policy.
+  - `CoreMLLocalQuranSession` already represented a real domain seam, but it was physically embedded in the ASR client file, making future matcher/interface cleanup harder to review.
+  - `CONTEXT.md` did not yet name the Apple local Quran session seam alongside the backend `QuranLocator` / `RecitationTransitionPolicy` seams.
+- Completed:
+  - Generated an architecture review report at `/var/folders/b1/_3ms4wf1765fjddl0nb083580000gn/T/architecture-review-20260613T180635.html`.
+  - Added `CoreMLLocalQuranSession` to `CONTEXT.md` as the Apple local recitation-location seam that maps cumulative CoreML transcripts to `SessionEvent`-compatible recitation events.
+  - Extracted `CoreMLLocalQuranSession`, `CoreMLLocalQuranAyah`, the local word-ref/candidate/match helpers, `CoreMLLocalQuranCorpus`, and the local `RecitationEvent` construction helpers into `ios/TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift`.
+  - Kept the CoreML client file focused on resource loading, fixture running, transcribing, audio preprocessing, diagnostics, and the non-locator `coreMLWaiting` event helper.
+  - Intentionally made this a behavior-preserving move: no matcher thresholds, reason strings, scope policy, or event payload fields were changed.
+- Verification run:
+  - Focused CoreML local/session coverage passed: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test --filter CoreMLFastConformerTests` with 52 Swift Testing tests.
+  - Full Swift client core passed: 34 XCTest tests plus 85 Swift Testing tests.
+  - After project-memory updates, `uv run python -B -m json.tool feature_list.json /tmp/tarteel-feature-list.validated.json` passed.
+  - Final `git diff --check` passed.
+- Known risk or unresolved issue:
+  - This was a source-ownership refactor, not an ASR quality or locator-policy change.
+  - iOS/macOS app builds and physical-device CoreML microphone behavior were not rerun for this extraction; the Swift package tests compile and exercise the extracted code.
+- Next best step: design the next small interface cleanup around the new seam, especially reducing reason-string coupling and deciding whether corpus loading, matching policy, and event mapping should remain together or split under tests.
+
 ### Session 122
 
 - Date: 2026-06-13

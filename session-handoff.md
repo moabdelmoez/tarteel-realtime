@@ -2,6 +2,24 @@
 
 ## Verified Now
 
+- Latest slice: macOS app build repair after extracting `CoreMLLocalQuranSession`, completed locally on 2026-06-13 in the repo root on `main`.
+- User build log first showed stale/corrupt derived data: FluidAudio `MachTaskSelfWrapper` failed because a Darwin PCM under `/private/tmp/tarteel-xcode-derived-macos` was missing, and the compile command still referenced `.worktrees/coreml-fastconformer-spike`.
+- Fresh derived data exposed the actual project issue: `CoreMLFastConformerClient.swift` could not find `CoreMLLocalQuranSession` because the hand-authored Xcode project did not include the new extracted file in app target source phases.
+- Fixed `ios/TarteelPrototype/TarteelPrototype.xcodeproj/project.pbxproj` by adding `CoreMLLocalQuranSession.swift` to the Shared Core group and both iPhone/macOS source build phases.
+- Strengthened `tests.test_macos_app_project` so the shared-core project guardrail enumerates every Swift file under `ios/TarteelClientCore/Sources/TarteelClientCore`, preventing future extracted source files from silently missing app targets.
+- Verification passed: focused macOS project guardrails with 16 tests, fresh-derived-data macOS build, original-derived-data `clean build`, and original-derived-data normal macOS build.
+- Next manual step: open `/private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app` and run the CoreML capture/replay test.
+- Latest slice: CoreML local reason vocabulary deepening, completed locally on 2026-06-13 in the repo root on `main`.
+- Added internal `CoreMLLocalQuranEventReason` so `CoreMLLocalQuranSession` carries typed reason cases through matches and transcript construction, then emits the same raw wire strings only at `RecitationEvent` construction.
+- Updated local-session tests to use the reason vocabulary and added `localQuranEventReasonsKeepWireContractValues` to pin every current raw `coreml_local_*` value in one contract table.
+- Verification passed: focused `CoreMLFastConformerTests` with 53 Swift Testing tests and full Swift client core with 34 XCTest plus 86 Swift Testing tests. No iOS/macOS app build or physical-device run was performed for this internal architecture-only slice.
+- Next architecture step: consider splitting corpus loading from match policy only if it improves locality or test leverage; event mapping should probably stay behind the session seam until there is a second caller.
+- Latest slice: architecture review plus behavior-preserving `CoreMLLocalQuranSession` extraction, completed locally on 2026-06-13 in the repo root on `main`.
+- Generated architecture report: `/var/folders/b1/_3ms4wf1765fjddl0nb083580000gn/T/architecture-review-20260613T180635.html`. The recommended first move was to deepen the Apple local Quran session seam before changing its interface.
+- Added `CoreMLLocalQuranSession` to `CONTEXT.md` as the Apple local recitation-location seam that maps cumulative CoreML transcripts to `SessionEvent`-compatible events.
+- Moved `CoreMLLocalQuranSession`, the local Quran corpus/types, matching helpers, and local `RecitationEvent` constructors out of `CoreMLFastConformerClient.swift` into `ios/TarteelClientCore/Sources/TarteelClientCore/CoreMLLocalQuranSession.swift`. No matcher thresholds, reason strings, scope policy, or event payload fields were intentionally changed.
+- Verification passed before/after the extraction: focused `CoreMLFastConformerTests` with 52 Swift Testing tests, full Swift client core with 34 XCTest plus 85 Swift Testing tests, `uv run python -B -m json.tool feature_list.json /tmp/tarteel-feature-list.validated.json`, and `git diff --check`. No iOS/macOS app build or physical-device run was performed for this architecture-only slice.
+- Next architecture step: use the new file boundary to reduce `CoreMLLocalQuranSession` interface coupling, especially reason-string ownership and whether corpus loading, matching policy, and event mapping should split under focused tests.
 - Latest slice: selected-Surah CoreML long-current-ayah tail-skip fallback for the fresh physical-iPhone Surah 47:2 -> 47:3 failure, completed locally on 2026-06-13 in the repo root on `main`.
 - Latest physical-iPhone diagnosis from `/private/tmp/tarteel-iphone-coreml-20260613-150653.logarchive`: the 15:00 selected-Surah 47 run locked `47:1`, completed ayah 1, progressed through most of `47:2`, reached `next_expected_ref=47:2:14`, then stayed `coreml_local_ordered_no_match` while ASR emitted recognizable `47:3` anchors. Audio/VAD and inference were healthy; no invalid model output or quran-logo warning appeared in the fresh run.
 - Added selected-Surah-only `coreml_local_next_ayah_tail_skip_progress` after all current-ayah matchers fail. It considers only the immediate next ayah, only when the current ayah is long, at least 70% complete, with at most six words left, and the next ayah has strong ordered anchors near its start.
