@@ -15,6 +15,7 @@ MODEL_NAME = "silero-vad-unified-256ms-v6.0.0.mlmodelc"
 QURAN_LOGO_NAME = "quran_logo.png"
 ASSETS_CATALOG_NAME = "Assets.xcassets"
 APP_ICON_NAME = "AppIcon"
+QURAN_LOGO_IMAGESET_NAME = "quran_logo"
 COREML_CLIENT_NAME = "CoreMLFastConformerClient.swift"
 COREML_SCORING_NAME = "CoreMLFastConformerFixtureScoring.swift"
 LOCAL_AUDIO_REPLAY_NAME = "LocalAudioReplayStreamer.swift"
@@ -171,6 +172,22 @@ class MacOSAppProjectTests(unittest.TestCase):
         filenames = {image.get("filename") for image in contents["images"]}
         self.assertIn("app-icon-60@3x.png", filenames)
         self.assertIn("app-icon-1024.png", filenames)
+
+        logo_imageset_path = (
+            REPO_ROOT
+            / "ios"
+            / "TarteelPrototype"
+            / "TarteelPrototype"
+            / ASSETS_CATALOG_NAME
+            / f"{QURAN_LOGO_IMAGESET_NAME}.imageset"
+            / "Contents.json"
+        )
+        self.assertTrue(logo_imageset_path.exists(), f"Missing {logo_imageset_path}")
+        with logo_imageset_path.open(encoding="utf-8") as file:
+            logo_contents = json.load(file)
+
+        logo_filenames = {image.get("filename") for image in logo_contents["images"]}
+        self.assertIn(QURAN_LOGO_NAME, logo_filenames)
 
     def test_coreml_client_emits_asr_diagnostics(self) -> None:
         source = (
