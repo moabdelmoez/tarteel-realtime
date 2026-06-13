@@ -1164,6 +1164,47 @@ struct CoreMLFastConformerTests {
         #expect(recoveredShortAyah.nextExpectedRef == "18:4:1")
     }
 
+    @Test func localQuranSessionAdvancesToNextAyahWhenLongCurrentAyahTailIsSkipped() throws {
+        let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
+        47|1|بسم الله الرحمن الرحيم الذين كفروا وصدوا عن سبيل الله أضل أعمالهم
+        47|2|والذين آمنوا وعملوا الصالحات وآمنوا بما نزل على محمد وهو الحق من ربهم ۙ كفر عنهم سيئاتهم وأصلح بالهم
+        47|3|ذلك بأن الذين كفروا اتبعوا الباطل وأن الذين آمنوا اتبعوا الحق من ربهم ۚ كذلك يضرب الله للناس أمثالهم
+        47|4|فإذا لقيتم الذين كفروا فضرب الرقاب
+        """)
+        var session = CoreMLLocalQuranSession(
+            scope: .selectedSurah(id: 47),
+            corpus: corpus
+        )
+
+        let ayah1 = "بسم الله الرحمن الرحيم الذين كفروا وصدوا عن سبيل الله أضل أعمالهم"
+        let ayah2ThroughLateTail = "\(ayah1) والذين آمنوا وعملوا الصالحات وآمنوا بما نزل على محمد وهو الحق من ربهم"
+        let locked = session.event(
+            transcript: ayah1,
+            confidence: 0.90,
+            chunkSequence: 62
+        )
+        let lateAyah2 = session.event(
+            transcript: ayah2ThroughLateTail,
+            confidence: 0.82,
+            chunkSequence: 209
+        )
+        let ayah3Evidence = session.event(
+            transcript: "\(ayah2ThroughLateTail) ذلك بأن الذين كفروا اتبعوا الباطل وأن الذين آمنوا اتبعوا الحق من ربهم كذلك يضرب الله للناس أمثالهم",
+            confidence: 0.76,
+            chunkSequence: 258
+        )
+
+        #expect(locked.ayahRef == "47:1")
+        #expect(lateAyah2.ayahRef == "47:2")
+        #expect(lateAyah2.nextExpectedRef == "47:2:14")
+        #expect(ayah3Evidence.type == .progress)
+        #expect(ayah3Evidence.reason == "coreml_local_next_ayah_tail_skip_progress")
+        #expect(ayah3Evidence.ayahRef == "47:3")
+        #expect(ayah3Evidence.startRef == "47:3:1")
+        #expect(ayah3Evidence.nextExpectedRef == "47:3:7")
+        #expect(ayah3Evidence.consumedWords == 6)
+    }
+
     @Test func localQuranSessionCanUseTanzilCorpusBeyondMVPAyahs() throws {
         let corpus = try CoreMLLocalQuranCorpus.ayahs(fromTanzilText: """
         112|1|قل هو الله أحد

@@ -1014,6 +1014,12 @@ struct CoreMLLocalQuranSession: Sendable {
     private static let forwardProgressMaximumRecentWords = 5
     private static let forwardProgressMinimumF1 = 0.60
     private static let forwardProgressMinimumExpectedCoverage = 0.70
+    private static let nextAyahTailSkipMinimumCurrentAyahWords = 8
+    private static let nextAyahTailSkipMinimumCompletedCoverage = 0.70
+    private static let nextAyahTailSkipMaximumRemainingWords = 6
+    private static let nextAyahTailSkipMinimumMatchedWords = 4
+    private static let nextAyahTailSkipMinimumScore = 0.78
+    private static let nextAyahTailSkipMaximumStartWordIndex = 4
     private static let orderedAnchorProgressMaximumWords = 6
     private static let orderedAnchorProgressMinimumStrongMatches = 2
     private static let shortAyahSuffixMaximumExpectedWords = 4
@@ -1139,6 +1145,21 @@ struct CoreMLLocalQuranSession: Sendable {
 
         if currentAyahIndex != nil,
            let match = orderedForwardProgressMatch(recognizedWords: recognizedWords) {
+            currentAyahIndex = match.ayahIndex
+            nextExpectedRef = nextExpectedRefValue(after: match)
+                .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
+            return RecitationEvent.coreMLLocated(
+                type: .progress,
+                transcript: transcript,
+                confidence: confidence,
+                chunkSequence: chunkSequence,
+                match: match,
+                nextExpectedRef: nextExpectedRef?.rawValue
+            )
+        }
+
+        if currentAyahIndex != nil,
+           let match = nextAyahTailSkipProgressMatch(recognizedWords: recognizedWords) {
             currentAyahIndex = match.ayahIndex
             nextExpectedRef = nextExpectedRefValue(after: match)
                 .flatMap(CoreMLLocalQuranWordRef.init(rawValue:))
@@ -2549,6 +2570,58 @@ struct CoreMLLocalQuranSession: Sendable {
                 return lhs.startWordIndex < rhs.startWordIndex
             }
             .first
+    }
+
+    private func nextAyahTailSkipProgressMatch(recognizedWords: [String]) -> CoreMLLocalQuranMatch? {
+        guard let nextExpectedRef,
+              allowsAnchorLock,
+              !recognizedWords.isEmpty,
+              let currentIndex = ayahs.firstIndex(where: { $0.ref == nextExpectedRef.ayahRef }) else {
+            return nil
+        }
+
+        let currentWords = Self.words(in: ayahs[currentIndex].normalizedText)
+        guard currentWords.count >= Self.nextAyahTailSkipMinimumCurrentAyahWords,
+              nextExpectedRef.wordIndex <= currentWords.count else {
+            return nil
+        }
+
+        let completedWords = max(nextExpectedRef.wordIndex - 1, 0)
+        let remainingWords = max(currentWords.count - completedWords, 0)
+        let completedCoverage = Double(completedWords) / Double(currentWords.count)
+        guard completedCoverage >= Self.nextAyahTailSkipMinimumCompletedCoverage,
+              remainingWords <= Self.nextAyahTailSkipMaximumRemainingWords else {
+            return nil
+        }
+
+        let nextIndex = ayahs.index(after: currentIndex)
+        guard ayahs.indices.contains(nextIndex) else { return nil }
+        let candidateWords = boundedPostLockWords(from: recognizedWords)
+        guard !candidateWords.isEmpty else { return nil }
+        return Self.nextAyahTailSkipProgressMatch(
+            ayah: ayahs[nextIndex],
+            ayahIndex: nextIndex,
+            recognizedWords: candidateWords
+        )
+    }
+
+    private static func nextAyahTailSkipProgressMatch(
+        ayah: CoreMLLocalQuranAyah,
+        ayahIndex: Int,
+        recognizedWords: [String]
+    ) -> CoreMLLocalQuranMatch? {
+        guard let match = orderedAnchorProgressMatch(
+            ayah: ayah,
+            ayahIndex: ayahIndex,
+            recognizedWords: recognizedWords,
+            minimumStartWordIndex: 1
+        ),
+              match.startWordIndex <= nextAyahTailSkipMaximumStartWordIndex,
+              match.matchedWords >= nextAyahTailSkipMinimumMatchedWords,
+              match.score >= nextAyahTailSkipMinimumScore else {
+            return nil
+        }
+        return match.with(reason: "coreml_local_next_ayah_tail_skip_progress")
     }
 
     private static func orderedAnchorProgressMatch(
