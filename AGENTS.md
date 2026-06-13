@@ -37,14 +37,14 @@ Single-context repo: read root `CONTEXT.md` and `docs/adr/` when present. See `d
 - Do not mutate canonical Quran data in place. Treat `data/tanzil/quran-simple-clean.txt` as pinned local input.
 - Preserve user changes. Do not run destructive git commands or revert unrelated edits.
 - Prefer small verified slices. Update harness docs after meaningful changes.
-- WebSocket `/ws/recitation` is the only transport. For mobile-to-RunPod testing, expose the ASR backend over WSS and use the iOS `Custom` preset.
+- WebSocket `/ws/recitation` is the only backend transport. For Apple-to-GPU testing, expose the ASR backend over WSS and use the Apple app `Custom` preset. The experimental Apple `CoreML` preset is a local in-app route (`coreml://fastconformer-quran-streaming`), not a second backend transport.
 
 ## Repository Map
 
 - `tarteel_realtime/`: Python backend, Quran parsing, locator, session engine, ASR adapters, and WebSocket transport.
 - `tests/`: deterministic Python tests; must stay fast and avoid network/GPU requirements.
-- `ios/TarteelClientCore/`: Swift package for event decoding, state reduction, and transport abstractions.
-- `ios/TarteelPrototype/`: SwiftUI iPhone prototype.
+- `ios/TarteelClientCore/`: shared Swift package for endpoint presets, event decoding, state reduction, recording orchestration, local CoreML ASR routing, replay/capture helpers, and testable transport abstractions.
+- `ios/TarteelPrototype/`: Xcode project containing the SwiftUI iPhone app (`TarteelPrototype`), native macOS app (`TarteelPrototypeMac`), shared app resources, CoreML/VAD assets, and local artifact copy scripts.
 - `fixtures/`: small committed fixtures only.
 - `data/tanzil/`: ignored full Quran text plus checked-in metadata/docs.
 - `scripts/`: R2 and RunPod helper scripts.
@@ -66,10 +66,14 @@ Choose the smallest check that proves the change, then run broader checks when t
 - WebSocket transport changes:
   - `uv run python -B -m unittest tests.test_api tests.test_recitation_stream tests.test_ws_client`
   - Use the documented WebSocket client smoke before real ASR transport claims.
-- iOS client changes:
+- Apple client changes:
   - From `ios/TarteelClientCore`: `env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test`
-  - iOS app build when UI or app target changes:
-    `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototype -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
+  - Source/project guardrails for Apple UI, resources, settings, and Xcode project wiring: `uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v`
+  - iPhone app build when iOS UI, resources, CoreML routing, or the app target changes:
+    `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build`
+  - macOS app build when macOS UI, resources, settings, Keychain token storage, or the app target changes:
+    `xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build`
+  - Local CoreML ASR changes also need focused Swift `CoreMLFastConformerTests`, app resource/bundle guardrails, iPhone and macOS builds, and manual physical-device evidence before claiming iOS ASR quality. iOS Simulator nonfinite CoreML output is expected for the ANE-specialized model and is not successful ASR evidence.
 - Docs-only changes:
   - Validate affected structured files.
   - Run the baseline Python suite if the docs change workflow, commands, or harness state.

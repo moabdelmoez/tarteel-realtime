@@ -237,7 +237,9 @@ Expected shape: several `waiting_for_audio_buffer` events, then a meaningful `lo
 
 ## WebSocket + VAD Transport
 
-WebSocket is the only transport for app audio. The iOS prototype uses one app-owned microphone pipeline: `MicrophoneAudioStreamer` captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends `AudioChunkPayload` messages to `WS /ws/recitation`.
+WebSocket is the only backend transport for app audio. The iPhone and macOS apps share the same app-owned audio path: the platform microphone streamer captures mono PCM16, `VoiceActivityDetector` runs the bundled Silero VAD when available, and `BackendWebSocketClient` sends `AudioChunkPayload` messages to `WS /ws/recitation`.
+
+The experimental `CoreML` preset is the exception to the remote transport path: it routes `coreml://fastconformer-quran-streaming` to the in-app `CoreMLFastConformerSocketClient` while preserving the same app queue, VAD metadata seam, reducer, and recitation event shape. It is a local Apple ASR route, not a second backend transport.
 
 When VAD metadata is available, each WebSocket chunk may include:
 
@@ -251,27 +253,35 @@ When VAD metadata is available, each WebSocket chunk may include:
 }
 ```
 
-The backend treats that metadata as transport-neutral input to the rolling ASR buffer. It can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present. If VAD is unavailable, the WebSocket path still works with PCM16 audio and backend RMS gating.
+The backend treats that metadata as transport-neutral input to the rolling ASR buffer. It can trust `speech_start` as speech and flush early on `speech_end` after minimum audio is present. If VAD is unavailable, the WebSocket path still works with PCM16 audio and backend RMS gating. The app resets streaming VAD state whenever recording starts or stops.
 
-For RunPod or another GPU host, expose the real ASR backend directly over WSS and enter that URL in the iOS `Custom` preset:
+The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent.
+
+### Apple Backend Presets
+
+The Apple apps expose these backend presets:
+
+- `Simulator`: local development WebSocket at `ws://127.0.0.1:8000/ws/recitation`.
+- `CoreML`: local FastConformer ASR at `coreml://fastconformer-quran-streaming`, with selected-Surah scope handled in-app.
+- `Custom`: remote WebSocket URL entry. The visible iPhone/macOS Settings UI is Modal-only for Custom, with a fixed Provider row, Modal bearer-token field, and Modal ASR model picker.
+
+Fresh iPhone and macOS installs default to `CoreML` plus selected Surah 108 for local testing. Existing saved preferences still override that fallback.
+
+For RunPod or another GPU host, expose the real ASR backend directly over WSS and enter the full URL in the Apple app `Custom` preset:
 
 ```text
 wss://<pod-id>-8000.proxy.runpod.net/ws/recitation
 ```
 
-The `Custom` preset accepts full WebSocket URLs. For RunPod proxy hosts pasted without a scheme or path, the app normalizes to `wss://.../ws/recitation`.
+The `Custom` preset accepts full WebSocket URLs. Provider-specific bare-host normalization still exists in shared endpoint code for compatibility, launch arguments, and tests, but the current visible Settings flow presents Modal as the only Custom provider.
 
-For the prototype RunPod Serverless path, use a Load Balancer endpoint and paste the full endpoint URL or bare host into the iOS `Custom` preset:
+For the prototype RunPod Serverless path, use a Load Balancer endpoint and paste the full WSS endpoint URL into the Apple app `Custom` preset:
 
 ```text
 wss://<endpoint-id>.api.runpod.ai/ws/recitation
 ```
 
-The app Settings sheet keeps `Simulator` and `Custom` backend modes. In `Custom`,
-choose a provider from `Generic`, `RunPod`, or `Modal`; provider selection controls
-URL normalization and token labeling while the WebSocket contract stays the same.
-
-Direct Apple-to-serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key locally; do not commit it or put it in docs. The iPhone prototype keeps bearer tokens memory-only. The macOS prototype stores the selected `Custom` provider bearer token in macOS Keychain so it survives relaunch without writing the secret to `UserDefaults`. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for provider health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
+Direct Apple-to-serverless testing is prototype-only because the app sends `Authorization: Bearer <token>` on the WebSocket request. Enter that key locally; do not commit it or put it in docs. The iPhone prototype keeps bearer tokens memory-only. The macOS prototype stores the selected `Custom` provider bearer token in macOS Keychain so it survives relaunch without writing the secret to `UserDefaults`. The token field accepts a raw token, `Bearer <token>`, or `Authorization: Bearer <token>` and canonicalizes to the raw token before connecting. The serverless worker keeps the same `/ws/recitation` contract and also exposes `/ping` for provider health checks. See `docs/runpod-serverless.md` for the Dockerfile, endpoint settings, key workflow, and replay checks.
 
 For the Modal comparison path, deploy the existing ASR app with `deploy/modal_asr_app.py` and use a Modal Volume for Hugging Face model weights. Modal uses one WebSocket endpoint and selects between the two approved model profiles per recording session with a safe `asr_model` query item:
 
@@ -302,7 +312,7 @@ uv run --with websockets python -m tarteel_realtime.replay_probe \
   --include-events
 ```
 
-Repeat with `--asr-model faster-whisper-base-ar-quran` to compare the Faster Whisper profile without changing the endpoint. In the iPhone or macOS app, choose Settings -> Custom -> Provider: Modal, then pick the ASR model from the Modal-only menu.
+Repeat with `--asr-model faster-whisper-base-ar-quran` to compare the Faster Whisper profile without changing the endpoint. In the iPhone or macOS app, choose Settings -> `Custom`, enter the Modal WSS URL and bearer token, then pick the ASR model from the Modal-only menu.
 
 ### Visual Diagnostics Bundle
 
@@ -337,8 +347,6 @@ ignored `diagnostics/sessions/` and contain raw voice audio plus ASR transcripts
 Do not commit or upload them unless intentionally sharing diagnostic evidence.
 
 See `docs/modal-serverless.md` for Modal setup, prewarm, deployment, auth, and evidence capture.
-
-The app bundles the FluidInference Silero VAD Core ML asset at `ios/TarteelPrototype/TarteelPrototype/Models/silero-vad-unified-256ms-v6.0.0.mlmodelc`. `VoiceActivityDetector` prefers that local compiled model through `VadManager(config: .default, vadModel:)` and falls back to `VadManager()` only if the bundle is absent. Streaming VAD state is reset whenever recording starts or stops.
 
 ## GitHub And R2 Artifact Workflow
 
@@ -375,29 +383,95 @@ For full host bootstrap steps, see `docs/runpod-r2.md`. The preferred bootstrap 
 
 The current GitHub repo is public, so a fresh GPU host can clone it over HTTPS. If the repo becomes private again, configure a read-only deploy key or another GitHub auth method before running the bootstrap. Do not use `scp` for host setup; add R2 credentials manually to your host env file (for RunPod, `/workspace/tarteel-r2.env`) or through provider secrets.
 
-## iOS Prototype
+## Apple Prototypes
 
-The first native SwiftUI prototype lives under `ios/`.
+The native Apple prototypes live under `ios/`:
 
-Run the deterministic backend first:
+- `ios/TarteelClientCore`: shared Swift package for endpoint presets, event decoding, `AudioChunkPayload`, `VoiceActivityPayload`, recording orchestration, state reduction, local CoreML ASR routing, replay/capture helpers, and tests.
+- `ios/TarteelPrototype/TarteelPrototype.xcodeproj`: iPhone app target `TarteelPrototype`, macOS app target `TarteelPrototypeMac`, shared assets, VAD/CoreML resources, and local artifact copy scripts.
+
+Run the deterministic backend when using the `Simulator` preset:
 
 ```bash
 uv run uvicorn tarteel_realtime.dev_app:app --reload
 ```
 
-Then open:
+Then open the Xcode project:
 
 ```text
 ios/TarteelPrototype/TarteelPrototype.xcodeproj
 ```
 
-The app defaults to the `Simulator` backend preset:
+The iPhone app is a light recitation surface: backend setup lives behind the gear Settings sheet, while Auto/Surah, Surah picker, status, canonical ayah display, `Latest ayah`, `Next expected`, voice indicator, and mic control stay on the home screen.
+
+The macOS app is a native desktop prototype with a unified toolbar for recording, Surah search, and Settings. It supports `Space` or `Command-R` for recording, `Command-F` for search focus, URL/text drop-in for backend URLs, diagnostic drag-out text, first-run onboarding, adaptive system colors/materials, and a curated timeline that collapses repeated waiting/uncertain/same-ayah progress rows.
+
+Both apps support:
+
+- `Simulator`, `CoreML`, and `Custom` backend presets.
+- Auto global detection or selected-Surah mode. Selected Surah adds `scope=<surah-id>` to WebSocket URLs and scopes the local CoreML locator.
+- Modal-only Custom Settings with `FastConformer Quran AR (NeMo)` and `Faster Whisper Base AR Quran` choices.
+- Canonical Tanzil word highlighting after lock, plus stable `Latest ayah` and `Next expected` diagnostics.
+- Bundled `quran_logo` image and app icons.
+- Conditional app-build copying of ignored local `data/tanzil/quran-simple-clean.txt` and ignored local WAV replay fixtures when those files exist.
+
+Fresh installs default to:
 
 ```text
-ws://127.0.0.1:8000/ws/recitation
+coreml://fastconformer-quran-streaming?scope=108
 ```
 
-Switch to `Custom` for a LAN, tunnel, or any remote real-ASR WebSocket URL. For a physical iPhone, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP in the app. More details are in `ios/README.md`.
+For a physical iPhone using the backend instead of CoreML, run the backend with `--host 0.0.0.0` and enter your Mac LAN IP as a full WebSocket URL in `Custom`:
+
+```text
+ws://192.168.1.20:8000/ws/recitation
+```
+
+For deterministic app-level replay, launch a built app with bundled or absolute WAV input. The audio flows through the normal app queue, VAD metadata path, selected backend route, and reducer:
+
+```bash
+open -n /path/to/TarteelPrototypeMac.app --args \
+  --tarteel-replay-audio 108001.wav \
+  --tarteel-replay-surah 108
+```
+
+To replay against a remote backend, add backend launch arguments after entering the bearer token locally through Settings or letting macOS restore it from Keychain:
+
+```bash
+open -n /path/to/TarteelPrototypeMac.app --args \
+  --tarteel-replay-audio 108001.wav \
+  --tarteel-replay-surah 108 \
+  --tarteel-backend-url wss://<modal-app>.modal.run/ws/recitation \
+  --tarteel-backend-provider modal
+```
+
+For macOS live-mic diagnosis, capture the exact mono 16 kHz PCM16 chunks forwarded by the app, then replay that WAV through the same route:
+
+```bash
+open -n /path/to/TarteelPrototypeMac.app --args --tarteel-capture-audio /tmp/tarteel-capture.wav
+open -n /path/to/TarteelPrototypeMac.app --args --tarteel-replay-audio /tmp/tarteel-capture.wav --tarteel-replay-surah 108
+```
+
+The iOS Simulator can build and render the app, but the ANE-specialized CoreML FastConformer model is not accepted as successful iOS ASR evidence there; Simulator CoreML output is guarded with an actionable invalid-output message. Use a physical Apple Neural Engine device for iOS CoreML ASR proof.
+
+Build the iPhone app with the shared replay scheme:
+
+```bash
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+Build the macOS app:
+
+```bash
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build
+```
+
+Test the shared client core:
+
+```bash
+cd ios/TarteelClientCore
+env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test
+```
 
 ## Verify
 
