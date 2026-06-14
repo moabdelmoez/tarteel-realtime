@@ -472,7 +472,9 @@ class MacOSAppProjectTests(unittest.TestCase):
         self.assertIn(".onChange(of: searchText)", content_source)
         self.assertIn("SurahCatalog.selectionID(for: query)", content_source)
         self.assertIn("selectSurah", content_source)
-        self.assertIn("viewModel.selectRecitationMode(.selectedSurah)", content_source)
+        self.assertNotIn('Picker("Recitation"', content_source)
+        self.assertNotIn("Text(\"Auto\").tag(RecitationMode.autoDetect)", content_source)
+        self.assertNotIn("viewModel.selectRecitationMode(.selectedSurah)", content_source)
         search_selection_match = re.search(
             r"private func applySearchSelection\(_ query: String\) \{(?P<body>.*?)\n    \}",
             content_source,
@@ -482,17 +484,11 @@ class MacOSAppProjectTests(unittest.TestCase):
         search_selection_body = search_selection_match.group("body")
         self.assertIsNotNone(re.search(
             r"guard let selectionID = SurahCatalog\.selectionID\(for: query\) else \{ return \}"
-            r".*viewModel\.selectedSurahID = selectionID"
-            r".*viewModel\.selectRecitationMode\(\.selectedSurah\)",
+            r".*viewModel\.selectedSurahID = selectionID",
             search_selection_body,
             flags=re.DOTALL,
         ))
-        self.assertIsNone(re.search(
-            r"viewModel\.selectRecitationMode\(\.selectedSurah\).*"
-            r"guard let selectionID = SurahCatalog\.selectionID\(for: query\)",
-            search_selection_body,
-            flags=re.DOTALL,
-        ))
+        self.assertNotIn("viewModel.selectRecitationMode(.selectedSurah)", search_selection_body)
         self.assertIn("if isShowingSearchResults && !filteredSurahs.isEmpty", content_source)
         self.assertIn("filteredSurahs", content_source)
         self.assertIn("ForEach(filteredSurahs)", content_source)

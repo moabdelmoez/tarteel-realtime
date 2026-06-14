@@ -84,7 +84,7 @@ public final class RecitationViewModel: ObservableObject {
     @Published public private(set) var backendPreset = BackendEndpointPreset.simulator
     @Published public private(set) var customBackendProvider = BackendProvider.runPod
     @Published public private(set) var modalASRModel = ModalASRModel.nemoFastConformerQuranAR
-    @Published public private(set) var recitationMode = RecitationMode.autoDetect
+    @Published public private(set) var recitationMode = RecitationMode.selectedSurah
     @Published public private(set) var connectionStatus = "Idle"
     @Published public private(set) var recentEventHistory: [RecitationEventHistoryItem] = []
     @Published public private(set) var backendURLValidationMessage: String?
@@ -143,7 +143,11 @@ public final class RecitationViewModel: ObservableObject {
         customBackendProvider = storedProvider
         modalASRModel = preferencesStore.modalASRModel
         customBackendURLText = storedCustomURLText
-        recitationMode = preferencesStore.recitationMode
+        let storedRecitationMode = preferencesStore.recitationMode
+        recitationMode = Self.supportedRecitationMode(from: storedRecitationMode)
+        if storedRecitationMode != recitationMode {
+            self.preferencesStore.recitationMode = recitationMode
+        }
         selectedSurahID = preferencesStore.selectedSurahID
         switch storedPreset {
         case .simulator:
@@ -202,16 +206,18 @@ public final class RecitationViewModel: ObservableObject {
     }
 
     public func selectRecitationMode(_ mode: RecitationMode) {
-        recitationMode = mode
-        preferencesStore.recitationMode = mode
+        recitationMode = Self.supportedRecitationMode(from: mode)
+        preferencesStore.recitationMode = recitationMode
     }
 
     private var recitationScopeSelection: RecitationScopeSelection {
-        switch recitationMode {
-        case .autoDetect:
-            return .autoDetect
-        case .selectedSurah:
-            return .selectedSurah(id: selectedSurahID)
+        return .selectedSurah(id: selectedSurahID)
+    }
+
+    private static func supportedRecitationMode(from mode: RecitationMode) -> RecitationMode {
+        switch mode {
+        case .autoDetect, .selectedSurah:
+            return .selectedSurah
         }
     }
 

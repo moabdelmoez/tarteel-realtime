@@ -49,6 +49,14 @@ Before treating a future slice as passing:
 
 ## Quality Log
 
+### 2026-06-14 - Selected-Surah-Only Apple UI
+
+- Removed Auto from the iPhone and macOS recitation UI after physical-iPhone logs showed Auto connecting without `scope=` and falling into expensive full-corpus CoreML locator scans.
+- Shared `RecitationViewModel` now defaults to selected Surah, rewrites stale `.autoDetect` preferences, coerces explicit Auto selections back to selected Surah, and always builds recording URLs with `scope=<surah-id>`.
+- Users can choose a Surah and recite from the beginning or anywhere inside it; matching is restricted to that Surah.
+- Local confidence is good for the UI/client contract: red Swift/Python guardrails failed first, full Swift client core passed with 42 XCTest plus 92 Swift Testing tests, Apple source guardrails passed with 30 tests, iOS and macOS builds passed, full Python passed with 319 tests, and compileall/JSON/diff checks passed.
+- Release posture: this removes a known full-corpus Auto backlog path. Physical-device selected-Surah recitation still needs fresh manual confirmation before broader ASR quality claims.
+
 ### 2026-06-13 - Modal NeMo FastConformer Quran AR Proof
 
 - Added an optional NeMo ASR backend for `mohammed/fastconformer-quran-ar`, using Hugging Face snapshot restore for `phase3_full/phase3_full_wer0.0014.nemo` while keeping NeMo/Hugging Face dependencies outside the default project.
@@ -345,7 +353,7 @@ Before treating a future slice as passing:
 ### 2026-05-25 - iOS Clean Home And Settings Sheet
 
 - The iOS prototype home screen now uses a white, readable recitation-focused layout instead of exposing backend controls inline.
-- Backend preset, custom WebSocket URL, and prototype-only RunPod API key moved behind a gear settings sheet; Auto/Surah and Surah picker remain on the home screen because they are recitation controls.
+- Backend preset, custom WebSocket URL, and prototype-only RunPod API key moved behind a gear settings sheet; the selected Surah picker remains on the home screen because it is a recitation control.
 - Local confidence is good for this UI organization slice: source guardrails first failed on the old layout, then focused iOS source checks passed with 11 tests, Swift client core passed with 24 tests, the iOS app target built successfully after approved CoreSimulator/package access, and final harness checks passed with feature JSON validation, whitespace check, and 197 deterministic Python tests.
 - A simulator visual sanity check installed and launched the rebuilt app in the booted iPhone 17 Pro simulator and captured `/private/tmp/tarteel-clean-home.png`.
 - Release posture: ready for manual settings-sheet interaction testing. This slice does not change or prove live ASR behavior.

@@ -90,6 +90,10 @@ in the app and choose one of:
 - `Simulator`: local fake backend at `ws://127.0.0.1:8000/ws/recitation`.
 - `Custom`: remote Modal WebSocket URL with the Modal ASR model picker.
 
+The recitation surface exposes a Surah picker only. Choose the Surah before
+recording; the app sends `scope=<surah-id>` and you can recite from the
+beginning or start anywhere inside that Surah.
+
 Important iOS note: the CoreML FastConformer model is specialized for Apple
 Neural Engine hardware. The iOS Simulator can build and render the app, but it
 is not valid CoreML ASR evidence for this model. Use a physical iPhone for
@@ -142,10 +146,11 @@ open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPro
 VAD metadata seam, reducer state, and recitation event shape used by WebSocket
 backends.
 
-CoreML currently supports selected-Surah local matching best. Fresh installs
-default to selected Surah 108. If the full Tanzil file is bundled locally, the
-local Quran session can use the full corpus; otherwise it falls back to the
-small MVP corpus.
+CoreML currently supports selected-Surah local matching as the app path. Fresh
+installs default to selected Surah 108, and old Auto preferences are coerced
+back to selected-Surah scope before recording. If the full Tanzil file is
+bundled locally, the local Quran session can use all Surahs as selectable
+scopes; otherwise it falls back to the small MVP corpus.
 
 Important CoreML comments:
 

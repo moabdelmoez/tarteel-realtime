@@ -10,7 +10,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(store.backendPreset, .simulator)
         XCTAssertEqual(store.customBackendProvider, .runPod)
         XCTAssertEqual(store.customBackendURLText, "")
-        XCTAssertEqual(store.recitationMode, .autoDetect)
+        XCTAssertEqual(store.recitationMode, .selectedSurah)
         XCTAssertEqual(store.selectedSurahID, 108)
         XCTAssertEqual(store.modalASRModel, .nemoFastConformerQuranAR)
     }
@@ -29,7 +29,7 @@ final class RecitationPreferencesStoreTests: XCTestCase {
             store.customBackendURLText,
             "wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation"
         )
-        XCTAssertEqual(store.recitationMode, .autoDetect)
+        XCTAssertEqual(store.recitationMode, .selectedSurah)
         XCTAssertEqual(store.selectedSurahID, 108)
     }
 

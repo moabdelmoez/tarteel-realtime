@@ -139,36 +139,23 @@ private struct RecitationControlPanel: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Picker("Recitation", selection: Binding(
-                get: { viewModel.recitationMode },
-                set: { viewModel.selectRecitationMode($0) }
-            )) {
-                Text("Auto").tag(RecitationMode.autoDetect)
-                Text("Surah").tag(RecitationMode.selectedSurah)
+            Picker("Surah", selection: $viewModel.selectedSurahID) {
+                ForEach(SurahCatalog.all) { surah in
+                    Text(surah.displayName).tag(surah.id)
+                }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .tint(AppTheme.teal)
             .disabled(viewModel.isRecording)
-
-            if viewModel.recitationMode == .selectedSurah {
-                Picker("Surah", selection: $viewModel.selectedSurahID) {
-                    ForEach(SurahCatalog.all) { surah in
-                        Text(surah.displayName).tag(surah.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(AppTheme.teal)
-                .disabled(viewModel.isRecording)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(AppTheme.paleTeal)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppTheme.teal.opacity(0.18), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(AppTheme.paleTeal)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(AppTheme.teal.opacity(0.18), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }

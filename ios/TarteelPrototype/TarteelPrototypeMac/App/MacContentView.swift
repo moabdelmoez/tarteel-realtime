@@ -98,13 +98,11 @@ struct MacContentView: View {
         guard let selectionID = SurahCatalog.selectionID(for: query) else { return }
 
         viewModel.selectedSurahID = selectionID
-        viewModel.selectRecitationMode(.selectedSurah)
     }
 
     private func selectSurah(_ surah: SurahMetadata) {
         guard !viewModel.isRecording else { return }
         viewModel.selectedSurahID = surah.id
-        viewModel.selectRecitationMode(.selectedSurah)
         searchText = surah.nameSimple
     }
 
@@ -220,33 +218,20 @@ private struct MacRecitationControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Picker("Recitation", selection: Binding(
-                get: { viewModel.recitationMode },
-                set: { viewModel.selectRecitationMode($0) }
-            )) {
-                Text("Auto").tag(RecitationMode.autoDetect)
-                Text("Surah").tag(RecitationMode.selectedSurah)
+            Picker("Surah", selection: $viewModel.selectedSurahID) {
+                ForEach(filteredSurahs) { surah in
+                    Text(surah.displayName).tag(surah.id)
+                }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .disabled(viewModel.isRecording)
-            .frame(width: 280)
+            .frame(width: 320)
 
-            if viewModel.recitationMode == .selectedSurah {
-                Picker("Surah", selection: $viewModel.selectedSurahID) {
-                    ForEach(filteredSurahs) { surah in
-                        Text(surah.displayName).tag(surah.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .disabled(viewModel.isRecording)
-                .frame(width: 320)
-
-                if filteredSurahs.isEmpty {
-                    Text("No matching surah")
-                        .font(.caption)
-                        .foregroundStyle(MacTheme.muted)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+            if filteredSurahs.isEmpty {
+                Text("No matching surah")
+                    .font(.caption)
+                    .foregroundStyle(MacTheme.muted)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if isShowingSearchResults && !filteredSurahs.isEmpty {

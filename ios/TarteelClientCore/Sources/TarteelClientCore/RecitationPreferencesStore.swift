@@ -12,7 +12,7 @@ public struct RecitationPreferencesDefaults: Equatable, Sendable {
         backendPreset: BackendEndpointPreset = .simulator,
         customBackendProvider: BackendProvider = .runPod,
         customBackendURLText: String = "",
-        recitationMode: RecitationMode = .autoDetect,
+        recitationMode: RecitationMode = .selectedSurah,
         selectedSurahID: Int = 108,
         modalASRModel: ModalASRModel = .nemoFastConformerQuranAR
     ) {
@@ -30,7 +30,7 @@ public struct RecitationPreferencesDefaults: Equatable, Sendable {
         backendPreset: .custom,
         customBackendProvider: .modal,
         customBackendURLText: "wss://moabdelmoez--tarteel-realtime-asr-fastapi-app.modal.run/ws/recitation",
-        recitationMode: .autoDetect,
+        recitationMode: .selectedSurah,
         selectedSurahID: 108
     )
 

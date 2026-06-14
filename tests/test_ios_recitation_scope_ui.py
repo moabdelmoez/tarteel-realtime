@@ -23,17 +23,20 @@ class IOSRecitationScopeUITests(unittest.TestCase):
         self.assertIn("@Published public private(set) var recitationMode", source)
         self.assertIn("@Published public var selectedSurahID", source)
         self.assertIn("func selectRecitationMode", source)
+        self.assertIn("supportedRecitationMode", source)
         self.assertIn("private var recitationScopeSelection", source)
+        self.assertIn("return .selectedSurah(id: selectedSurahID)", source)
         self.assertIn("recitationScope: recitationScopeSelection", source)
 
-    def test_content_view_keeps_recitation_controls_on_home_screen(self) -> None:
+    def test_content_view_keeps_selected_surah_controls_on_home_screen(self) -> None:
         source = (APP_ROOT / "ContentView.swift").read_text(encoding="utf-8")
         app_source = (APP_ROOT / "TarteelPrototypeApp.swift").read_text(encoding="utf-8")
 
-        self.assertIn("Picker(\"Recitation\"", source)
-        self.assertIn("selectRecitationMode", source)
-        self.assertIn("Text(\"Auto\").tag(RecitationMode.autoDetect)", source)
-        self.assertIn("Text(\"Surah\").tag(RecitationMode.selectedSurah)", source)
+        self.assertNotIn("Picker(\"Recitation\"", source)
+        self.assertNotIn("selectRecitationMode", source)
+        self.assertNotIn("Text(\"Auto\").tag(RecitationMode.autoDetect)", source)
+        self.assertNotIn("Text(\"Surah\").tag(RecitationMode.selectedSurah)", source)
+        self.assertNotIn("if viewModel.recitationMode == .selectedSurah", source)
         self.assertIn("Picker(\"Surah\"", source)
         self.assertIn("ForEach(SurahCatalog.all)", source)
         self.assertIn(".pickerStyle(.menu)", source)

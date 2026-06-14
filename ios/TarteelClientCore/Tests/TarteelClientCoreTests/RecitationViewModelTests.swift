@@ -171,6 +171,50 @@ final class RecitationViewModelTests: XCTestCase {
         XCTAssertTrue(audio.didStart)
     }
 
+    func testAutoDetectPreferencesAreCoercedToSelectedSurahScope() async throws {
+        let socket = FakeSocket()
+        let preferences = FakePreferencesStore(
+            backendPreset: .coreML,
+            recitationMode: .autoDetect,
+            selectedSurahID: 47
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: socket,
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: preferences
+        )
+
+        XCTAssertEqual(viewModel.recitationMode, .selectedSurah)
+        XCTAssertEqual(preferences.recitationMode, .selectedSurah)
+
+        await viewModel.startRecording()
+
+        XCTAssertEqual(
+            socket.connectedURL?.absoluteString,
+            "coreml://fastconformer-quran-streaming?scope=47"
+        )
+    }
+
+    func testSelectingAutoDetectKeepsSelectedSurahScope() {
+        let preferences = FakePreferencesStore(
+            recitationMode: .selectedSurah,
+            selectedSurahID: 18
+        )
+        let viewModel = RecitationViewModel(
+            socketClient: FakeSocket(),
+            audioStreamer: FakeAudioStreamer(),
+            voiceActivityDetector: FakeVoiceActivityDetector(),
+            preferencesStore: preferences
+        )
+
+        viewModel.selectRecitationMode(.autoDetect)
+
+        XCTAssertEqual(viewModel.recitationMode, .selectedSurah)
+        XCTAssertEqual(preferences.recitationMode, .selectedSurah)
+        XCTAssertEqual(viewModel.selectedSurahID, 18)
+    }
+
     func testCoreMLFixtureReplayThroughViewModelLocksSelectedSurah() async throws {
         let modelDirectoryURL = try localCoreMLModelDirectoryURL()
         let audioURL = try localAudioFixtureURL(named: "108001.wav")

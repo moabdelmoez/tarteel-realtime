@@ -2,6 +2,12 @@
 
 ## Verified Now
 
+- Latest slice: selected-Surah-only Apple recitation UI, completed locally on 2026-06-14 in the repo root on `main`.
+- Physical-iPhone Auto-mode diagnosis used `/private/tmp/tarteel-iphone-auto-20260614.logarchive`: CoreML loaded and emitted transcripts, but the app connected without `scope=`, then full-corpus matching produced multi-second no-match locator windows, including `locator_ms=32564.0` after disconnect.
+- iPhone and macOS no longer expose the Auto/Surah segmented picker. The visible recitation control is now only the Surah picker.
+- `RecitationViewModel` defaults to `.selectedSurah`, rewrites stale `.autoDetect` preferences to `.selectedSurah`, coerces explicit `selectRecitationMode(.autoDetect)` calls back to selected Surah, and always builds recording URLs with `.selectedSurah(id: selectedSurahID)`.
+- Verification passed: red Swift/Python guardrails failed on the old Auto behavior first; full Swift client core passed with 42 XCTest plus 92 Swift Testing tests; Apple source guardrails passed with 30 Python tests; iOS Simulator `TarteelPrototypeCoreMLReplay` build passed; macOS `TarteelPrototypeMac` build passed; feature-list JSON, `git diff --check`, compileall, and full Python with 319 tests passed.
+- Next manual step: install/open the rebuilt physical-iPhone app, choose the intended Surah, recite from the beginning or a middle ayah, and confirm unified logs show `coreml_asr_connect ... scope=<surah-id>` plus bounded selected-Surah locator timings.
 - Latest slice: macOS app build repair after extracting `CoreMLLocalQuranSession`, completed locally on 2026-06-13 in the repo root on `main`.
 - User build log first showed stale/corrupt derived data: FluidAudio `MachTaskSelfWrapper` failed because a Darwin PCM under `/private/tmp/tarteel-xcode-derived-macos` was missing, and the compile command still referenced `.worktrees/coreml-fastconformer-spike`.
 - Fresh derived data exposed the actual project issue: `CoreMLFastConformerClient.swift` could not find `CoreMLLocalQuranSession` because the hand-authored Xcode project did not include the new extracted file in app target source phases.
