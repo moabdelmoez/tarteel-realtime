@@ -67,6 +67,8 @@ uv run python -m tarteel_realtime.ws_client
 
 ## Run The iOS App
 
+<img src="docs/assets/tarteel-ios-app.png" alt="Tarteel iOS app showing a locked recitation state" width="320">
+
 Open the Xcode project:
 
 ```text
@@ -94,6 +96,8 @@ is not valid CoreML ASR evidence for this model. Use a physical iPhone for
 local CoreML ASR proof.
 
 ## Run The macOS App
+
+<img src="docs/assets/tarteel-macos-app.png" alt="Tarteel macOS app showing recitation status and timeline" width="820">
 
 Build the macOS target:
 
