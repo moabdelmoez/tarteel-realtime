@@ -1,52 +1,121 @@
 # Tarteel Realtime
 
-Technical MVP for Quran recitation location and correction, with native iPhone
-and macOS prototypes. The apps can stream microphone audio to the backend over
-`WS /ws/recitation`, or run the experimental local CoreML FastConformer route
-inside the Apple app.
+Build a Tarteel-like native Apple recitation app: listen to Quran recitation,
+locate the current ayah, show canonical Quran text, track word progress, and
+surface obvious text-level mistakes or uncertainty.
 
-## What Is Here
+This repo contains the iOS app, macOS app, shared Swift client core, and the
+Python/Modal support needed to test local and remote ASR modes.
 
-- `tarteel_realtime/`: Python backend, Quran parsing, recitation session logic,
-  ASR adapter seams, and WebSocket API.
-- `ios/TarteelClientCore/`: shared Swift package for endpoint presets, event
-  decoding, state reduction, recording orchestration, CoreML routing, and tests.
-- `ios/TarteelPrototype/`: Xcode project with the iPhone app target
-  `TarteelPrototype` and native macOS app target `TarteelPrototypeMac`.
-- `deploy/modal_asr_app.py`: Modal deployment for the real ASR backend.
+## Screenshots
 
-## Prerequisites
+<img src="docs/assets/tarteel-ios-app.png" alt="Tarteel iOS app showing a locked recitation state" width="320">
+
+<img src="docs/assets/tarteel-macos-app.png" alt="Tarteel macOS app showing recitation status and timeline" width="820">
+
+## Tech Stack
+
+- **iOS app**: SwiftUI target in `ios/TarteelPrototype`.
+- **macOS app**: native SwiftUI/AppKit-friendly target in
+  `ios/TarteelPrototype`.
+- **Shared Apple core**: `ios/TarteelClientCore` handles endpoint presets,
+  recording orchestration, state reduction, event decoding, CoreML routing, and
+  tests.
+- **Backend support**: Python FastAPI/WebSocket backend for deterministic
+  simulator testing and Modal deployment for real remote ASR.
+
+## ASR Modes
+
+- **CoreML**: local in-app FastConformer route at
+  `coreml://fastconformer-quran-streaming`. Fresh installs default to CoreML
+  with selected Surah 108. Use physical iPhone hardware for real iOS CoreML ASR
+  evidence; the iOS Simulator can build/render the app but is not valid ASR
+  proof for this ANE-specialized model.
+- **Simulator**: local fake backend at
+  `ws://127.0.0.1:8000/ws/recitation`. Use this for predictable UI and state
+  testing without real ASR.
+- **Custom / Modal**: remote WebSocket backend at
+  `wss://<modal-app>.modal.run/ws/recitation`. The app sends the selected Surah
+  as `scope=<surah-id>` and the selected model as `asr_model=<slug>`.
+
+Approved Modal ASR slugs:
+
+```text
+nemo-fastconformer-quran-ar
+faster-whisper-base-ar-quran
+```
+
+## User Journey
+
+1. Open the iOS or macOS app.
+2. Choose the Surah you want to recite.
+3. Pick an ASR mode in Settings: `CoreML`, `Simulator`, or `Custom`.
+4. If using Modal, paste the WSS URL and bearer token in Settings, then choose
+   the ASR model.
+5. Start recording.
+6. Recite from the beginning or from the middle of the selected Surah.
+7. Watch the app move through listening, locating, locked, progress, correction
+   needed, or uncertain states.
+8. Read canonical Quran text from the local corpus, not noisy ASR transcript
+   text.
+
+## App Features
+
+### iOS
+
+- Recitation-first screen with status, latest ayah, next expected position,
+  canonical ayah text, voice indicator, Surah picker, and mic control.
+- Settings sheet for backend mode, Custom Modal URL, bearer token, and Modal ASR
+  model.
+- Memory-only bearer token entry on iPhone.
+- Actionable setup errors for missing local backend, Modal auth rejection, and
+  invalid CoreML Simulator output.
+
+### macOS
+
+- Native desktop recitation window with toolbar recording, Surah search, and
+  Settings.
+- Keyboard shortcuts: `Space` or `Command-R` toggles recording;
+  `Command-F` focuses Surah search.
+- Status sidebar with latest ayah, next expected position, ayah text,
+  transcript, diagnostic summary, and timeline.
+- Custom Modal bearer tokens are stored in macOS Keychain after entry.
+
+## Install And Run
+
+Prerequisites:
 
 - macOS with Xcode installed.
 - `uv` for Python commands.
-- Modal CLI configured locally if deploying the Modal backend.
-- Optional local CoreML model artifacts at:
+- Modal CLI configured only if you want remote Modal ASR.
+- Optional CoreML model artifacts at
+  `.models/fastconformer-quran-coreml-streaming/`.
+- Optional full Tanzil text at `data/tanzil/quran-simple-clean.txt`.
 
-```text
-.models/fastconformer-quran-coreml-streaming/
+Clone and open the project:
+
+```bash
+git clone https://github.com/moabdelmoez/tarteel-realtime.git
+cd tarteel-realtime
+open ios/TarteelPrototype/TarteelPrototype.xcodeproj
 ```
 
-Expected CoreML files:
+### iOS Simulator
 
-```text
-fastconformer-quran-streaming.mlpackage
-pronunciation-head.mlpackage
-tokenizer.model
-tokens.txt
+In Xcode:
+
+1. Select the `TarteelPrototypeCoreMLReplay` scheme.
+2. Choose an iPhone Simulator.
+3. Build and run.
+
+Command-line build:
+
+```bash
+xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
 ```
 
-For full-corpus local matching, place the pinned Tanzil text locally at:
-
-```text
-data/tanzil/quran-simple-clean.txt
-```
-
-The Quran text, local audio captures, bearer tokens, and other sensitive
-runtime artifacts should stay local and uncommitted.
-
-## Run The Local Dev Backend
-
-Use this when the Apple app is set to the `Simulator` backend preset:
+For deterministic simulator backend testing, run the local fake backend and set
+the app backend to `Simulator`:
 
 ```bash
 uv run uvicorn tarteel_realtime.dev_app:app --reload
@@ -58,52 +127,14 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
-The dev backend uses a fake recognizer and emits deterministic `locked` /
-`wrong` events. You can smoke it from another terminal:
+### macOS App
 
-```bash
-uv run python -m tarteel_realtime.ws_client
-```
+In Xcode:
 
-## Run The iOS App
+1. Select the `TarteelPrototypeMac` scheme.
+2. Build and run.
 
-<img src="docs/assets/tarteel-ios-app.png" alt="Tarteel iOS app showing a locked recitation state" width="320">
-
-Open the Xcode project:
-
-```text
-ios/TarteelPrototype/TarteelPrototype.xcodeproj
-```
-
-Build the iPhone app from the command line:
-
-```bash
-xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeCoreMLReplay -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/tarteel-xcode-derived CODE_SIGNING_ALLOWED=NO build
-```
-
-In Xcode, choose an iPhone simulator or physical device and run the
-`TarteelPrototypeCoreMLReplay` scheme. For normal manual testing, open Settings
-in the app and choose one of:
-
-- `CoreML`: local on-device route, default for fresh installs with selected
-  Surah 108.
-- `Simulator`: local fake backend at `ws://127.0.0.1:8000/ws/recitation`.
-- `Custom`: remote Modal WebSocket URL with the Modal ASR model picker.
-
-The recitation surface exposes a Surah picker only. Choose the Surah before
-recording; the app sends `scope=<surah-id>` and you can recite from the
-beginning or start anywhere inside that Surah.
-
-Important iOS note: the CoreML FastConformer model is specialized for Apple
-Neural Engine hardware. The iOS Simulator can build and render the app, but it
-is not valid CoreML ASR evidence for this model. Use a physical iPhone for
-local CoreML ASR proof.
-
-## Run The macOS App
-
-<img src="docs/assets/tarteel-macos-app.png" alt="Tarteel macOS app showing recitation status and timeline" width="820">
-
-Build the macOS target:
+Command-line build:
 
 ```bash
 xcodebuild -project ios/TarteelPrototype/TarteelPrototype.xcodeproj -scheme TarteelPrototypeMac -sdk macosx -derivedDataPath /private/tmp/tarteel-xcode-derived-macos CODE_SIGNING_ALLOWED=NO build
@@ -115,128 +146,69 @@ Open the built app:
 open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app
 ```
 
-The macOS app uses a native toolbar for recording, Surah search, and Settings:
+## Modal Token And Remote ASR
 
-- `Space` or `Command-R`: start or stop recording.
-- `Command-F`: focus Surah search.
-- Settings: choose `CoreML`, `Simulator`, or `Custom`.
-- Custom Modal bearer tokens are stored in macOS Keychain after entry.
+There are two different tokens:
 
-For deterministic local replay through the same app queue, VAD metadata path,
-backend route, and reducer:
+- **Modal account token**: lets your machine deploy and manage Modal apps. Set it
+  up with `modal setup` or `modal token new`.
+- **App bearer token**: protects this prototype's
+  `wss://.../ws/recitation` endpoint. This is the token you paste into the iOS
+  or macOS app Settings.
 
-```bash
-open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args \
-  --tarteel-replay-audio 108001.wav \
-  --tarteel-replay-surah 108
-```
-
-For live-mic diagnosis, capture the exact mono 16 kHz PCM16 chunks forwarded by
-the app, then replay that capture:
+Create the app bearer secret in Modal:
 
 ```bash
-open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args --tarteel-capture-audio /tmp/tarteel-capture.wav
-open -n /private/tmp/tarteel-xcode-derived-macos/Build/Products/Debug/TarteelPrototypeMac.app --args --tarteel-replay-audio /tmp/tarteel-capture.wav --tarteel-replay-surah 108
+modal secret create tarteel-modal-asr-secrets TARTEEL_WS_BEARER_TOKEN="<prototype-token>"
 ```
 
-## CoreML Route
-
-`CoreML` routes `coreml://fastconformer-quran-streaming` to the in-app
-`CoreMLFastConformerSocketClient`. It preserves the same app recording queue,
-VAD metadata seam, reducer state, and recitation event shape used by WebSocket
-backends.
-
-CoreML currently supports selected-Surah local matching as the app path. Fresh
-installs default to selected Surah 108, and old Auto preferences are coerced
-back to selected-Surah scope before recording. If the full Tanzil file is
-bundled locally, the local Quran session can use all Surahs as selectable
-scopes; otherwise it falls back to the small MVP corpus.
-
-Important CoreML comments:
-
-- Keep CoreML model artifacts and local recitation audio out of git.
-- Use physical iPhone hardware for iOS CoreML ASR claims.
-- macOS CoreML replay is useful for debugging model, locator, and UI behavior.
-- The app logs CoreML audio windows, transcripts, locator events, stream resets,
-  and latency markers through unified logging.
-
-## Modal Deployment
-
-Modal serves the real ASR backend behind the same WebSocket app contract:
-
-```text
-wss://<modal-app>.modal.run/ws/recitation
-```
-
-The Apple apps use Settings -> `Custom` for Modal. The visible Custom provider
-is Modal-only, and the app appends the selected ASR model slug as `asr_model` on
-the recording URL.
-
-Approved Modal ASR model slugs:
-
-```text
-nemo-fastconformer-quran-ar
-faster-whisper-base-ar-quran
-```
-
-Create a Modal Secret named `tarteel-modal-asr-secrets` containing:
-
-```text
-TARTEEL_WS_BEARER_TOKEN=<prototype token>
-```
-
-Do not store the token in docs or git.
-
-Prewarm both model snapshots:
+Prewarm the model volume and deploy:
 
 ```bash
 modal run deploy/modal_asr_app.py::prewarm
-```
-
-Deploy:
-
-```bash
 modal deploy deploy/modal_asr_app.py
 ```
 
-After deployment, enter the WSS URL in the iPhone or macOS app Settings, paste
-the Modal bearer token locally, choose an ASR model, select a Surah, and record.
+After deploy:
 
-For a command-line replay proof:
+1. Copy the deployed Web Function URL.
+2. Convert it to WebSocket form:
+   `https://<modal-app>.modal.run` ->
+   `wss://<modal-app>.modal.run/ws/recitation`.
+3. In the Apple app, open Settings.
+4. Choose `Custom` / `Modal`.
+5. Paste the WSS URL and app bearer token.
+6. Choose `FastConformer Quran AR (NeMo)` or
+   `Faster Whisper Base AR Quran`.
+7. Select a Surah and record.
 
-```bash
-uv run --with websockets python -m tarteel_realtime.replay_probe \
-  --url 'wss://<modal-app>.modal.run/ws/recitation' \
-  --scope 108 \
-  --asr-model nemo-fastconformer-quran-ar \
-  --audio-path fixtures/local_audio/108001.wav \
-  --chunk-ms 160 \
-  --bearer-token-env MODAL_TOKEN \
-  --disable-ping \
-  --send-speech-end \
-  --include-events
-```
+For deeper Modal replay and comparison workflows, see
+`docs/modal-serverless.md`.
 
-Repeat with `--asr-model faster-whisper-base-ar-quran` when comparing Modal
-profiles.
+## Notes
 
-## Important Comments
-
-- WebSocket `/ws/recitation` is the only remote backend transport.
-- The local CoreML route is in-app only; it is not a second backend protocol.
-- The app sends PCM16 audio chunks plus optional VAD metadata.
-- Canonical displayed ayah text should come from Quran data, not from noisy ASR
-  transcript text.
+- Remote backends use only WebSocket `/ws/recitation`.
+- The local CoreML route is in-app only; it is not a second remote backend
+  transport.
+- The visible app flow is selected-Surah first. Choose a Surah before
+  recording.
+- Keep bearer tokens, local Quran text, raw recitation audio, and generated
+  diagnostics out of git.
 - Heavy ASR dependencies remain opt-in and should not become default test
   dependencies.
-- iPhone bearer tokens are memory-only. macOS Custom bearer tokens are stored in
-  Keychain after entry.
-- Raw user audio, generated diagnostics, local Quran text, and credentials must
-  remain local unless intentionally shared as evidence.
+- This MVP is text-level location and correction, not tajweed scoring,
+  phoneme-level feedback, or production memorization coaching.
 
-## Verify
+## Verification
 
-Python:
+Docs and project sanity:
+
+```bash
+git diff --check
+xcodebuild -list -project ios/TarteelPrototype/TarteelPrototype.xcodeproj
+```
+
+Python baseline:
 
 ```bash
 uv run python -B -m unittest discover -s tests -v
@@ -248,10 +220,4 @@ Swift client core:
 ```bash
 cd ios/TarteelClientCore
 env CLANG_MODULE_CACHE_PATH=/private/tmp/tarteel-clang-module-cache SWIFT_MODULE_CACHE_PATH=/private/tmp/tarteel-swift-module-cache swift test
-```
-
-Apple source/project guardrails:
-
-```bash
-uv run python -B -m unittest tests.test_macos_app_project tests.test_ios_recitation_scope_ui tests.test_ios_websocket_client tests.test_ios_status_panel -v
 ```
